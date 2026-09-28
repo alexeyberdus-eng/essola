@@ -4,10 +4,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Cormorant+Garamond:ital,wght@1,500&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: first screen of the argan page, text left and a live 3D specimen right; a short tech note below. Tokens mirror the live ESSOLA Lab block. */
+/* Layout: first screen of the argan page, text left and a studio-rendered 360° bottle right; a short note below. Tokens mirror the live ESSOLA Lab block. */
 :root{
   --bg:#ffffff;--ink:#1c1c1a;--ink2:#3b3b37;--muted:#7a7a72;--line:#ecebe6;--line2:#dcd9d0;
-  --gold:#b0822f;--gold-deep:#8f6820;--gold-soft:#f7f1e5;--sage:#6d7b5a;--card:#ffffff;
+  --gold:#b0822f;--gold-deep:#8f6820;--glow:rgba(214,170,92,.16);--card:#ffffff;
   --f-body:'Onest',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
   --f-serif:'Cormorant Garamond',Georgia,'Times New Roman',serif;
   --f-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -15,65 +15,58 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#15130f;--ink:#efe9dc;--ink2:#d2cbbb;--muted:#9a9384;--line:#2a2620;--line2:#3a342b;
-  --gold:#d3a24c;--gold-deep:#e2b866;--gold-soft:#241d12;--sage:#9aa883;--card:#1b1813;color-scheme:dark}}
+  --gold:#d3a24c;--gold-deep:#e2b866;--glow:rgba(211,162,76,.14);--card:#1b1813;color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#15130f;--ink:#efe9dc;--ink2:#d2cbbb;--muted:#9a9384;--line:#2a2620;--line2:#3a342b;
-  --gold:#d3a24c;--gold-deep:#e2b866;--gold-soft:#241d12;--sage:#9aa883;--card:#1b1813;color-scheme:dark}
+  --gold:#d3a24c;--gold-deep:#e2b866;--glow:rgba(211,162,76,.14);--card:#1b1813;color-scheme:dark}
 
 *,*:before,*:after{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font:400 16px/1.65 var(--f-body);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
-button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 h1,h2,h3,p{margin:0}
 .wrap{width:min(1240px,100%);margin:0 auto;padding-inline:clamp(16px,4vw,40px)}
 .mono{font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .serif{font-family:var(--f-serif);font-style:italic;font-weight:500}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 
-/* nav */
 .nav{border-bottom:1px solid var(--line)}
 .nav-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:18px}
-.logo{font-family:var(--f-serif);font-size:26px;letter-spacing:.28em;font-style:normal;font-weight:500}
+.logo{font-family:var(--f-serif);font-size:26px;letter-spacing:.28em;font-weight:500}
 .logo small{font-style:italic;font-size:15px;letter-spacing:0;margin-right:4px;color:var(--gold)}
 
-/* hero */
 .hero{padding-block:clamp(28px,5vw,64px) 24px}
-.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(24px,4vw,56px);align-items:center}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:center}
 .kicker{display:flex;align-items:center;gap:10px}
-.pulse{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 color-mix(in srgb,var(--gold) 60%,transparent);animation:pulse 2.4s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
-h1{margin:22px 0 22px;font-size:clamp(40px,5.6vw,84px);font-weight:500;line-height:.98;letter-spacing:-.05em;text-wrap:balance}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--gold);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--glow)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+h1{margin:22px 0;font-size:clamp(40px,5.6vw,84px);font-weight:500;line-height:.98;letter-spacing:-.05em;text-wrap:balance}
 h1 .serif{display:block;margin-top:6px;letter-spacing:-.03em;color:var(--gold-deep)}
 .lead{max-width:34em;color:var(--ink2);font-size:17px}
 .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:26px}
-.chip{display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid var(--line2);border-radius:999px;font-size:14px;font-weight:500;transition:background .25s,border-color .25s,color .25s}
-.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
-.chip:hover{border-color:var(--gold)}
-.btn{display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 22px;border-radius:999px;font-weight:500;transition:transform .3s var(--ease),background .25s,border-color .25s}
-.btn-gold{background:var(--gold);color:#fff}
-.btn-gold:hover{background:var(--gold-deep)}
-.btn-gold:disabled{opacity:.55;cursor:default}
-.btn-line{border:1px solid var(--line2)}
-.btn-line:hover{border-color:var(--ink)}
-.btn svg{width:18px;height:18px}
-:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.chip{display:inline-flex;align-items:center;height:36px;padding:0 16px;border:1px solid var(--line2);border-radius:999px;font-size:14px;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 22px;border-radius:999px;font-weight:500;border:1px solid var(--line2);transition:border-color .25s,background .25s}
+.btn:hover{border-color:var(--ink)}
+.btn-gold{background:var(--gold);border-color:var(--gold);color:#fff}
+.btn-gold:hover{background:var(--gold-deep);border-color:var(--gold-deep)}
 
-/* stage */
-.stage{position:relative;aspect-ratio:1/1.08;max-width:100%;border-radius:28px;overflow:hidden;background:var(--bg);touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
+/* 360 stage */
+.stage{position:relative;max-width:100%;aspect-ratio:3/4;max-height:78vh;margin-inline:auto;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
 .stage.is-drag{cursor:grabbing}
-.stage canvas{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .9s var(--ease)}
+.stage:before{content:"";position:absolute;inset:8% 4% 14%;border-radius:50%;background:radial-gradient(closest-side,var(--glow),transparent);pointer-events:none}
+.stage img,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.stage canvas{opacity:0;transition:opacity .4s}
 .stage.is-ready canvas{opacity:1}
-.poster{position:absolute;inset:6% 12%;width:76%;height:88%;object-fit:contain;transition:opacity .6s var(--ease)}
-:root:not([data-theme="dark"]) .poster{mix-blend-mode:multiply}
-.stage.is-ready .poster{opacity:0;pointer-events:none}
-.stage-ui{position:absolute;left:18px;right:18px;bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;pointer-events:none}
-.spec{display:grid;gap:2px}
-.spec b{font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.stage.is-ready img{visibility:hidden}
+.dial{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;pointer-events:none}
+.dial b{display:block;font-family:var(--f-mono);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.ticks{position:absolute;left:50%;bottom:4.5%;width:62%;height:10px;transform:translateX(-50%);display:flex;justify-content:space-between}
+.ticks i{width:1px;height:6px;background:var(--line2);transition:height .2s,background .2s}
+.ticks i.on{height:10px;background:var(--gold)}
 .hint{display:flex;align-items:center;gap:8px;transition:opacity .5s}
 .hint svg{width:16px;height:16px;color:var(--gold)}
 .stage.is-touched .hint{opacity:0}
-.status{position:absolute;top:16px;left:18px}
+.load{position:absolute;top:0;left:0}
 
-/* below */
 .notes{padding-block:40px clamp(40px,6vw,80px);border-top:1px solid var(--line);margin-top:24px}
 .notes h2{font-size:clamp(26px,3vw,36px);font-weight:500;letter-spacing:-.03em;line-height:1.1;margin:10px 0 28px;text-wrap:balance}
 .notes-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
@@ -84,7 +77,7 @@ h1 .serif{display:block;margin-top:6px;letter-spacing:-.03em;color:var(--gold-de
 
 @media (max-width:900px){
   .hero-grid{grid-template-columns:1fr}
-  .stage{order:-1;aspect-ratio:1/1.05}
+  .stage{order:-1;width:min(100%,440px)}
   .notes-grid{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
@@ -93,7 +86,7 @@ h1 .serif{display:block;margin-top:6px;letter-spacing:-.03em;color:var(--gold-de
 <header class="nav">
   <div class="wrap nav-in">
     <span class="logo"><small>The</small>ESSOLA</span>
-    <span class="mono">Демо · 3D-образец</span>
+    <span class="mono">Демо · 360° студийный рендер</span>
   </div>
 </header>
 
@@ -103,27 +96,26 @@ h1 .serif{display:block;margin-top:6px;letter-spacing:-.03em;color:var(--gold-de
       <div>
         <div class="kicker"><span class="pulse"></span><span class="mono">ESSOLA Home Lab · Образец ARG/BO-01</span></div>
         <h1>Аргановое масло <span class="serif">для питания и мягкости</span></h1>
-        <p class="lead">Универсальная растительная база для лица, тела, волос и ногтей. Поверните флакон, чтобы прочитать этикетку, или капните масло.</p>
-        <div class="row" role="group" aria-label="Объём">
+        <p class="lead">Универсальная растительная база для лица, тела, волос и ногтей. Поверните флакон, чтобы прочитать состав на этикетке.</p>
+        <div class="row">
           <span class="mono" style="margin-right:6px">Объём</span>
-          <button type="button" class="chip" id="vol30" data-vol="30" aria-pressed="true">30 мл</button>
-          <button type="button" class="chip" id="vol100" data-vol="100" aria-pressed="false">100 мл</button>
+          <span class="chip">30 мл</span>
+          <span class="chip">100 мл</span>
         </div>
         <div class="row">
-          <button type="button" class="btn btn-gold" id="dropBtn" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.2S5.6 10.6 5.6 15a6.4 6.4 0 0 0 12.8 0c0-4.4-6.4-11.8-6.4-11.8z"/></svg>
-            Капнуть масло
-          </button>
-          <a class="btn btn-line" href="https://www.wildberries.ru/catalog/436643513/detail.aspx" target="_blank" rel="noopener noreferrer">Wildberries</a>
-          <a class="btn btn-line" href="https://www.ozon.ru/product/essola-naturalnoe-arganovoe-maslo-dlya-litsa-tela-i-volos-nerafinirovannoe-pitanie-i-uvlazhnenie-2719749191/" target="_blank" rel="noopener noreferrer">Ozon</a>
+          <a class="btn btn-gold" href="https://www.wildberries.ru/catalog/436643513/detail.aspx" target="_blank" rel="noopener noreferrer">Wildberries</a>
+          <a class="btn" href="https://www.ozon.ru/product/essola-naturalnoe-arganovoe-maslo-dlya-litsa-tela-i-volos-nerafinirovannoe-pitanie-i-uvlazhnenie-2719749191/" target="_blank" rel="noopener noreferrer">Ozon</a>
+          <a class="btn" href="https://www.letu.ru/brand/essola" target="_blank" rel="noopener noreferrer">Лэтуаль</a>
         </div>
       </div>
 
-      <div class="stage" id="stage" aria-label="3D-модель флакона арганового масла ESSOLA. Перетащите, чтобы повернуть." role="img">
-        <img class="poster" src="bottle.webp" alt="Флакон арганового масла ESSOLA 30 мл" width="1160" height="1546" fetchpriority="high">
-        <span class="status mono" id="status">Загрузка 3D…</span>
-        <div class="stage-ui">
-          <div class="spec"><span class="mono">Поворот</span><b id="angle">0°</b></div>
+      <div class="stage" id="stage" role="img" aria-label="Флакон арганового масла ESSOLA 30 мл, вид 360°. Перетащите, чтобы повернуть.">
+        <img src="frames/00.webp" alt="Аргановое масло ESSOLA 30 мл, янтарный флакон с пипеткой" width="720" height="960" fetchpriority="high">
+        <canvas id="view"></canvas>
+        <span class="load mono" id="load">Кадры 0 / 36</span>
+        <div class="ticks" id="ticks" aria-hidden="true"></div>
+        <div class="dial">
+          <div><span class="mono">Поворот</span><b id="angle">0°</b></div>
           <div class="hint mono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Потяните, чтобы повернуть</div>
         </div>
       </div>
@@ -132,391 +124,116 @@ h1 .serif{display:block;margin-top:6px;letter-spacing:-.03em;color:var(--gold-de
 
   <section class="notes">
     <div class="wrap">
-      <span class="mono">Как это устроено</span>
-      <h2>Настоящая 3D-сцена вместо картинки</h2>
+      <span class="mono">Как это сделано</span>
+      <h2>Фотореалистичный рендер вместо живого 3D</h2>
       <div class="notes-grid">
+        <div class="note">
+          <span class="num">36 кадров</span>
+          <h3>Студийная съёмка без съёмки</h3>
+          <p>Флакон смоделирован в Blender и отрендерен физическим движком Cycles: толстое янтарное стекло, масло внутри, мягкие боксы и чёрные отражатели, как в предметной студии.</p>
+        </div>
+        <div class="note">
+          <span class="num" id="weight">≈ 1,5 МБ</span>
+          <h3>Первый кадр — обычная картинка</h3>
+          <p>Поисковики и медленные телефоны сразу видят флакон. Остальные кадры подгружаются после, и вращение включается, когда они готовы.</p>
+        </div>
         <div class="note">
           <span class="num">98 × 46 мм</span>
           <h3>Ваша этикетка из макета</h3>
-          <p>Этикетка взята из печатного PDF и обёрнута вокруг стекла так же, как на флаконе: её видно целиком, если повернуть флакон.</p>
-        </div>
-        <div class="note">
-          <span class="num">≈ 170 КБ</span>
-          <h3>Сначала фото, потом 3D</h3>
-          <p>Столько весит Three.js в сжатом виде. Пока он грузится, показывается обычное фото флакона. Поисковики и медленные телефоны видят картинку, скорость первого экрана не страдает.</p>
-        </div>
-        <div class="note">
-          <span class="num">1 блок T123</span>
-          <h3>Встаёт в Tilda</h3>
-          <p>Сцена работает в том же HTML-блоке, что и текущая страница. Рендер останавливается, когда флакон уходит с экрана, и не тратит батарею.</p>
+          <p>Печатный PDF обёрнут вокруг стекла в масштабе. Фон прозрачный, поэтому флакон встаёт и на белую, и на тёмную страницу вместе с тенью.</p>
         </div>
       </div>
     </div>
   </section>
 </main>
 
-<script type="importmap">
-{"imports":{
-  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
-  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-}}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+<script>
+(function () {
+  var N = 36;
+  var stage = document.getElementById('stage');
+  var cv = document.getElementById('view');
+  var ctx = cv.getContext('2d');
+  var angleEl = document.getElementById('angle');
+  var loadEl = document.getElementById('load');
+  var ticks = document.getElementById('ticks');
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var frames = new Array(N), loaded = 0, ready = false;
 
-const stage = document.getElementById('stage');
-const statusEl = document.getElementById('status');
-const angleEl = document.getElementById('angle');
-const dropBtn = document.getElementById('dropBtn');
-const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (var t = 0; t < 36; t++) ticks.appendChild(document.createElement('i'));
+  var tickEls = ticks.children, lastTick = -1;
 
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-} catch (e) {
-  statusEl.textContent = 'Показано фото: браузер без WebGL';
-  throw e;
-}
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-stage.prepend(renderer.domElement);
+  function src(i) { return 'frames/' + (i < 10 ? '0' : '') + i + '.webp'; }
+  // frame 0 is the <img> already on the page; load the rest in turn order
+  for (var i = 0; i < N; i++) (function (i) {
+    var im = new Image();
+    im.decoding = 'async';
+    im.onload = function () {
+      frames[i] = im; loaded++;
+      loadEl.textContent = loaded < N ? 'Кадры ' + loaded + ' / ' + N : '';
+      if (loaded === N) start();
+    };
+    im.src = src(i);
+  })(i);
 
-const scene = new THREE.Scene();
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  var rot = 0, vel = 0, drag = false, px = 0, lastInput = -1e9, lastT = 0;
 
-const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
-const camTarget = new THREE.Vector3(0, 5.4, 0);
-
-/* ---------- theme ---------- */
-const css = () => getComputedStyle(document.documentElement);
-function applyTheme() {
-  const bg = css().getPropertyValue('--bg').trim() || '#ffffff';
-  scene.background = new THREE.Color(bg);
-  const gold = css().getPropertyValue('--gold').trim() || '#b0822f';
-  glowMat.color.set(gold);
-  const dark = new THREE.Color(bg).getHSL({}).l < 0.5;
-  glowMat.opacity = dark ? 0.38 : 0.22;
-  shadowMat.opacity = dark ? 0.75 : 0.42;
-}
-
-/* ---------- lights ---------- */
-const key = new THREE.DirectionalLight(0xfff1dc, 2.2); key.position.set(5, 12, 8); scene.add(key);
-const rim = new THREE.DirectionalLight(0xffc877, 2.6); rim.position.set(-7, 8, -6); scene.add(rim);
-scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-
-/* ---------- helpers ---------- */
-function radialTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const g = c.getContext('2d');
-  const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  gr.addColorStop(0, inner); gr.addColorStop(1, outer);
-  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  const t = new THREE.CanvasTexture(c); return t;
-}
-function bezier(p0, p1, p2, p3, n, out) {
-  for (let i = 1; i <= n; i++) {
-    const t = i / n, u = 1 - t;
-    out.push(new THREE.Vector2(
-      u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0],
-      u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]));
+  function size() {
+    var r = stage.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
   }
-}
-function arc(cx, cy, r, a0, a1, n, out) {
-  for (let i = 0; i <= n; i++) {
-    const a = a0 + (a1 - a0) * i / n;
-    out.push(new THREE.Vector2(cx + r * Math.cos(a), cy + r * Math.sin(a)));
+  function draw() {
+    var f = ((rot / (2 * Math.PI)) * N % N + N) % N;
+    var a = Math.floor(f), b = (a + 1) % N, k = f - a;
+    var A = frames[a], B = frames[b];
+    var W = cv.width, H = cv.height, s = Math.min(W / A.width, H / A.height);
+    var w = A.width * s, h = A.height * s, x = (W - w) / 2, y = (H - h) / 2;
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = 1; ctx.drawImage(A, x, y, w, h);
+    if (k > 0.02) { ctx.globalAlpha = k; ctx.drawImage(B, x, y, w, h); }
+    var deg = Math.round(f * 360 / N) % 360;
+    angleEl.textContent = deg + '°';
+    var tk = Math.round(f) % 36;
+    if (tk !== lastTick) { if (lastTick >= 0) tickEls[lastTick].className = ''; tickEls[tk].className = 'on'; lastTick = tk; }
   }
-}
-
-/* ---------- backdrop ---------- */
-const glowMat = new THREE.MeshBasicMaterial({ map: radialTexture(), transparent: true, depthWrite: false, toneMapped: false });
-const glow = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), glowMat);
-glow.position.set(0, 5.6, -7); scene.add(glow);
-
-const shadowMat = new THREE.MeshBasicMaterial({ map: radialTexture('rgba(40,24,6,1)', 'rgba(40,24,6,0)'), transparent: true, depthWrite: false, toneMapped: false });
-const shadow = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 6.2), shadowMat);
-shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.01; scene.add(shadow);
-applyTheme();
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
-new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-/* ---------- bottle (units: 1 = 10 mm, 30 ml Boston round) ---------- */
-const R = 1.7, BODY = 5.9;
-const bottle = new THREE.Group();
-const model = new THREE.Group();          // scaled for 30/100 ml
-model.add(bottle); scene.add(model);
-
-// amber glass
-const glassPts = [new THREE.Vector2(0, 0), new THREE.Vector2(R - 0.3, 0)];
-arc(R - 0.3, 0.3, 0.3, -Math.PI / 2, 0, 8, glassPts);
-glassPts.push(new THREE.Vector2(R, BODY));
-bezier([R, BODY], [R, 6.55], [1.1, 6.75], [0.85, 6.95], 18, glassPts);
-glassPts.push(new THREE.Vector2(0.85, 7.25), new THREE.Vector2(0.7, 7.3));
-const glassMat = new THREE.MeshPhysicalMaterial({
-  color: 0xffffff, metalness: 0, roughness: 0.06, transmission: 1, thickness: 0.9, ior: 1.52,
-  attenuationColor: new THREE.Color(0x8a4a10), attenuationDistance: 0.55,
-  clearcoat: 1, clearcoatRoughness: 0.05, specularIntensity: 1, envMapIntensity: 1.2
-});
-const glass = new THREE.Mesh(new THREE.LatheGeometry(glassPts, 128), glassMat);
-bottle.add(glass);
-
-// oil inside
-const oilPts = [new THREE.Vector2(0, 0.14), new THREE.Vector2(R - 0.4, 0.14)];
-arc(R - 0.4, 0.4, 0.26, -Math.PI / 2, 0, 6, oilPts);
-oilPts.push(new THREE.Vector2(R - 0.14, 5.25), new THREE.Vector2(0, 5.25));
-const oilMat = new THREE.MeshStandardMaterial({ color: 0xe0a53c, emissive: 0x6a3a06, emissiveIntensity: 0.55, roughness: 0.15 });
-bottle.add(new THREE.Mesh(new THREE.LatheGeometry(oilPts, 96), oilMat));
-
-// label
-const LABEL_W = 9.8, LABEL_H = 4.6, LR = R + 0.006;
-const labelTheta = LABEL_W / LR;
-const labelTex = new THREE.TextureLoader().load('label.jpg', () => { labelReady = true; maybeReady(); });
-labelTex.colorSpace = THREE.SRGBColorSpace;
-labelTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-const label = new THREE.Mesh(
-  new THREE.CylinderGeometry(LR, LR, LABEL_H, 160, 1, true, -labelTheta / 2, labelTheta),
-  new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.62, metalness: 0, side: THREE.FrontSide })
-);
-label.position.y = 0.95 + LABEL_H / 2;
-bottle.add(label);
-
-// cap + dropper (moves as one piece)
-const cap = new THREE.Group(); bottle.add(cap);
-const black = new THREE.MeshPhysicalMaterial({ color: 0x0c0c0c, roughness: 0.38, clearcoat: 0.5, clearcoatRoughness: 0.3 });
-const rubber = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.55, sheen: 0.4, sheenColor: new THREE.Color(0x444444) });
-
-const collarPts = [new THREE.Vector2(0.8, 7.05), new THREE.Vector2(1.04, 7.05)];
-arc(1.02, 7.12, 0.07, -Math.PI / 2, 0, 4, collarPts);
-collarPts.push(new THREE.Vector2(1.09, 7.82), new THREE.Vector2(1.0, 7.9), new THREE.Vector2(0.6, 7.9));
-cap.add(new THREE.Mesh(new THREE.LatheGeometry(collarPts, 96), black));
-
-const skirtGeo = new THREE.CylinderGeometry(0.93, 0.97, 1.6, 240, 6, false);
-{
-  const p = skirtGeo.attributes.position, v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const rr = Math.hypot(v.x, v.z); if (rr < 0.01) continue;
-    const a = Math.atan2(v.x, v.z);
-    const k = 1 + 0.028 * Math.pow(Math.abs(Math.cos(a * 30)), 0.6);
-    p.setXYZ(i, v.x * k, v.y, v.z * k);
+  function loop(now) {
+    var dt = Math.min((now - lastT) / 1000 || 0, 0.05); lastT = now;
+    if (!drag) {
+      rot += vel * dt; vel *= Math.pow(0.05, dt);
+      var idle = (now - lastInput) / 1000;
+      if (!reduced && idle > 2.2) rot += dt * 0.42 * Math.min(1, idle - 2.2);
+    }
+    draw();
+    if (visible) requestAnimationFrame(loop);
   }
-  skirtGeo.computeVertexNormals();
-}
-const skirt = new THREE.Mesh(skirtGeo, black); skirt.position.y = 7.9 + 0.8; cap.add(skirt);
-
-const bulbPts = [new THREE.Vector2(0.001, 9.5), new THREE.Vector2(0.78, 9.5), new THREE.Vector2(0.78, 9.62), new THREE.Vector2(0.52, 9.66)];
-bezier([0.52, 9.66], [0.5, 10.1], [0.42, 10.3], [0.41, 10.55], 10, bulbPts);
-arc(0, 10.55, 0.41, 0, Math.PI / 2, 12, bulbPts);
-cap.add(new THREE.Mesh(new THREE.LatheGeometry(bulbPts, 64), rubber));
-
-const tubeMat = new THREE.MeshStandardMaterial({ color: 0xf4e7cf, roughness: 0.1, transparent: true, opacity: 0.5 });
-const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.12, 3.9, 32), tubeMat);
-tube.position.y = 3.3 + 3.9 / 2; cap.add(tube);
-const tubeOil = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 1.3, 24), oilMat);
-tubeOil.position.y = 3.3 + 0.65; cap.add(tubeOil);
-const TIP_Y = 3.3;
-
-/* ---------- floating argan: leaves, nuts, oil drops ---------- */
-const floaters = [];
-const leafShape = new THREE.Shape();
-leafShape.moveTo(0, 0);
-leafShape.bezierCurveTo(0.28, 0.25, 0.3, 0.85, 0, 1.3);
-leafShape.bezierCurveTo(-0.3, 0.85, -0.28, 0.25, 0, 0);
-const leafGeo = new THREE.ShapeGeometry(leafShape, 16); leafGeo.translate(0, -0.65, 0);
-const leafMats = [0x6d7b5a, 0x7f8f5f, 0x5b6a49].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, side: THREE.DoubleSide }));
-const nutGeo = new THREE.SphereGeometry(0.32, 32, 24); nutGeo.scale(1, 1.4, 1);
-const nutMat = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.45 });
-const dropPts = [];
-for (let i = 0; i <= 24; i++) {
-  const t = i / 24, a = Math.PI * t;
-  dropPts.push(new THREE.Vector2(Math.sin(a) * (0.5 - 0.35 * Math.pow(t, 1.6)) * (1 - Math.pow(t, 6) * 0.9), -Math.cos(a) * 0.55 + t * t * 0.5));
-}
-const dropGeo = new THREE.LatheGeometry(dropPts, 32);
-const dropMat = new THREE.MeshPhysicalMaterial({ color: 0xe2a63a, emissive: 0x7a4304, emissiveIntensity: 0.35, roughness: 0.04, clearcoat: 1, clearcoatRoughness: 0.02 });
-
-const spec = [
-  ['leaf', -3.6, 8.8, 1.2, 1.0], ['leaf', 3.4, 9.6, -1.5, 0.9], ['leaf', -4.2, 3.2, -2.2, 1.1],
-  ['leaf', 3.9, 2.6, 1.6, 0.8], ['leaf', -2.4, 11.2, -3, 0.7],
-  ['nut', 3.1, 6.2, 1.9, 1], ['nut', -3.3, 5.6, 2.2, 0.85],
-  ['drop', 2.6, 10.6, 1.4, 0.55], ['drop', -2.9, 1.6, 2.6, 0.5], ['drop', 4.4, 4.6, -1.2, 0.45], ['drop', -4.6, 7.6, 0.6, 0.4]
-];
-spec.forEach(([kind, x, y, z, s], i) => {
-  let m;
-  if (kind === 'leaf') m = new THREE.Mesh(leafGeo, leafMats[i % 3]);
-  else if (kind === 'nut') m = new THREE.Mesh(nutGeo, nutMat);
-  else m = new THREE.Mesh(dropGeo, dropMat);
-  m.scale.setScalar(s);
-  m.rotation.set(Math.random() * 2, Math.random() * 3, Math.random() * 2);
-  scene.add(m);
-  floaters.push({ m, base: new THREE.Vector3(x, y, z), ph: i * 1.7, sp: 0.35 + (i % 4) * 0.08, spin: new THREE.Vector3(0.2 + (i % 3) * 0.1, 0.3, 0.15) });
-});
-
-/* ---------- falling drop + splash ---------- */
-const fallDrop = new THREE.Mesh(dropGeo, dropMat); fallDrop.visible = false; scene.add(fallDrop);
-const splashMat = new THREE.MeshBasicMaterial({ color: 0xd9a441, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
-const splash = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 64), splashMat);
-splash.rotation.x = -Math.PI / 2; splash.position.y = 0.02; scene.add(splash);
-const puddleMat = new THREE.MeshStandardMaterial({ color: 0xd9a03a, emissive: 0x5a3000, emissiveIntensity: 0.4, roughness: 0.05, transparent: true, opacity: 0 });
-const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.5, 48), puddleMat);
-puddle.rotation.x = -Math.PI / 2; puddle.position.y = 0.015; scene.add(puddle);
-
-/* ---------- interaction ---------- */
-let rotY = -0.35, velY = 0, tiltX = 0, lastInteract = -10, dragging = false, px = 0, py = 0;
-let pointerNX = 0, pointerNY = 0;
-stage.addEventListener('pointerdown', e => {
-  if (anim) return;
-  dragging = true; px = e.clientX; py = e.clientY; velY = 0;
-  stage.setPointerCapture(e.pointerId); stage.classList.add('is-drag', 'is-touched');
-});
-stage.addEventListener('pointermove', e => {
-  const r = stage.getBoundingClientRect();
-  pointerNX = ((e.clientX - r.left) / r.width) * 2 - 1;
-  pointerNY = ((e.clientY - r.top) / r.height) * 2 - 1;
-  if (!dragging) return;
-  const dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
-  rotY += dx * 0.011; velY = dx * 0.011 * 60;
-  tiltX = THREE.MathUtils.clamp(tiltX + dy * 0.004, -0.28, 0.28);
-  lastInteract = clock.elapsedTime;
-});
-const endDrag = () => { dragging = false; stage.classList.remove('is-drag'); lastInteract = clock.elapsedTime; };
-stage.addEventListener('pointerup', endDrag);
-stage.addEventListener('pointercancel', endDrag);
-stage.addEventListener('pointerleave', () => { pointerNX = pointerNY = 0; });
-
-// 30 / 100 ml
-let targetScale = 1;
-document.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('[data-vol]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
-  targetScale = b.dataset.vol === '100' ? 1.3 : 1;
-}));
-
-// drop sequence
-let anim = null, animZoom = 1;
-dropBtn.addEventListener('click', () => {
-  if (anim) return;
-  anim = { t0: clock.elapsedTime, rot0: rotY, rotTo: Math.round(rotY / (Math.PI * 2)) * Math.PI * 2, fell: false };
-  velY = 0; dropBtn.disabled = true; stage.classList.add('is-touched');
-});
-const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const seg = (t, a, b) => THREE.MathUtils.clamp((t - a) / (b - a), 0, 1);
-
-function runAnim(now) {
-  const t = now - anim.t0;
-  rotY = THREE.MathUtils.lerp(anim.rot0, anim.rotTo, ease(seg(t, 0, 0.6)));
-  // out: lift 0.3–1.0, swing right 1.0–1.7 ; back: 3.9–4.6 swing, 4.6–5.3 lower
-  const lift = ease(seg(t, 0.3, 1.0)) - ease(seg(t, 4.6, 5.3));
-  const swing = ease(seg(t, 1.0, 1.7)) - ease(seg(t, 3.9, 4.6));
-  cap.position.set(3.3 * swing, 4.3 * lift - 1.6 * swing, 0);
-  cap.rotation.z = -0.12 * swing;
-  camTarget.x = 1.5 * swing;
-  camTarget.y = 5.4 + 1.3 * lift - 0.6 * swing;
-  animZoom = 1 + 0.3 * lift;
-
-  const tip = new THREE.Vector3(0, TIP_Y - 0.02, 0);
-  cap.localToWorld(tip);
-  const grow = seg(t, 1.8, 2.5);
-  if (t >= 1.8 && t < 2.55) {
-    fallDrop.visible = true;
-    const s = 0.1 + 0.4 * ease(grow);
-    fallDrop.scale.set(s, s * (1 + 0.5 * grow), s);
-    fallDrop.position.set(tip.x, tip.y - 0.55 * fallDrop.scale.y + 0.05, tip.z);
-    fallDrop.rotation.set(0, 0, 0);
-    anim.y0 = fallDrop.position.y; anim.x0 = tip.x;
-  } else if (t >= 2.55 && !anim.fell) {
-    const ft = t - 2.55, y = anim.y0 - 0.5 * 26 * ft * ft;
-    fallDrop.scale.set(0.46, 0.66, 0.46);
-    fallDrop.position.set(anim.x0, y, 0);
-    if (y <= 0.15) { anim.fell = true; anim.hit = t; fallDrop.visible = false; puddle.position.x = splash.position.x = anim.x0; }
+  var visible = true;
+  function start() {
+    ready = true; size(); draw(); stage.classList.add('is-ready');
+    new ResizeObserver(function () { size(); draw(); }).observe(stage);
+    new IntersectionObserver(function (e) {
+      var was = visible; visible = e[0].isIntersecting;
+      if (visible && !was) { lastT = performance.now(); requestAnimationFrame(loop); }
+    }).observe(stage);
+    lastT = performance.now(); requestAnimationFrame(loop);
   }
-  if (anim.fell) {
-    const h = t - anim.hit;
-    const s1 = seg(h, 0, 0.7);
-    splash.scale.setScalar(0.4 + 2.2 * s1); splashMat.opacity = 0.8 * (1 - s1);
-    const pIn = seg(h, 0, 0.25), pOut = seg(h, 1.6, 2.6);
-    puddle.scale.set(0.2 + 0.9 * pIn, 0.2 + 0.7 * pIn, 1); puddleMat.opacity = 0.95 * pIn * (1 - pOut);
-  }
-  if (t > 5.4) {
-    cap.position.set(0, 0, 0); cap.rotation.z = 0; camTarget.x = 0; camTarget.y = 5.4; animZoom = 1;
-    splashMat.opacity = 0; puddleMat.opacity = 0; fallDrop.visible = false;
-    anim = null; dropBtn.disabled = false; lastInteract = now;
-  }
-}
 
-/* ---------- layout ---------- */
-function resize() {
-  const w = stage.clientWidth, h = stage.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  const fitH = 13.6, fitW = 11.5;
-  const vFov = THREE.MathUtils.degToRad(camera.fov);
-  const dH = fitH / 2 / Math.tan(vFov / 2);
-  const dW = fitW / 2 / Math.tan(vFov / 2) / camera.aspect;
-  camera.userData.dist = Math.max(dH, dW);
-  camera.updateProjectionMatrix();
-}
-new ResizeObserver(resize).observe(stage);
-resize();
-
-/* ---------- loop ---------- */
-const clock = new THREE.Clock();
-let visible = true, labelReady = false, firstFrame = false;
-new IntersectionObserver(es => { visible = es[0].isIntersecting; if (visible) loop(); }).observe(stage);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) loop(); });
-
-function maybeReady() {
-  if (!labelReady || !firstFrame) return;
-  stage.classList.add('is-ready');
-  statusEl.textContent = '3D · Three.js';
-  dropBtn.disabled = false;
-}
-
-let raf = 0;
-function loop() {
-  cancelAnimationFrame(raf);
-  if (!visible || document.hidden) return;
-  raf = requestAnimationFrame(frame);
-}
-function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05), now = clock.elapsedTime;
-
-  if (anim) runAnim(now);
-  else if (!dragging) {
-    rotY += velY * dt; velY *= Math.pow(0.04, dt);
-    if (!reduced && now - lastInteract > 2.5) rotY += dt * 0.32 * Math.min(1, (now - lastInteract - 2.5));
-    tiltX *= Math.pow(0.02, dt);
-  }
-  bottle.rotation.y = rotY;
-  const scroll = Math.min(scrollY / 900, 1);
-  model.rotation.x = tiltX + (reduced ? 0 : pointerNY * 0.05) + scroll * 0.12;
-  const sc = THREE.MathUtils.lerp(model.scale.x, targetScale, 1 - Math.pow(0.001, dt));
-  model.scale.setScalar(sc);
-  shadow.scale.setScalar(sc);
-
-  // camera: gentle parallax, framed around the bottle
-  const d = camera.userData.dist * (0.92 + 0.08 * sc) * animZoom;
-  const tgt = camTarget.clone(); tgt.y = camTarget.y * sc;
-  const parX = reduced ? 0 : pointerNX * 1.4;
-  camera.position.set(tgt.x + parX, tgt.y + 1.6 + (reduced ? 0 : -pointerNY * 0.8), d);
-  camera.lookAt(tgt);
-
-  if (!reduced) floaters.forEach(f => {
-    const k = now * f.sp + f.ph;
-    f.m.position.set(f.base.x * sc + Math.sin(k) * 0.35, f.base.y * sc + Math.sin(k * 1.3) * 0.45, f.base.z + Math.cos(k) * 0.3);
-    f.m.rotation.x += f.spin.x * dt; f.m.rotation.y += f.spin.y * dt;
+  stage.addEventListener('pointerdown', function (e) {
+    if (!ready) return;
+    drag = true; px = e.clientX; vel = 0;
+    stage.setPointerCapture(e.pointerId); stage.classList.add('is-drag', 'is-touched');
   });
-  else floaters.forEach(f => f.m.position.copy(f.base).multiplyScalar(sc));
-
-  const deg = ((THREE.MathUtils.radToDeg(rotY) % 360) + 360) % 360;
-  angleEl.textContent = Math.round(deg) + '°';
-
-  renderer.render(scene, camera);
-  if (!firstFrame) { firstFrame = true; maybeReady(); }
-  loop();
-}
-if (reduced) floaters.forEach(f => f.m.position.copy(f.base));
-loop();
+  stage.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dx = e.clientX - px; px = e.clientX;
+    var d = dx / stage.clientWidth * Math.PI * 1.6;
+    rot += d; vel = d * 60; lastInput = performance.now();
+  });
+  function end() { drag = false; stage.classList.remove('is-drag'); lastInput = performance.now(); }
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+  stage.tabIndex = 0;
+  stage.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') { rot += Math.PI / 18; lastInput = performance.now(); stage.classList.add('is-touched'); }
+    if (e.key === 'ArrowLeft') { rot -= Math.PI / 18; lastInput = performance.now(); stage.classList.add('is-touched'); }
+  });
+})();
 </script>
