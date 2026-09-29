@@ -28,6 +28,8 @@ export type Analysis = {
   concerns: AnalyzedItem[];
   personal: string[];
   unknown: number;
+  /** true when too little of the text matched real ingredients — likely a bad photo */
+  unreadable: boolean;
 };
 
 const ORIGIN_SCORE: Record<Origin, number> = { natural: 1, mineral: 0.85, identical: 0.6, synthetic: 0.1 };
@@ -80,7 +82,16 @@ export function splitIngredients(text: string): string[] {
         .replace(/^(and|и)\s+/i, '')
         .trim(),
     )
-    .filter((t) => t.length > 1 && t.length < 90 && /[a-zа-я]/i.test(t));
+    .filter((t) => t.length > 1 && t.length < 90 && plausible(t));
+}
+
+/** Drops OCR garbage: an ingredient name is mostly letters, at most a few words, no stray symbols. */
+function plausible(token: string) {
+  const letters = (token.match(/[a-zа-яё]/gi) ?? []).length;
+  if (letters < 3) return false;
+  if (/[{}\[\]\\<>"=_@#$^~|]/.test(token)) return false;
+  if (token.split(/\s+/).length > 7) return false;
+  return letters / token.replace(/\s/g, '').length >= 0.7;
 }
 
 function levenshtein(a: string, b: string, max: number) {
@@ -253,7 +264,13 @@ export function analyze(text: string, skin?: SkinType | null): Analysis {
     concerns,
     personal,
     unknown: items.filter((it) => it.match === 'unknown').length,
+    unreadable: isUnreadable(items),
   };
+}
+
+function isUnreadable(items: AnalyzedItem[]) {
+  const recognised = items.filter((it) => it.match === 'exact' || it.match === 'fuzzy').length;
+  return recognised < 2 || recognised / items.length < 0.4;
 }
 
 function verdictFor(score: number, n: number) {
