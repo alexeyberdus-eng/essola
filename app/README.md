@@ -19,7 +19,9 @@
 
 ## Открыть на телефоне — без компьютера
 
-1. Установите **Expo Go** из App Store / Google Play.
+Один раз: создайте бесплатный аккаунт на expo.dev, сделайте ключ в **Settings → Access tokens** и добавьте его в репозиторий как секрет `EXPO_TOKEN` (**Settings → Secrets and variables → Actions**). Expo Go открывает приложение по интернету только для вошедших в аккаунт Expo.
+
+1. Установите **Expo Go** из App Store / Google Play и войдите в тот же аккаунт Expo.
 2. Откройте в репозитории вкладку **Issues → «📱 Essola в Expo Go»** и отсканируйте QR-код камерой.
 
 QR-код публикует GitHub Actions (`.github/workflows/expo-go-preview.yml`): при каждом изменении кода он запускает сервер разработки на GitHub и открывает к нему бесплатный туннель Cloudflare. Сервер живёт ~5,5 часа; чтобы получить новую ссылку, откройте последний запуск в **Actions** и нажмите **Re-run all jobs**.
