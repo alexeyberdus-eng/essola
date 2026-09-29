@@ -1,6 +1,7 @@
 /// <reference types="node" />
 // Sanity checks for the INCI analyzer: run with `npm run test:analyzer`.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { analyze, SAMPLES, splitIngredients } from '../src/lib/analyze';
 
 const [cream, shampoo, oil] = SAMPLES.map((s) => analyze(s.text));
@@ -19,6 +20,12 @@ assert.deepEqual(
 );
 assert.equal(splitIngredients('Ingredients: Alcohol Denat., Parfum').length, 2);
 assert.equal(analyze('').scores.overall, 0);
+
+// Real Tesseract output for a photographed label (see src/lib/ocrHtml.ts).
+const label = analyze(readFileSync(new URL('./fixture-ocr-label.txt', import.meta.url), 'utf8'));
+assert.equal(label.items.length, 16);
+assert.equal(label.unknown, 0);
+assert.ok(!label.items.some((i) => /france/i.test(i.raw)), 'text after "Made in" must be ignored');
 
 for (const [i, a] of [cream, shampoo, oil].entries()) console.log(SAMPLES[i].title.padEnd(22), a.scores, a.verdict.title);
 console.log('analyzer ok');

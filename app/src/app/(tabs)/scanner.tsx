@@ -6,10 +6,14 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
+import { OcrStatus, OcrWebView } from '../../components/OcrWebView';
 import { Button, Press, tap } from '../../components/ui';
 import { useLibrary } from '../../context/LibraryContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
-import { ocrAvailable, recognizeText } from '../../lib/ocr';
+import { nativeOcr, recognizeText } from '../../lib/ocr';
+
+// Without the native module (Expo Go) photos are read by Tesseract inside a hidden WebView.
+const webOcr = !nativeOcr && Platform.OS !== 'web';
 import { colors, fonts, radius, space } from '../../theme';
 
 type Mode = 'camera' | 'manual';
@@ -26,6 +30,7 @@ export default function ScannerScreen() {
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const finish = (raw: string, title?: string) => {
     const result = analyze(raw);
@@ -44,9 +49,9 @@ export default function ScannerScreen() {
   };
 
   const readImage = async (uri: string) => {
-    if (!ocrAvailable) {
+    if (!nativeOcr && !webOcr) {
       setMode('manual');
-      setNotice('Распознавание текста работает в установленной сборке Essola. Здесь вставьте или введите состав вручную.');
+      setNotice('В браузере распознавание фото недоступно — вставьте или введите состав вручную.');
       return;
     }
     setBusy(true);
@@ -54,7 +59,11 @@ export default function ScannerScreen() {
       finish(await recognizeText(uri));
     } catch {
       setMode('manual');
-      setNotice('Не получилось прочитать фото. Попробуйте ещё раз при хорошем освещении или введите состав вручную.');
+      setNotice(
+        ocr.state === 'error'
+          ? 'Не удалось загрузить распознавание — нужен интернет при первом запуске. Пока введите состав вручную.'
+          : 'Не получилось прочитать фото. Попробуйте ещё раз при хорошем освещении или введите состав вручную.',
+      );
     } finally {
       setBusy(false);
     }
@@ -79,6 +88,7 @@ export default function ScannerScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <StatusBar style="light" />
+      {webOcr && <OcrWebView onStatus={setOcr} />}
       <View style={styles.head}>
         <Text style={styles.kicker}>Сканер составов</Text>
         <Text style={styles.title}>
@@ -118,12 +128,16 @@ export default function ScannerScreen() {
             {busy && (
               <View style={styles.busy}>
                 <ActivityIndicator color={colors.nightInk} />
-                <Text style={styles.busyText}>Читаю состав…</Text>
+                <Text style={styles.busyText}>{ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
               </View>
             )}
           </View>
           {notice && mode === 'camera' && <Text style={styles.notice}>{notice}</Text>}
-          <Text style={styles.hint}>Наведите камеру на список «Ingredients / Состав» и держите ровно</Text>
+          <Text style={styles.hint}>
+            {ocr.state === 'loading'
+              ? `Готовлю распознавание текста… ${Math.round(ocr.progress * 100)}%`
+              : 'Наведите камеру на список «Ingredients / Состав» и держите ровно'}
+          </Text>
           <View style={styles.controls}>
             <Press onPress={pick} style={styles.sideBtn} accessibilityLabel="Выбрать фото">
               <Icon name="image" size={22} color={colors.nightInk} />
