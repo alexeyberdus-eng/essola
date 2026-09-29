@@ -2,9 +2,11 @@
 
 Мобильное приложение на Expo (SDK 57) + React Native + Expo Router.
 
-| Рецепты | Рецепт | Сканер | Разбор состава | Кабинет |
+Стиль «Мёд»: ванильный белый, графит и медовый акцент; рецепты — пробирки, оценка состава — шкала как тест-полоска pH.
+
+| Главная | Разбор состава | Формула | Приготовление | Кабинет |
 |---|---|---|---|---|
-| ![](docs/home.png) | ![](docs/recipe.png) | ![](docs/scanner.png) | ![](docs/analysis.png) | ![](docs/profile.png) |
+| ![](docs/home.png) | ![](docs/analysis.png) | ![](docs/recipe.png) | ![](docs/cook.png) | ![](docs/profile.png) |
 
 ## Что внутри
 
@@ -15,21 +17,22 @@
   - «звёзды состава», «обратите внимание», «без …», диаграмма назначения компонентов, персональные предупреждения под тип кожи.
 - **Личный кабинет** — вход через **Apple ID** или **почту (одноразовый код)**, тип кожи, избранное, история сканов.
 
-## Запуск
+## Открыть на телефоне — без компьютера
+
+1. Установите **Expo Go** из App Store / Google Play.
+2. Откройте в репозитории вкладку **Issues → «📱 Essola в Expo Go»** и отсканируйте QR-код камерой.
+
+QR-код публикует GitHub Actions (`.github/workflows/expo-go-preview.yml`): при каждом изменении кода он запускает сервер разработки на GitHub и открывает к нему бесплатный туннель Cloudflare. Сервер живёт ~5,5 часа; чтобы получить новую ссылку, откройте последний запуск в **Actions** и нажмите **Re-run all jobs**.
+
+## Запуск локально
 
 ```bash
 cd app
 npm install
-npx expo start
+npx expo start --go
 ```
 
-В **Expo Go работает всё, включая сканер фото**: без нативного модуля текст распознаёт Tesseract внутри скрытого WebView (при первом запуске скачивается модель ~4 МБ, дальше из кэша). Для большей точности можно бесплатно получить ключ на ocr.space и прописать `EXPO_PUBLIC_OCR_SPACE_KEY` в `.env`. В Expo Go недоступен только вход через Apple.
-
-В собственной сборке используется нативное распознавание (Apple Vision / ML Kit) — быстрее и точнее:
-
-```bash
-npx eas-cli@latest build --profile development --platform ios
-```
+Сканер фото работает в Expo Go: без нативного модуля текст распознаёт Tesseract внутри скрытого WebView (при первом запуске скачивается модель ~4 МБ). Для большей точности можно бесплатно получить ключ на ocr.space и прописать `EXPO_PUBLIC_OCR_SPACE_KEY` в `.env`. В собственной сборке (`eas build`) используется нативное распознавание Apple Vision / ML Kit.
 
 ## Бэкенд (Supabase)
 
@@ -42,8 +45,8 @@ npx eas-cli@latest build --profile development --platform ios
 ## Структура
 
 ```
-src/app/            экраны (Expo Router): (tabs)/index, scanner, profile, recipe/[id], analysis/[id], auth
-src/components/     UI-кит, логотип, обложки рецептов, иконки
+src/app/            экраны (Expo Router): (tabs)/index, scanner, profile, recipe/[id], cook/[id], analysis/[id], auth
+src/components/     UI-кит, пробирки, строки рецептов, иконки
 src/context/        авторизация, лайки и история сканов
 src/data/           рецепты и база INCI
 src/lib/analyze.ts  парсер и скоринг составов
@@ -56,4 +59,4 @@ npm run typecheck
 npm run test:analyzer
 ```
 
-Логотип воспроизведён вектором (`src/components/Logo.tsx`, шрифты Bodoni Moda и Mrs Saint Delafield); иконка и сплэш — в `assets/`. Оценки состава носят информационный характер и не заменяют консультацию дерматолога.
+Шрифты — Inter и IBM Plex Mono; иконка и сплэш — в `assets/`. Оценки состава носят информационный характер и не заменяют консультацию дерматолога.

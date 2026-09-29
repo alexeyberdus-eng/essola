@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#F6F3EC",
+    "backgroundColor": "#FFFCF6",
     "ios": {
       "bundleIdentifier": "com.essola.lab",
       "supportsTablet": false,
@@ -19,7 +19,7 @@
     "android": {
       "package": "com.essola.lab",
       "adaptiveIcon": {
-        "backgroundColor": "#F6F3EC",
+        "backgroundColor": "#F0B429",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -37,9 +37,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 260,
+          "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#F6F3EC"
+          "backgroundColor": "#FFFCF6"
         }
       ],
       [

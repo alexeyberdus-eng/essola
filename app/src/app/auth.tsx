@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../components/Icon';
-import { Logo } from '../components/Logo';
-import { Button, Hairline, Press, T, tap } from '../components/ui';
+import { Button, Hairline, Press, T, tap, Wordmark } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius, space } from '../theme';
 
@@ -56,8 +55,8 @@ export default function AuthScreen() {
         </View>
 
         <View style={styles.brand}>
-          <Logo size={30} />
-          <Text style={styles.serif}>лаборатория косметики</Text>
+          <Wordmark size={34} />
+          <T v="label">Лаборатория домашней косметики</T>
         </View>
 
         <Text style={styles.title}>Войдите, чтобы сохранить всё важное</Text>
@@ -65,7 +64,7 @@ export default function AuthScreen() {
         <View style={styles.perks}>
           {PERKS.map(([icon, text]) => (
             <View key={text} style={styles.perk}>
-              <Icon name={icon} size={17} color={colors.gold} />
+              <Icon name={icon} size={17} color={colors.honeyText} />
               <T style={{ flex: 1 }}>{text}</T>
             </View>
           ))}
@@ -75,7 +74,7 @@ export default function AuthScreen() {
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-            cornerRadius={27}
+            cornerRadius={14}
             style={styles.apple}
             onPress={() => run(async () => {
               await signInWithApple();
@@ -175,31 +174,30 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   wrap: { flexGrow: 1, paddingHorizontal: space.gutter + 4, gap: space.xl },
   top: { flexDirection: 'row', justifyContent: 'flex-end' },
-  close: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line2, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
-  brand: { alignItems: 'center', gap: 6, marginTop: space.md },
-  serif: { fontFamily: fonts.serif, fontSize: 22, color: colors.gold },
-  title: { fontFamily: fonts.medium, fontSize: 26, lineHeight: 31, letterSpacing: -0.8, color: colors.ink, textAlign: 'center' },
-  perks: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line2 },
+  close: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  brand: { alignItems: 'center', gap: 10, marginTop: space.md },
+  title: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 31, letterSpacing: -0.9, color: colors.ink, textAlign: 'center' },
+  perks: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: colors.honeySoft },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   apple: { height: 54, width: '100%' },
   or: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   field: {
     height: 54,
-    borderRadius: radius.pill,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.line2,
+    borderColor: colors.line,
     backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 20,
   },
-  input: { flex: 1, height: '100%', fontFamily: fonts.body, fontSize: 16, color: colors.ink },
+  input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 16, color: colors.ink },
   code: {
     height: 64,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.line2,
+    borderColor: colors.line,
     backgroundColor: colors.card,
     textAlign: 'center',
     fontFamily: fonts.mono,
@@ -207,5 +205,5 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
     color: colors.ink,
   },
-  error: { fontFamily: fonts.body, fontSize: 14, color: colors.bad, textAlign: 'center' },
+  error: { fontFamily: fonts.regular, fontSize: 14, color: colors.bad, textAlign: 'center' },
 });

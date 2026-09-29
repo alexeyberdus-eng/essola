@@ -1,62 +1,59 @@
 import { Platform, TextStyle } from 'react-native';
 
-// Tokens mirror the ESSOLA Lab web block: ivory paper, graphite ink, antique gold.
+// "Honey lab": vanilla white paper, graphite ink, honey-yellow accent for primary actions only.
 export const colors = {
-  bg: '#F6F3EC',
-  paper: '#FBF9F4',
+  bg: '#FFFCF6',
   card: '#FFFFFF',
-  ink: '#1C1C1A',
-  ink2: '#3B3B37',
-  muted: '#7A7A72',
-  faint: '#A9A69C',
-  line: '#E7E3D8',
-  line2: '#D8D3C5',
-  gold: '#B0822F',
-  goldDeep: '#8F6820',
-  goldSoft: '#EFE3CB',
-  night: '#15130F',
-  nightCard: '#1F1C17',
-  nightLine: '#2E2A22',
-  nightInk: '#EFE9DC',
-  nightMuted: '#9A9384',
-  good: '#5E7A4F',
-  warn: '#B7832F',
-  bad: '#A5503C',
+  surf: '#F7F1E4',
+  ink: '#1C1A15',
+  ink2: '#3A362D',
+  muted: '#7A7365',
+  faint: '#B3AB9A',
+  line: '#ECE4D3',
+  honey: '#F0B429',
+  honeyText: '#9A6B00',
+  honeySoft: '#FDF3D8',
+  honeyLine: '#F5D98A',
+  good: '#3F8A55',
+  goodSoft: '#EAF3E6',
+  warn: '#B7791F',
+  warnSoft: '#FBF0DA',
+  bad: '#C8553D',
+  badSoft: '#FAE7E1',
+  night: '#12110E',
+  nightCard: '#1E1C17',
 } as const;
 
 export const fonts = {
-  body: 'Onest_400Regular',
-  medium: 'Onest_500Medium',
-  semibold: 'Onest_600SemiBold',
-  serif: 'CormorantGaramond_500Medium_Italic',
-  serifUpright: 'CormorantGaramond_500Medium',
-  mono: 'JetBrainsMono_500Medium',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+  mono: 'IBMPlexMono_400Regular',
+  monoMedium: 'IBMPlexMono_500Medium',
 } as const;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, gutter: 20 } as const;
-export const radius = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 } as const;
+export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 } as const;
 
 export const type = {
-  display: { fontFamily: fonts.medium, fontSize: 38, lineHeight: 40, letterSpacing: -1.6, color: colors.ink },
-  title: { fontFamily: fonts.medium, fontSize: 26, lineHeight: 30, letterSpacing: -0.8, color: colors.ink },
-  heading: { fontFamily: fonts.medium, fontSize: 18, lineHeight: 23, letterSpacing: -0.3, color: colors.ink },
-  serif: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 32, color: colors.goldDeep },
-  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 23, color: colors.ink2 },
-  small: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.muted },
-  label: {
-    fontFamily: fonts.mono,
-    fontSize: 10.5,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.muted,
-  },
+  display: { fontFamily: fonts.semibold, fontSize: 34, lineHeight: 38, letterSpacing: -1.4, color: colors.ink },
+  title: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 30, letterSpacing: -0.9, color: colors.ink },
+  heading: { fontFamily: fonts.semibold, fontSize: 19, lineHeight: 24, letterSpacing: -0.5, color: colors.ink },
+  body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink2 },
+  small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
+  label: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted },
+  mono: { fontFamily: fonts.mono, fontSize: 12, color: colors.muted },
 } satisfies Record<string, TextStyle>;
 
 export const shadow = Platform.select({
-  ios: { shadowColor: '#3B2E14', shadowOpacity: 0.07, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 2 },
-  default: { boxShadow: '0 8px 24px rgba(59,46,20,0.07)' },
+  ios: { shadowColor: '#3B2E14', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
+  android: { elevation: 3 },
+  default: { boxShadow: '0 6px 20px rgba(59,46,20,0.08)' },
 }) as object;
+
+/** pH-strip palette: red (risky) → green (clean). */
+export const STRIP = ['#E4572E', '#EE7B30', '#F29C38', '#F4B942', '#F2CB4C', '#DCCB55', '#B9C65A', '#8FBC63', '#6AAF69', '#4C9D6B'];
 
 export function scoreColor(score: number) {
   if (score >= 75) return colors.good;

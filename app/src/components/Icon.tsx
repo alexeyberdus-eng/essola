@@ -24,7 +24,11 @@ export type IconName =
   | 'alert'
   | 'bolt'
   | 'logout'
-  | 'history';
+  | 'history'
+  | 'play'
+  | 'plus'
+  | 'minus'
+  | 'pause';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -133,6 +137,14 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
         return <Path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12L13 3Z" {...p} />;
       case 'logout':
         return <Path d="M10 4.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 19.5h4M15 8l4 4-4 4M19 12H9.5" {...p} />;
+      case 'play':
+        return <Path d="M8 5.5v13l10-6.5-10-6.5Z" {...p} />;
+      case 'pause':
+        return <Path d="M8.5 5.5v13M15.5 5.5v13" {...p} />;
+      case 'plus':
+        return <Path d="M12 6v12M6 12h12" {...p} />;
+      case 'minus':
+        return <Path d="M6 12h12" {...p} />;
       case 'history':
         return (
           <>

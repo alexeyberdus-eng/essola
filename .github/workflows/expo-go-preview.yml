@@ -1,0 +1,149 @@
+# Runs the Expo dev server on a GitHub runner behind a free Cloudflare tunnel and posts
+# a QR code to the issue "📱 Essola в Expo Go". Open it in Expo Go — no local setup needed.
+# The server lives up to ~5.5 hours; re-run the workflow to get a fresh link.
+name: Expo Go preview
+
+on:
+  push:
+    branches: [main, claude/awesome-mccarthy-dlbgor]
+    paths: ['app/**', '.github/workflows/expo-go-preview.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: expo-go-preview
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: '📱 Essola в Expo Go'
+
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check types and analyzer
+        run: |
+          npx tsc --noEmit
+          npm run -s test:analyzer
+
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i /tmp/cloudflared.deb
+
+      - name: Open public tunnel
+        id: tunnel
+        run: |
+          nohup cloudflared tunnel --no-autoupdate --url http://localhost:8081 > /tmp/cloudflared.log 2>&1 &
+          for i in $(seq 1 60); do
+            URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -1 || true)
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+          if [ -z "$URL" ]; then cat /tmp/cloudflared.log; exit 1; fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "host=${URL#https://}" >> "$GITHUB_OUTPUT"
+          echo "Tunnel: $URL"
+
+      - name: Start Expo dev server
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+          EXPO_PACKAGER_PROXY_URL: ${{ steps.tunnel.outputs.url }}
+        run: |
+          nohup npx expo start --go --port 8081 > /tmp/expo.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -fs http://localhost:8081/status | grep -q running && break
+            sleep 2
+          done
+          curl -fs http://localhost:8081/status || (cat /tmp/expo.log; exit 1)
+
+      - name: Pre-build bundles through the tunnel
+        run: |
+          for platform in ios android; do
+            MANIFEST=$(curl -fsS --retry 5 --retry-delay 3 -H "expo-platform: $platform" -H 'accept: application/expo+json,application/json' "${{ steps.tunnel.outputs.url }}")
+            BUNDLE=$(echo "$MANIFEST" | jq -r '.launchAsset.url // .bundleUrl')
+            echo "$platform bundle: $BUNDLE"
+            case "$BUNDLE" in https://${{ steps.tunnel.outputs.host }}*) ;; *) echo "Manifest points to the wrong host"; echo "$MANIFEST"; exit 1 ;; esac
+            curl -fsS -o /dev/null --max-time 600 -w "$platform bundle: %{http_code}, %{size_download} bytes\n" "$BUNDLE"
+          done
+
+      - name: Publish QR code to the issue
+        uses: actions/github-script@v7
+        env:
+          HOST: ${{ steps.tunnel.outputs.host }}
+        with:
+          script: |
+            const link = `exps://${process.env.HOST}`;
+            const qr = `https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=16&data=${encodeURIComponent(link)}`;
+            const until = new Date(Date.now() + 5.5 * 3600e3).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' });
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '## Откройте Essola на телефоне',
+              '',
+              '1. Установите **Expo Go** из App Store или Google Play.',
+              '2. Наведите камеру iPhone на QR-код (на Android — сканер внутри Expo Go).',
+              '',
+              `<img src="${qr}" width="280" alt="QR-код для Expo Go">`,
+              '',
+              'Если QR не сработал: откройте Expo Go → «Enter URL manually» и вставьте:',
+              '',
+              '```',
+              link,
+              '```',
+              '',
+              `🟢 Сервер работает примерно до **${until} (МСК)**. Версия: \`${context.sha.slice(0, 7)}\`.`,
+              '',
+              `<!-- run:${context.runId} -->`,
+              `Чтобы получить новую ссылку позже — откройте [этот запуск](${run}) и нажмите **Re-run all jobs**. Каждое обновление кода запускает сервер автоматически.`,
+            ].join('\n');
+            const { data: issues } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', per_page: 100 });
+            const existing = issues.find((i) => i.title === process.env.ISSUE_TITLE && !i.pull_request);
+            if (existing) {
+              await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
+              core.notice(`Updated issue #${existing.number}`);
+            } else {
+              const { data } = await github.rest.issues.create({ ...context.repo, title: process.env.ISSUE_TITLE, body });
+              core.notice(`Created issue #${data.number}`);
+            }
+            await core.summary.addHeading('Essola в Expo Go').addRaw(`<img src="${qr}" width="240">`).addCodeBlock(link).write();
+
+      - name: Keep the server running
+        run: |
+          END=$(( $(date +%s) + 5*3600 + 20*60 ))
+          while [ "$(date +%s)" -lt "$END" ]; do
+            sleep 60
+            if ! curl -fs http://localhost:8081/status > /dev/null; then
+              echo "Expo server stopped"; tail -50 /tmp/expo.log; exit 1
+            fi
+          done
+
+      - name: Mark the link as expired
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', per_page: 100 });
+            const issue = issues.find((i) => i.title === process.env.ISSUE_TITLE && !i.pull_request);
+            if (!issue || !issue.body?.includes(`<!-- run:${context.runId} -->`)) return;
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = issue.body.replace(/🟢[^\n]*/, `🔴 Сервер остановлен — ссылка больше не работает. Откройте [этот запуск](${run}) и нажмите **Re-run all jobs**, через 3–4 минуты здесь появится новый QR-код.`);
+            await github.rest.issues.update({ ...context.repo, issue_number: issue.number, body });
