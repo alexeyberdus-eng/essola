@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "Essola",
+    "slug": "essola",
+    "scheme": "essola",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F3EC",
+    "ios": {
+      "bundleIdentifier": "com.essola.lab",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.essola.lab",
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F3EC",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-apple-authentication",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 260,
+          "resizeMode": "contain",
+          "backgroundColor": "#F6F3EC"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Essola использует камеру, чтобы сфотографировать состав косметики и разобрать его.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Essola открывает фото, чтобы распознать на нём состав косметики."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
