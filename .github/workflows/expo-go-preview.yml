@@ -123,6 +123,12 @@ jobs:
 
       - name: Pre-build bundles through the tunnel
         run: |
+          # A fresh trycloudflare hostname takes a little while to resolve.
+          for i in $(seq 1 60); do
+            curl -fs -o /dev/null "${{ steps.tunnel.outputs.url }}/status" && break
+            sleep 3
+          done
+          curl -fsS "${{ steps.tunnel.outputs.url }}/status"; echo
           HEADERS=$(curl -fsS -D - -o /dev/null -H 'expo-platform: ios' -H 'accept: multipart/mixed' -H 'expo-expect-signature: sig, keyid="expo-root", alg="rsa-v1_5-sha256"' "${{ steps.tunnel.outputs.url }}" || true)
           echo "$HEADERS" | head -20
           curl -fsS -H 'expo-platform: ios' -H 'accept: multipart/mixed' -H 'expo-expect-signature: sig, keyid="expo-root", alg="rsa-v1_5-sha256"' "${{ steps.tunnel.outputs.url }}" | grep -qi 'expo-signature' || { echo "Manifest is not signed — Expo Go would refuse it"; tail -40 /tmp/expo.log; exit 1; }
