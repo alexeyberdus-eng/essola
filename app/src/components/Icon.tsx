@@ -28,7 +28,15 @@ export type IconName =
   | 'play'
   | 'plus'
   | 'minus'
-  | 'pause';
+  | 'pause'
+  | 'home'
+  | 'book'
+  | 'swap'
+  | 'bookmark'
+  | 'comment'
+  | 'send'
+  | 'external'
+  | 'filter';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -137,6 +145,27 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
         return <Path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12L13 3Z" {...p} />;
       case 'logout':
         return <Path d="M10 4.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 19.5h4M15 8l4 4-4 4M19 12H9.5" {...p} />;
+      case 'home':
+        return <Path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1v-8.5Z" {...p} />;
+      case 'book':
+        return (
+          <>
+            <Path d="M5 4.5h10a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3v-12Z" {...p} />
+            <Path d="M5 16.5a3 3 0 0 1 3-3h10" {...p} />
+          </>
+        );
+      case 'swap':
+        return <Path d="M7 7h11M15 4l3 3-3 3M17 17H6M9 14l-3 3 3 3" {...p} />;
+      case 'bookmark':
+        return <Path d="M6.5 4.5h11v15.5L12 16l-5.5 4V4.5Z" {...p} />;
+      case 'comment':
+        return <Path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V16.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5Z" {...p} />;
+      case 'send':
+        return <Path d="M20 4 10 14M20 4l-6 16-4-6-6-4 16-6Z" {...p} />;
+      case 'external':
+        return <Path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 13.5v5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7h5" {...p} />;
+      case 'filter':
+        return <Path d="M5 7h14M8 12h8M10.5 17h3" {...p} />;
       case 'play':
         return <Path d="M8 5.5v13l10-6.5-10-6.5Z" {...p} />;
       case 'pause':

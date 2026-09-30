@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { CommunityProvider } from '../context/CommunityContext';
 import { LibraryProvider } from '../context/LibraryContext';
 import { colors } from '../theme';
 
@@ -36,6 +37,8 @@ function Root() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipe/[id]" />
         <Stack.Screen name="analysis/[id]" />
+        <Stack.Screen name="comments/[id]" />
+        <Stack.Screen name="ingredient/[id]" />
         <Stack.Screen name="cook/[id]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
       </Stack>
@@ -48,7 +51,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <LibraryProvider>
-          <Root />
+          <CommunityProvider>
+            <Root />
+          </CommunityProvider>
         </LibraryProvider>
       </AuthProvider>
     </SafeAreaProvider>

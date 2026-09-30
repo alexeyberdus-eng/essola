@@ -12,14 +12,49 @@ export function formatCount(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k` : String(n);
 }
 
-export function LikeButton({ id, size = 19, withCount }: { id: string; size?: number; withCount?: boolean }) {
+const SPARKS = [0, 60, 120, 180, 240, 300];
+
+/** Golden particles flying out of a heart when it gets liked. */
+export function Burst({ trigger, size }: { trigger: Animated.Value; size: number }) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+      {SPARKS.map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        const dist = size * 0.95;
+        return (
+          <Animated.View
+            key={deg}
+            style={[
+              styles.spark,
+              {
+                opacity: trigger.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+                transform: [
+                  { translateX: trigger.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(rad) * dist] }) },
+                  { translateY: trigger.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(rad) * dist] }) },
+                  { scale: trigger.interpolate({ inputRange: [0, 1], outputRange: [1.2, 0.3] }) },
+                ],
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+export function LikeButton({ id, size = 19, withCount, showCount }: { id: string; size?: number; withCount?: boolean; showCount?: boolean }) {
   const { isLiked, toggleLike, likeCount } = useLibrary();
   const liked = isLiked(id);
   const pop = useRef(new Animated.Value(1)).current;
+  const burst = useRef(new Animated.Value(0)).current;
   const onPress = () => {
     tap(liked ? 'light' : 'medium');
-    pop.setValue(0.7);
+    pop.setValue(0.6);
     Animated.spring(pop, { toValue: 1, friction: 3, tension: 180, useNativeDriver: Platform.OS !== 'web' }).start();
+    if (!liked) {
+      burst.setValue(0);
+      Animated.timing(burst, { toValue: 1, duration: 520, useNativeDriver: Platform.OS !== 'web' }).start();
+    }
     toggleLike(id);
   };
   return (
@@ -28,12 +63,15 @@ export function LikeButton({ id, size = 19, withCount }: { id: string; size?: nu
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel={liked ? 'Убрать из избранного' : 'В избранное'}
-      style={withCount ? styles.pill : undefined}
+      style={withCount ? styles.pill : showCount ? styles.inline : undefined}
     >
-      <Animated.View style={{ transform: [{ scale: pop }] }}>
-        <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? colors.bad : withCount ? colors.ink : colors.muted} />
-      </Animated.View>
-      {withCount && <Text style={styles.pillText}>{formatCount(likeCount(id))}</Text>}
+      <View>
+        <Burst trigger={burst} size={size} />
+        <Animated.View style={{ transform: [{ scale: pop }] }}>
+          <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? colors.bad : withCount || showCount ? colors.ink : colors.muted} />
+        </Animated.View>
+      </View>
+      {(withCount || showCount) && <Text style={[styles.pillText, showCount && styles.countText]}>{formatCount(likeCount(id))}</Text>}
     </Pressable>
   );
 }
@@ -88,5 +126,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  spark: { position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: colors.honey },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  countText: { fontFamily: fonts.medium, fontSize: 13.5 },
   pillText: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink },
 });

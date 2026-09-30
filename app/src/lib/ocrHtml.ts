@@ -23,14 +23,44 @@ function getWorker() {
     var opts = Object.assign(${options}, {
       logger: function (m) { if (m.status && typeof m.progress === 'number') post({ type: 'progress', status: m.status, progress: m.progress }); }
     });
-    workerP = Tesseract.createWorker('eng', 1, opts).then(function (w) { post({ type: 'ready' }); return w; });
+    // Latin for INCI lists + Cyrillic for Russian labels ("Состав: вода, глицерин…").
+    workerP = Tesseract.createWorker(['rus', 'eng'], 1, opts).then(function (w) { post({ type: 'ready' }); return w; });
     workerP.catch(function (e) { workerP = null; post({ type: 'fatal', error: String(e && e.message || e) }); });
   }
   return workerP;
 }
+// Grayscale + contrast stretch: glossy packaging and coloured print read much better.
+function prepare(dataUrl) {
+  return new Promise(function (resolve) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        var x = c.getContext('2d');
+        x.drawImage(img, 0, 0);
+        var d = x.getImageData(0, 0, c.width, c.height), p = d.data, lo = 255, hi = 0, i, g;
+        for (i = 0; i < p.length; i += 4) {
+          g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+          p[i] = g; if (g < lo) lo = g; if (g > hi) hi = g;
+        }
+        var k = 255 / Math.max(1, hi - lo);
+        for (i = 0; i < p.length; i += 4) {
+          g = Math.min(255, Math.max(0, (p[i] - lo) * k));
+          p[i] = p[i + 1] = p[i + 2] = g;
+        }
+        x.putImageData(d, 0, 0);
+        resolve(c);
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = function () { resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
+
 window.ocr = function (id, dataUrl) {
-  getWorker()
-    .then(function (w) { return w.recognize(dataUrl); })
+  Promise.all([getWorker(), prepare(dataUrl)])
+    .then(function (r) { return r[0].recognize(r[1]); })
     .then(function (r) { post({ type: 'result', id: id, text: r.data.text }); })
     .catch(function (e) { post({ type: 'result', id: id, error: String(e && e.message || e) }); });
 };

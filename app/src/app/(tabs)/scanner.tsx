@@ -7,6 +7,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleShe
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { OcrStatus, OcrWebView } from '../../components/OcrWebView';
+import { Breathe } from '../../components/silk';
 import { Button, IconButton, Press, T, tap } from '../../components/ui';
 import { useLibrary } from '../../context/LibraryContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
@@ -35,10 +36,14 @@ export default function ScannerScreen() {
 
   const finish = (raw: string, title?: string) => {
     const result = analyze(raw);
-    if (!result.items.length) {
+    if (!result.items.length || result.unreadable) {
       setText(raw);
       setManual(true);
-      setNotice('Не удалось найти список ингредиентов. Проверьте текст и поправьте при необходимости.');
+      setNotice(
+        result.items.length
+          ? 'Фото прочиталось неточно — проверьте текст ниже и поправьте ошибки. Или переснимите ближе, ровно и при хорошем свете.'
+          : 'Не удалось найти список ингредиентов. Снимите строку «Состав» / «Ingredients» крупнее.',
+      );
       return;
     }
     tap('success');
@@ -155,11 +160,11 @@ export default function ScannerScreen() {
       )}
 
       {permission?.granted && (
-        <View pointerEvents="none" style={[styles.frame, { top: insets.top + 90 }]}>
+        <Breathe amount={0.025} style={[styles.frame, { top: insets.top + 90 }]}>
           {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
-            <View key={c} style={[styles.corner, styles[c]]} />
+            <View key={c} pointerEvents="none" style={[styles.corner, styles[c]]} />
           ))}
-        </View>
+        </Breathe>
       )}
 
       <View style={[styles.camTop, { top: insets.top + 10 }]}>
@@ -183,8 +188,8 @@ export default function ScannerScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.sheetTitle}>Наведите на список «Ingredients»</Text>
-            <Text style={styles.sheetText}>Держите телефон ровно, чтобы весь состав попал в рамку.</Text>
+            <Text style={styles.sheetTitle}>Наведите на «Состав» или «Ingredients»</Text>
+            <Text style={styles.sheetText}>Читаем русский и латиницу. Держите телефон ровно, чтобы весь состав попал в рамку.</Text>
           </>
         )}
         {notice && <Text style={[styles.notice, { marginTop: 12 }]}>{notice}</Text>}

@@ -27,8 +27,8 @@ async function toJpegBase64(uri: string) {
 async function cloud(dataUrl: string) {
   const body = new FormData();
   body.append('base64Image', dataUrl);
-  body.append('language', 'eng');
-  body.append('OCREngine', '2');
+  body.append('language', 'rus');
+  body.append('OCREngine', '1');
   body.append('scale', 'true');
   const res = await fetch('https://api.ocr.space/parse/image', { method: 'POST', headers: { apikey: cloudKey! }, body });
   const json = (await res.json()) as { IsErroredOnProcessing?: boolean; ParsedResults?: { ParsedText: string }[] };

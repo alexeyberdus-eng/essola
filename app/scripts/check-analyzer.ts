@@ -27,6 +27,14 @@ assert.equal(label.items.length, 16);
 assert.equal(label.unknown, 0);
 assert.ok(!label.items.some((i) => /france/i.test(i.raw)), 'text after "Made in" must be ignored');
 
+// Russian label read by the rus+eng OCR engine.
+const ruLabel = analyze(readFileSync(new URL('./fixture-ocr-label-ru.txt', import.meta.url), 'utf8'));
+assert.equal(ruLabel.items.length, 11);
+assert.equal(ruLabel.unknown, 0);
+assert.ok(!ruLabel.items.some((i) => /срок|изготовитель/i.test(i.raw)), 'text after the list must be ignored');
+// Mixed-script OCR slip: Cyrillic look-alikes inside a Latin INCI name.
+assert.equal(analyze('Ingredients: Aqua, Butyrospermum РАВКИ (Shea) Butter, Glycerin').items[1].ing.inci, 'Butyrospermum Parkii Butter');
+
 // Garbage read from a Cyrillic label by a Latin-only OCR must not produce a verdict.
 const junk = analyze('% 4 4 i ey, A z {1B se gy o p 3 p aH I A y 3 ca 9" ALITA 4, ( E \\ a, S- EJ \\ [, be SS LI 7 KOKTEV/Tb MOJ14HbIi CTEPUIM30BAHCOB, NTA TIATARMA JIETEM CTAPLLE 12 MECALLEB, MONOKO HOPMaNH30BaHHOE');
 assert.ok(junk.unreadable, 'OCR junk must be flagged as unreadable');

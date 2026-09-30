@@ -166,7 +166,19 @@ function guess(raw: string, key: string): Ingredient {
   return make([], 'synthetic', 1, 'Компонента пока нет в базе Essola.');
 }
 
+// Cyrillic letters that look like Latin ones — OCR with both alphabets sometimes mixes them up.
+const LOOKALIKE: Record<string, string> = { а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x', и: 'u', г: 'r', п: 'n' };
+const latinize = (s: string) => s.toLowerCase().replace(/[авекмнорстухигп]/g, (ch) => LOOKALIKE[ch] ?? ch);
+
 export function identify(raw: string): { ing: Ingredient; match: Match } {
+  const direct = identifyExact(raw);
+  if (direct.match === 'exact' || direct.match === 'fuzzy' || !/[а-яё]/i.test(raw)) return direct;
+  // "BUTYROSPERMUM РАВКИ" → try again with look-alike Cyrillic letters swapped for Latin.
+  const retry = identifyExact(latinize(raw));
+  return retry.match === 'exact' || retry.match === 'fuzzy' ? retry : direct;
+}
+
+function identifyExact(raw: string): { ing: Ingredient; match: Match } {
   const full = normalize(raw);
   const outer = normalize(raw.replace(/\(.*?\)/g, ' '));
   const inner = raw.match(/\((.*?)\)/)?.[1];

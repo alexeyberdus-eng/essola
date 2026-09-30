@@ -1,38 +1,41 @@
-import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FeedPost } from '../../components/FeedPost';
 import { Icon } from '../../components/Icon';
-import { RecipeRow } from '../../components/RecipeRow';
-import { IconButton, Press, SectionHead, Seg, T, Wordmark } from '../../components/ui';
-import { useAuth } from '../../context/AuthContext';
+import { FadeIn, Glow } from '../../components/silk';
+import { IconButton, Seg, T, Wordmark } from '../../components/ui';
+import { useCommunity } from '../../context/CommunityContext';
 import { useLibrary } from '../../context/LibraryContext';
+import { recipeMeta } from '../../data/community';
 import { CATEGORIES, Category, RECIPES } from '../../data/recipes';
-import { colors, fonts, radius, space } from '../../theme';
+import { colors, fonts, space, TAB_SPACE } from '../../theme';
 
-type Filter = 'all' | 'fav' | Category;
+type Sort = 'for-you' | 'new' | 'hot' | 'saved';
 
-export default function HomeScreen() {
+export default function FeedScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const { liked, scans } = useLibrary();
-  const [filter, setFilter] = useState<Filter>('all');
+  const { liked, likeCount } = useLibrary();
+  const { count } = useCommunity();
+  const [sort, setSort] = useState<Sort>('for-you');
+  const [cat, setCat] = useState<'all' | Category>('all');
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const input = useRef<TextInput>(null);
 
   const q = query.trim().toLowerCase();
-  const list = useMemo(
-    () =>
-      RECIPES.filter((r) => {
-        if (filter === 'fav' && !liked.has(r.id)) return false;
-        if (filter !== 'all' && filter !== 'fav' && r.category !== filter) return false;
-        if (!q) return true;
-        return [r.title, r.subtitle, r.category, ...r.ingredients.map((i) => i.name)].some((t) => t.toLowerCase().includes(q));
-      }),
-    [filter, q, liked],
-  );
-  const last = scans[0];
+  const list = useMemo(() => {
+    let l = RECIPES.filter((r) => {
+      if (sort === 'saved' && !liked.has(r.id)) return false;
+      if (cat !== 'all' && r.category !== cat) return false;
+      if (!q) return true;
+      return [r.title, r.subtitle, r.category, ...r.ingredients.map((i) => i.name)].some((t) => t.toLowerCase().includes(q));
+    });
+    if (sort === 'new') l = [...l].sort((a, b) => recipeMeta(a).postedAgo - recipeMeta(b).postedAgo);
+    if (sort === 'hot') l = [...l].sort((a, b) => count(b.id) - count(a.id));
+    if (sort === 'for-you') l = [...l].sort((a, b) => likeCount(b.id) - likeCount(a.id));
+    return l;
+  }, [sort, cat, q, liked, likeCount, count]);
 
   const toggleSearch = () => {
     if (searching) {
@@ -40,7 +43,7 @@ export default function HomeScreen() {
       setSearching(false);
     } else {
       setSearching(true);
-      setTimeout(() => input.current?.focus(), 50);
+      setTimeout(() => input.current?.focus(), 60);
     }
   };
 
@@ -48,15 +51,9 @@ export default function HomeScreen() {
     <View style={{ paddingTop: insets.top + 8 }}>
       <View style={styles.top}>
         <Wordmark />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <IconButton icon={searching ? 'close' : 'search'} label="Поиск" onPress={toggleSearch} />
-          <Press onPress={() => router.push(user ? '/profile' : '/auth')} style={styles.avatar} accessibilityLabel="Кабинет">
-            {user ? <Text style={styles.avatarText}>{(user.name || user.email || 'E').slice(0, 1).toUpperCase()}</Text> : <Icon name="user" size={18} />}
-          </Press>
-        </View>
+        <IconButton icon={searching ? 'close' : 'search'} label="Поиск" onPress={toggleSearch} />
       </View>
-
-      {searching ? (
+      {searching && (
         <View style={styles.search}>
           <Icon name="search" size={18} color={colors.muted} />
           <TextInput
@@ -69,113 +66,61 @@ export default function HomeScreen() {
             returnKeyType="search"
           />
         </View>
-      ) : (
-        <Press haptic={false} onPress={() => router.navigate('/scanner')} style={styles.cta}>
-          <View style={styles.ctaTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ctaKicker}>Сканер составов</Text>
-              <Text style={styles.ctaTitle}>Проверьте состав{'\n'}любого средства</Text>
-            </View>
-            <View style={styles.ctaIcon}>
-              <Icon name="scan" size={26} color={colors.honey} strokeWidth={1.7} />
-            </View>
-          </View>
-          {last ? (
-            <Press haptic={false} onPress={() => router.push(`/analysis/${last.id}`)} style={styles.ctaLast}>
-              <Text style={styles.ctaLastText} numberOfLines={1}>
-                Последний · {last.title}
-              </Text>
-              <Text style={styles.ctaScore}>{last.overall}</Text>
-            </Press>
-          ) : (
-            <View style={styles.ctaLast}>
-              <Text style={styles.ctaLastText}>Сфотографируйте этикетку — разбор за секунды</Text>
-            </View>
-          )}
-        </Press>
       )}
-
-      <View style={{ marginTop: space.xl, marginBottom: space.md }}>
-        <SectionHead
-          kicker={filter === 'fav' ? 'Избранное' : 'Формулы'}
-          title={q ? `Найдено: ${list.length}` : filter === 'all' ? `${RECIPES.length} рецептов` : `${list.length} рецептов`}
-        />
-      </View>
       <Seg
         inset={space.gutter}
-        value={filter}
-        onChange={setFilter}
+        value={sort}
+        onChange={setSort}
         options={[
-          { key: 'all', label: 'Все' },
-          ...CATEGORIES.map((c) => ({ key: c as Filter, label: c })),
-          { key: 'fav', label: `♥ ${liked.size}` },
+          { key: 'for-you', label: 'Для вас' },
+          { key: 'new', label: 'Новое' },
+          { key: 'hot', label: 'Обсуждают' },
+          { key: 'saved', label: `♥ ${liked.size}` },
         ]}
       />
-      <View style={{ height: 6 }} />
+      <View style={{ height: 8 }} />
+      <Seg
+        small
+        inset={space.gutter}
+        value={cat}
+        onChange={setCat}
+        options={[{ key: 'all', label: 'Все' }, ...CATEGORIES.map((c) => ({ key: c as 'all' | Category, label: c }))]}
+      />
+      <View style={{ height: 16 }} />
     </View>
   );
 
   return (
-    <FlatList
-      style={{ backgroundColor: colors.bg }}
-      data={list}
-      keyExtractor={(r) => r.id}
-      ListHeaderComponent={header}
-      contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: 40 }}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      renderItem={({ item, index }) => <RecipeRow recipe={item} last={index === list.length - 1} />}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <T v="heading">{filter === 'fav' ? 'Пока пусто' : 'Ничего не нашлось'}</T>
-          <T v="small" style={{ textAlign: 'center' }}>
-            {filter === 'fav' ? 'Нажмите ♡ у рецепта, чтобы сохранить его сюда.' : 'Попробуйте другой ингредиент или категорию.'}
-          </T>
-        </View>
-      }
-    />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Glow />
+      <FlatList
+        data={list}
+        keyExtractor={(r) => r.id}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        initialNumToRender={4}
+        renderItem={({ item, index }) => (
+          <FadeIn index={index}>
+            <FeedPost recipe={item} />
+          </FadeIn>
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <T v="heading">{sort === 'saved' ? 'Пока пусто' : 'Ничего не нашлось'}</T>
+            <Text style={styles.emptyText}>{sort === 'saved' ? 'Нажмите ♡ под рецептом, чтобы сохранить его.' : 'Попробуйте другой ингредиент или категорию.'}</Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surf, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
-  cta: { backgroundColor: colors.honey, borderRadius: radius.xl, padding: 18 },
-  ctaTop: { flexDirection: 'row', gap: 12 },
-  ctaKicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: '#6B4E00' },
-  ctaTitle: { fontFamily: fonts.semibold, fontSize: 22, lineHeight: 26, letterSpacing: -0.7, color: colors.ink, marginTop: 8 },
-  ctaIcon: { width: 52, height: 52, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  ctaLast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 18,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderColor: 'rgba(28,26,21,0.14)',
-  },
-  ctaLastText: { flex: 1, fontFamily: fonts.regular, fontSize: 13, color: '#4A3A10' },
-  ctaScore: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 13,
-    color: colors.honey,
-    backgroundColor: colors.ink,
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-  search: {
-    height: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.surf,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 10,
-  },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  search: { height: 48, borderRadius: 99, backgroundColor: colors.surf, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10, marginBottom: 12 },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 48, paddingHorizontal: 30 },
+  empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
+  emptyText: { fontFamily: fonts.regular, fontSize: 13.5, color: colors.muted, textAlign: 'center' },
 });

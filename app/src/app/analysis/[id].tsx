@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { IconButton, MetricTable, Press, ScoreStrip, Seg, T, Tag } from '../../components/ui';
+import { Button, IconButton, MetricTable, Press, ScoreStrip, Seg, T, Tag } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { FLAG_LABEL, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
@@ -147,6 +147,7 @@ export default function AnalysisScreen() {
             {result.unknown} компонент(ов) пока нет в базе — они учтены в оценке с пониженным весом.
           </T>
         )}
+        <Button label="Найти аналоги дешевле" icon="swap" onPress={() => router.push({ pathname: '/analogs', params: { scan: scan.id } })} style={{ marginTop: 22 }} />
         <T v="small" style={{ marginTop: 20, color: colors.faint }}>
           Оценка информационная и не заменяет консультацию дерматолога: концентрации производитель обычно не указывает.
         </T>

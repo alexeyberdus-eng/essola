@@ -2,7 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { LikeButton, VialTile } from '../../components/RecipeRow';
+import { LikeButton } from '../../components/RecipeRow';
+import { Avatar, FadeIn, ProductPhoto } from '../../components/silk';
+import { useCommunity } from '../../context/CommunityContext';
+import { plural, recipeMeta } from '../../data/community';
 import { Button, IconButton, Press, T } from '../../components/ui';
 import { getRecipe, LEVELS, RECIPES } from '../../data/recipes';
 import { formatPercent, percentages } from '../../lib/formula';
@@ -41,14 +44,14 @@ export default function RecipeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 110 }} showsVerticalScrollIndicator={false}>
+        <FadeIn>
+          <ProductPhoto kind={recipeMeta(recipe).bottle} tone={recipe.tone} height={250} radius={22} />
+        </FadeIn>
         <View style={styles.hero}>
-          <VialTile recipe={recipe} size={72} />
-          <View style={{ flex: 1 }}>
-            <T v="label">
-              Формула №{num} · {recipe.category}
-            </T>
-            <Text style={styles.title}>{recipe.title}</Text>
-          </View>
+          <T v="label">
+            Формула №{num} · {recipe.category}
+          </T>
+          <Text style={styles.title}>{recipe.title}</Text>
         </View>
         <T style={{ marginTop: 10 }}>{recipe.subtitle}. Для кожи: {recipe.skin.join(', ').toLowerCase()}.</T>
 
@@ -96,6 +99,8 @@ export default function RecipeScreen() {
           </View>
         ))}
 
+        <Discussion recipeId={recipe.id} />
+
         <View style={[styles.note, { backgroundColor: colors.honeySoft }]}>
           <View style={styles.noteHead}>
             <Icon name="spark" size={15} color={colors.honeyText} />
@@ -128,7 +133,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', gap: 14, backgroundColor: colors.bg },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 12 },
   navRight: { flexDirection: 'row', gap: 8 },
-  hero: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 4 },
+  hero: { marginTop: 18 },
+  discussion: { marginTop: space.xl, borderRadius: 18, borderWidth: 1, borderColor: colors.line, padding: 16 },
+  dHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  dTitle: { fontFamily: fonts.semibold, fontSize: 17, color: colors.ink },
+  dRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  dText: { flex: 1, fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink },
+  dName: { fontFamily: fonts.semibold },
+  dReplies: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, marginTop: 3 },
+  dAll: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 14 },
+  dAllText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.honeyText },
   title: { fontFamily: fonts.semibold, fontSize: 34, lineHeight: 38, letterSpacing: -1.4, color: colors.ink, marginTop: 4 },
   facts: { flexDirection: 'row', marginTop: 18, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.card },
   fact: { flex: 1, paddingVertical: 11, paddingHorizontal: 9, gap: 3 },
@@ -150,3 +164,38 @@ const styles = StyleSheet.create({
   noteTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
   sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.line },
 });
+
+function Discussion({ recipeId }: { recipeId: string }) {
+  const { threads, count } = useCommunity();
+  const top = threads(recipeId).slice(0, 2);
+  const n = count(recipeId);
+  const open = () => router.push(`/comments/${recipeId}`);
+  return (
+    <Press haptic={false} onPress={open} style={styles.discussion}>
+      <View style={styles.dHead}>
+        <Text style={styles.dTitle}>Обсуждение</Text>
+        <T v="label">{n}</T>
+      </View>
+      {top.map((t) => (
+        <View key={t.id} style={styles.dRow}>
+          <Avatar name={t.author} size={26} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.dText} numberOfLines={2}>
+              <Text style={styles.dName}>{t.author} </Text>
+              {t.text}
+            </Text>
+            {t.replies.length > 0 && (
+              <Text style={styles.dReplies}>
+                {t.replies.length} {plural(t.replies.length, 'ответ', 'ответа', 'ответов')}
+              </Text>
+            )}
+          </View>
+        </View>
+      ))}
+      <View style={styles.dAll}>
+        <Text style={styles.dAllText}>{n ? `Все ${n} ${plural(n, 'комментарий', 'комментария', 'комментариев')}` : 'Написать первый комментарий'}</Text>
+        <Icon name="arrowRight" size={14} color={colors.honeyText} />
+      </View>
+    </Press>
+  );
+}

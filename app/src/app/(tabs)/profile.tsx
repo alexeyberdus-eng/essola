@@ -3,12 +3,15 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { RecipeRow } from '../../components/RecipeRow';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CountUp, FadeIn, Glow } from '../../components/silk';
 import { Button, LinkText, Press, SectionHead, T, Tag } from '../../components/ui';
+import { useCommunity } from '../../context/CommunityContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { RECIPES } from '../../data/recipes';
 import type { SkinType } from '../../lib/analyze';
-import { colors, fonts, radius, scoreColor, space } from '../../theme';
+import { colors, fonts, radius, scoreColor, shadow, space, TAB_SPACE } from '../../theme';
 
 const SKIN: { id: SkinType; label: string }[] = [
   { id: 'normal', label: 'Нормальная' },
@@ -27,9 +30,10 @@ export default function ProfileScreen() {
   const initial = (user?.name || user?.email || 'E').slice(0, 1).toUpperCase();
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <Glow />
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: space.gutter, paddingBottom: 40, gap: space.xxl }}
+      contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE, gap: space.xxl }}
     >
       <View style={{ gap: 14 }}>
         <T v="title">Кабинет</T>
@@ -65,19 +69,20 @@ export default function ProfileScreen() {
       </View>
 
       {user && (
-        <View style={{ gap: 12 }}>
-          <SectionHead kicker="Для персонального разбора" title="Тип кожи" />
+        <FadeIn index={1} style={styles.skin}>
+          <LinearGradient colors={['#FFF6D8', '#FFFDF6', '#FFF0C4']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
+          <SectionHead kicker="Профиль кожи · для персональных подсказок" title="Тип кожи" />
           <View style={styles.chips}>
             {SKIN.map((s) => {
               const on = user.skinType === s.id;
               return (
                 <Press key={s.id} onPress={() => updateProfile({ skinType: on ? null : s.id })} style={[styles.chip, on && styles.chipOn]}>
-                  <Text style={[styles.chipText, on && { color: colors.bg }]}>{s.label}</Text>
+                  <Text style={[styles.chipText, on && { color: colors.ink, fontFamily: fonts.semibold }]}>{s.label}</Text>
                 </Press>
               );
             })}
           </View>
-        </View>
+        </FadeIn>
       )}
 
       <View>
@@ -113,22 +118,22 @@ export default function ProfileScreen() {
 
       {user && <Button label="Выйти" icon="logout" variant="outline" onPress={signOut} />}
     </ScrollView>
+    </View>
   );
 }
 
-function Stats({ liked, scans, since }: { liked: number; scans: number; since?: string }) {
-  const cells: [string | number, string][] = [
+function Stats({ liked, scans }: { liked: number; scans: number; since?: string }) {
+  const { mineCount } = useCommunity();
+  const cells: [number, string][] = [
     [liked, 'Избранное'],
     [scans, 'Проверок'],
+    [mineCount, 'Комментариев'],
   ];
-  if (since) cells.push([since, 'С нами с']);
   return (
     <View style={styles.stats}>
       {cells.map(([v, k], i) => (
         <View key={k} style={[styles.stat, i > 0 && { borderLeftWidth: 1, borderColor: colors.line }]}>
-          <Text style={[styles.statValue, typeof v === 'string' && { fontSize: 15, lineHeight: 26 }]} numberOfLines={1}>
-            {v}
-          </Text>
+          <CountUp value={v} style={styles.statValue} />
           <T v="label" style={{ fontSize: 9.5 }}>
             {k}
           </T>
@@ -150,7 +155,8 @@ function Empty({ text, cta, onPress }: { text: string; cta: string; onPress: () 
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 18, gap: 16 },
+  card: { backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: 'rgba(40,30,10,0.05)', padding: 18, gap: 16, ...shadow },
+  skin: { gap: 12, padding: 18, borderRadius: 22, borderWidth: 1, borderColor: '#F7E6A8', overflow: 'hidden' },
   idRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.honey, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: fonts.semibold, fontSize: 24, color: colors.ink },
@@ -159,8 +165,8 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', gap: 3 },
   statValue: { fontFamily: fonts.semibold, fontSize: 22, lineHeight: 26, letterSpacing: -0.6, color: colors.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { height: 36, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.surf, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink },
+  chip: { height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.honey },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   scan: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderColor: colors.line },
   score: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

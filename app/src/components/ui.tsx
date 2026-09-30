@@ -1,7 +1,8 @@
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode, useRef } from 'react';
 import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
-import { colors, fonts, radius, STRIP, type } from '../theme';
+import { colors, fonts, glowShadow, radius, STRIP, type } from '../theme';
 import { Icon, IconName } from './Icon';
 
 export function T({ v = 'body', style, ...rest }: TextProps & { v?: keyof typeof type }) {
@@ -87,16 +88,20 @@ export function Button({
     <Press
       onPress={onPress}
       disabled={disabled || loading}
-      style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, style]}
+      style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, variant === 'honey' && glowShadow, style]}
     >
+      {variant === 'honey' && (
+        // Silk accent: soft vertical honey gradient with a light top edge.
+        <LinearGradient colors={[colors.honeyTop, colors.honeyBottom]} style={[StyleSheet.absoluteFill, s.btnFill]} />
+      )}
       {loading ? (
         <ActivityIndicator color={c.fg} />
       ) : (
-        <>
+        <View style={s.btnContent}>
           {icon && <Icon name={icon} size={18} color={c.fg} strokeWidth={1.8} />}
           <Text style={[s.btnText, { color: c.fg }]}>{label}</Text>
           {iconRight && <Icon name={iconRight} size={18} color={c.fg} strokeWidth={1.8} />}
-        </>
+        </View>
       )}
     </Press>
   );
@@ -130,7 +135,7 @@ export function Seg<K extends string>({
         const on = o.key === value;
         return (
           <Press key={o.key} onPress={() => onChange(o.key)} style={[s.seg, small && s.segSm, on && s.segOn]}>
-            <Text style={[s.segText, small && { fontSize: 12 }, on && { color: colors.bg }]}>{o.label}</Text>
+            <Text style={[s.segText, small && { fontSize: 12 }, on && { color: colors.ink, fontFamily: fonts.semibold }]}>{o.label}</Text>
           </Press>
         );
       })}
@@ -227,12 +232,14 @@ export function LinkText({ label, onPress }: { label: string; onPress: () => voi
 }
 
 const s = StyleSheet.create({
+  btnContent: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 },
+  btnFill: { borderRadius: 14, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
   btn: { height: 52, borderRadius: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   btnText: { fontFamily: fonts.semibold, fontSize: 15 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  seg: { height: 34, paddingHorizontal: 13, borderRadius: 10, backgroundColor: colors.surf, justifyContent: 'center' },
-  segSm: { height: 30, paddingHorizontal: 11, borderRadius: 9 },
-  segOn: { backgroundColor: colors.ink },
+  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },
+  segSm: { height: 30, paddingHorizontal: 12, borderRadius: 99 },
+  segOn: { backgroundColor: colors.honey },
   segText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
   tagText: { fontFamily: fonts.medium, fontSize: 11.5 },

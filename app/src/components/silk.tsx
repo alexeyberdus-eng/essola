@@ -1,0 +1,191 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { colors, fonts, shadow } from '../theme';
+
+const native = Platform.OS !== 'web';
+
+/** Warm light pooling in the top corners — replaces flat white behind headers. */
+export function Glow({ height = 360 }: { height?: number }) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height }]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="g1" cx="88%" cy="-6%" rx="75%" ry="60%">
+            <Stop offset="0" stopColor={colors.glow} stopOpacity="1" />
+            <Stop offset="1" stopColor={colors.glow} stopOpacity="0" />
+          </RadialGradient>
+          <RadialGradient id="g2" cx="-8%" cy="12%" rx="60%" ry="45%">
+            <Stop offset="0" stopColor="#FFF8E4" stopOpacity="1" />
+            <Stop offset="1" stopColor="#FFF8E4" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#g1)" />
+        <Rect width="100%" height="100%" fill="url(#g2)" />
+      </Svg>
+    </View>
+  );
+}
+
+/** White surface lifted on a layered soft shadow. */
+export function Card({ children, style, soft }: { children: ReactNode; style?: StyleProp<ViewStyle>; soft?: boolean }) {
+  return <View style={[s.card, soft && s.cardSoft, style]}>{children}</View>;
+}
+
+/** Fades and rises into place; `index` staggers siblings. */
+export function FadeIn({ children, index = 0, style }: { children: ReactNode; index?: number; style?: StyleProp<ViewStyle> }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(v, { toValue: 1, delay: Math.min(index, 8) * 60, speed: 14, bounciness: 6, useNativeDriver: native }).start();
+  }, [v, index]);
+  return (
+    <Animated.View style={[style, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/** Number that counts up from zero when it appears. */
+export function CountUp({ value, style, suffix = '', duration = 900 }: { value: number; style?: StyleProp<TextStyle>; suffix?: string; duration?: number }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const a = new Animated.Value(0);
+    const id = a.addListener(({ value: x }) => setShown(Math.round(x)));
+    Animated.timing(a, { toValue: value, duration, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => a.removeListener(id);
+  }, [value, duration]);
+  return (
+    <Text style={style}>
+      {shown}
+      {suffix}
+    </Text>
+  );
+}
+
+/** Slow breathing loop (scale + opacity) for "alive" elements: scan frame, risk dots. */
+export function Breathe({ children, style, amount = 0.06 }: { children: ReactNode; style?: StyleProp<ViewStyle>; amount?: number }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
+        Animated.timing(v, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  return (
+    <Animated.View
+      style={[style, { opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1 + amount] }) }] }]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/** Light sweep across a surface — used on "Купить" and gold badges. */
+export function Shimmer({ width = 120, style }: { width?: number; style?: StyleProp<ViewStyle> }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([Animated.delay(1400), Animated.timing(v, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: native })]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        style,
+        { overflow: 'hidden', transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-width, width] }) }] },
+      ]}
+    >
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.65)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ width: width * 0.4, height: '100%', transform: [{ skewX: '-20deg' }] }}
+      />
+    </Animated.View>
+  );
+}
+
+export type Bottle = 'dropper' | 'jar' | 'tube';
+
+/** Studio-style product shot: warm backdrop, bottle silhouette in the product tone, glossy highlight. */
+export function ProductPhoto({ kind, tone, height, radius = 16, style }: { kind: Bottle; tone: [string, string]; height: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const liquid = tone[1];
+  return (
+    <View style={[{ height, borderRadius: radius, overflow: 'hidden', backgroundColor: tone[0] }, style]}>
+      <Svg width="100%" height="100%" viewBox="0 0 200 160" preserveAspectRatio="xMidYMid slice">
+        <Defs>
+          <RadialGradient id="bg" cx="30%" cy="20%" rx="90%" ry="90%">
+            <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.9" />
+            <Stop offset="1" stopColor={liquid} stopOpacity="0.25" />
+          </RadialGradient>
+        </Defs>
+        <Rect width="200" height="160" fill="url(#bg)" />
+        {kind === 'dropper' && (
+          <>
+            <Rect x="88" y="20" width="24" height="26" rx="5" fill={colors.ink} />
+            <Rect x="96" y="6" width="8" height="16" rx="4" fill={colors.ink} />
+            <Rect x="72" y="44" width="56" height="104" rx="14" fill="rgba(255,255,255,0.6)" stroke="rgba(0,0,0,0.08)" />
+            <Rect x="72" y="92" width="56" height="56" rx="14" fill={liquid} opacity={0.75} />
+            <Rect x="82" y="62" width="36" height="18" rx="3" fill="#fff" opacity={0.92} />
+          </>
+        )}
+        {kind === 'jar' && (
+          <>
+            <Rect x="60" y="56" width="80" height="18" rx="6" fill={colors.ink} />
+            <Rect x="56" y="72" width="88" height="70" rx="16" fill="rgba(255,255,255,0.62)" stroke="rgba(0,0,0,0.08)" />
+            <Rect x="56" y="102" width="88" height="40" rx="16" fill={liquid} opacity={0.72} />
+            <Rect x="74" y="86" width="52" height="12" rx="3" fill="#fff" opacity={0.92} />
+          </>
+        )}
+        {kind === 'tube' && (
+          <>
+            <Path d="M78 24h44l-6 112H84Z" fill="rgba(255,255,255,0.62)" stroke="rgba(0,0,0,0.08)" />
+            <Rect x="84" y="136" width="32" height="18" rx="4" fill={colors.ink} />
+            <Path d="M80 60h40l-3 60H83Z" fill={liquid} opacity={0.72} />
+            <Rect x="88" y="36" width="24" height="14" rx="3" fill="#fff" opacity={0.92} />
+          </>
+        )}
+        <Ellipse cx="100" cy="154" rx="46" ry="4" fill="rgba(0,0,0,0.08)" />
+      </Svg>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.22)']}
+        locations={[0, 0.32, 0.7, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
+}
+
+const AVATAR_TONES = ['#F5C542', '#C9B79C', '#9DBF9A', '#E0A993', '#A9B8D6', '#D9C6E8'];
+export function Avatar({ name, size = 34 }: { name: string; size?: number }) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: AVATAR_TONES[h % AVATAR_TONES.length], alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: size * 0.4, color: colors.ink }}>{name.slice(0, 1).toUpperCase()}</Text>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(40,30,10,0.05)',
+    ...shadow,
+  },
+  cardSoft: { backgroundColor: colors.surf, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
+});
