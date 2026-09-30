@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { RecipeCard } from '../../components/RecipeCard';
-import { Brand, FadeIn, GradText, Glow } from '../../components/silk';
+import { Brand, FadeIn, Glow } from '../../components/silk';
+import { Zone } from '../../components/Zone';
 import { IconButton, Press, T, tap, Wordmark } from '../../components/ui';
 import { useCommunity } from '../../context/CommunityContext';
 import { useLibrary } from '../../context/LibraryContext';
@@ -79,8 +80,10 @@ export default function FeedScreen() {
         </View>
       </View>
       <View style={styles.hello}>
-        <Text style={styles.h1}>Сварим что-то </Text>
-        <GradText style={styles.h1}>новое?</GradText>
+        <Text style={styles.h1}>
+          Что сегодня{'\n'}
+          <Text style={{ color: colors.muted, fontFamily: fonts.regular }}>сварим?</Text>
+        </Text>
       </View>
       <View style={styles.modes}>
         <View style={[styles.mode, styles.modeOn]}>
@@ -153,12 +156,12 @@ export default function FeedScreen() {
             <Text style={[styles.sortText, sort === k && styles.sortOn]}>{l}</Text>
           </Press>
         ))}
+        <Zone
+          value={cat}
+          onChange={setCat}
+          options={[['all', 'Все'], ...(myRecipes.length ? ([['mine', 'Мои']] as const) : []), ...CATEGORIES.map((c) => [c, c] as const)]}
+        />
       </View>
-      <Chips
-        value={cat}
-        onChange={setCat}
-        options={[['all', 'Все'], ...(myRecipes.length ? ([['mine', 'Мои']] as const) : []), ...CATEGORIES.map((c) => [c, c] as const)]}
-      />
     </View>
   );
 
@@ -177,7 +180,7 @@ export default function FeedScreen() {
         scrollEventThrottle={16}
         renderItem={({ item, index }: { item: Recipe; index: number }) => (
           <FadeIn index={index}>
-            <RecipeCard recipe={item} variant={index % 3 === 0 ? (index === 0 ? 'grad' : 'dark') : 'light'} index={index} />
+            <RecipeCard recipe={item} index={index} />
           </FadeIn>
         )}
         ListEmptyComponent={
@@ -192,24 +195,6 @@ export default function FeedScreen() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.94)" }]} />
       </Animated.View>
     </View>
-  );
-}
-
-function Chips<K extends string>({ options, value, onChange }: { options: readonly (readonly [K, string])[]; value: K; onChange: (k: K) => void }) {
-  return (
-    <FlatList
-      horizontal
-      data={options as (readonly [K, string])[]}
-      keyExtractor={([k]) => k}
-      showsHorizontalScrollIndicator={false}
-      style={{ marginHorizontal: -space.gutter, marginTop: 10, marginBottom: 12 }}
-      contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}
-      renderItem={({ item: [k, l] }) => (
-        <Press haptic={false} onPress={() => { tap(); onChange(k); }} style={[styles.chip, value === k && styles.chipOn]}>
-          <Text style={[styles.chipText, value === k && styles.chipTextOn]}>{l}</Text>
-        </Press>
-      )}
-    />
   );
 }
 
@@ -232,7 +217,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52 },
   add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
-  h1: { fontFamily: fonts.display, fontSize: 25, lineHeight: 31, letterSpacing: -1, color: colors.ink },
+  h1: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.ink },
   modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: colors.surf, marginTop: 14 },
   mode: { flex: 1, height: 38, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   modeOn: { backgroundColor: colors.ink },
@@ -250,10 +235,10 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.tint },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   chipTextOn: { color: colors.violet, fontFamily: fonts.semibold },
-  sort: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  sortChip: { height: 36, paddingHorizontal: 15, borderRadius: 12, backgroundColor: colors.surf, justifyContent: 'center' },
+  sort: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 12 },
+  sortChip: { height: 36, paddingHorizontal: 13, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: 'rgba(21,23,43,0.06)', justifyContent: 'center' },
   sortChipOn: { backgroundColor: colors.ink },
-  sortText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
+  sortText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   sortOn: { color: '#fff' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
   emptyText: { fontFamily: fonts.regular, fontSize: 13.5, color: colors.muted, textAlign: 'center' },

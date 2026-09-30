@@ -6,6 +6,7 @@ import { Icon } from '../../components/Icon';
 import { DarkBlock, Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { CompositionSummary } from '../../components/Summary';
+import { useAiSummary } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_LABEL, INGREDIENTS } from '../../data/ingredients';
@@ -35,11 +36,13 @@ export default function BuilderScreen() {
   const list = useMemo(() => checks(items), [items]);
   const prediction = useMemo(() => predict(items), [items]);
   const score = prediction.scores.overall;
-  const summary = useMemo(() => {
+  const local = useMemo(() => {
     const k = KINDS.find((x) => x.key === kind)!;
     const s = summarize(prediction.items.map((i) => i.ing), k.label);
     return { ...s, use: [KIND_USE[kind], ...s.use.slice(1)] };
   }, [prediction, kind]);
+  // AI text after the user pauses editing, so sliders don't fire a request per step.
+  const summary = useAiSummary(items.map((i) => `${i.inci || i.name} ${i.pct}%`), local.kind, local, 1200);
   const layers = phaseSums(items);
 
   const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'));

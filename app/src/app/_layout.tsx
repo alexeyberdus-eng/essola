@@ -1,6 +1,7 @@
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import { Unbounded_400Regular, Unbounded_500Medium } from '@expo-google-fonts/unbounded';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-google-fonts/onest';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -19,6 +20,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Root() {
   const { ready } = useAuth();
   const [fontsLoaded] = useFonts({
+    Onest_400Regular,
+    Onest_500Medium,
+    Onest_600SemiBold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,

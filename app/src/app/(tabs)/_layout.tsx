@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
@@ -80,7 +79,7 @@ function TabBar({ state, navigation }: BarProps) {
                       style={styles.fab}
                       accessibilityLabel={tab.label}
                     >
-                      <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 18 }]} />
+                      <View style={[StyleSheet.absoluteFill, { borderRadius: 18, backgroundColor: colors.ink }]} />
                       <View style={{ zIndex: 1 }}>
                         <Icon name="barcode" size={24} color="#fff" strokeWidth={1.7} />
                       </View>
@@ -91,7 +90,7 @@ function TabBar({ state, navigation }: BarProps) {
               return (
                 <Press key={route.key} haptic={false} onPress={() => { tap(); navigation.navigate(name); }} style={styles.slot} accessibilityLabel={tab.label}>
                   <View style={styles.item}>
-                    <Icon name={tab.icon} size={21} color={on ? '#fff' : '#8C869A'} strokeWidth={on ? 1.9 : 1.5} />
+                    <Icon name={tab.icon} size={21} color={on ? colors.ink : '#9A9DB0'} strokeWidth={on ? 1.9 : 1.5} />
                     <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
                       {tab.label}
                     </Text>
@@ -110,7 +109,7 @@ function softShadow() {
   return Platform.select({
     ios: { shadowColor: '#28261A', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 14 } },
     android: { elevation: 10 },
-    default: { boxShadow: '0 22px 46px -14px rgba(40,38,25,0.38)' },
+    default: { boxShadow: '0 22px 46px -14px rgba(21,23,43,0.3)' },
   }) as object;
 }
 
@@ -129,12 +128,12 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 14, right: 14 },
   shadowBox: { borderRadius: 28, ...softShadow() },
-  bar: { height: 70, borderRadius: 26, backgroundColor: colors.ink },
+  bar: { height: 70, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: 'rgba(21,23,43,0.06)' },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   slot: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%' },
   item: { alignItems: 'center', gap: 3 },
-  label: { fontFamily: fonts.medium, fontSize: 9.5, color: '#8C869A' },
-  labelOn: { color: '#fff', fontFamily: fonts.semibold },
+  label: { fontFamily: fonts.medium, fontSize: 9.5, color: '#9A9DB0' },
+  labelOn: { color: colors.ink, fontFamily: fonts.semibold },
   capsule: {
     position: 'absolute',
     left: 0,
@@ -143,7 +142,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(21,23,43,0.05)',
   },
   fab: {
     width: 56,

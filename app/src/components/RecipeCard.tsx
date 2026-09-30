@@ -2,13 +2,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useCommunity } from '../context/CommunityContext';
-import { recipeMeta, timeAgo } from '../data/community';
+import { recipeMeta } from '../data/community';
 import { LEVELS, Recipe, RECIPES } from '../data/recipes';
-import { colors, fonts, shadow } from '../theme';
+import { identify } from '../lib/analyze';
+import { formatPercent, percentages } from '../lib/formula';
+import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
-import { Tilt3D } from './lab';
 import { LikeButton } from './RecipeRow';
-import { Avatar } from './silk';
 import { Press } from './ui';
 
 export function recipeNo(recipe: Recipe) {
@@ -16,124 +16,91 @@ export function recipeNo(recipe: Recipe) {
   return i >= 0 ? `№${String(i + 1).padStart(2, '0')}` : 'Моё';
 }
 
-/** Product type shown above the title: first words of the subtitle ("Крем-эмульсия", "Тоник"…). */
-function typeOf(recipe: Recipe) {
-  const t = recipe.subtitle.split(/[,:—–]| с | для /)[0].trim();
-  return t.length > 28 ? recipe.category : t;
+// Hairline frames in the aurora hues, rotating through the feed.
+const FRAMES: [string, string][] = [
+  ['#FFC2A8', '#E9D2FF'],
+  ['#AFCBFF', '#BFEBDD'],
+  ['#D2BDFF', '#AFCBFF'],
+];
+
+const short = (n: string) => {
+  const s = n.replace(/\s*\(.*?\)/, '').replace(/^(масло|экстракт|гидролат|эфирное масло)\s+/i, '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+/** Three key ingredients: the most active first, then the rest by share (water/base skipped). */
+function actives(recipe: Recipe) {
+  const pct = percentages(recipe);
+  return recipe.ingredients
+    .map((it, i) => {
+      const ing = identify(it.name).ing;
+      return { name: short(it.name), act: ing.act ?? 0, base: ing.fn.includes('base'), pct: pct?.[i] };
+    })
+    .filter((x) => !x.base)
+    .sort((a, b) => b.act - a.act || (b.pct ?? 0) - (a.pct ?? 0))
+    .slice(0, 3);
 }
 
-function forLabel(s: string) {
-  if (s === 'Все типы') return 'Любая кожа';
-  if (/волос|головы|кожа/.test(s)) return s;
-  return `${s} кожа`;
-}
-
-export type CardVariant = 'grad' | 'dark' | 'light';
-
-/** Recipe as a social post: author, type, title, who it's for, short description, key ingredients, likes/comments. */
-export function RecipeCard({ recipe, variant = 'light', index = 0 }: { recipe: Recipe; variant?: CardVariant; index?: number }) {
+/** Recipe in the feed: type and time, title, short description, key actives, likes and comments. */
+export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: number }) {
   const { count } = useCommunity();
-  const meta = recipeMeta(recipe);
-  const onColor = variant !== 'light';
-  const author = recipe.own ? 'Вы' : meta.author.name;
-  const body = (
-    <View style={styles.pad}>
-      <View style={styles.head}>
-        <Avatar name={author} size={24} />
-        <Text style={[styles.author, onColor && { color: '#fff' }]} numberOfLines={1}>
-          {author}
-        </Text>
-        {!recipe.own && meta.author.role ? (
-          <Text style={[styles.role, onColor && styles.roleOn]} numberOfLines={1}>
-            {meta.author.role}
-          </Text>
-        ) : null}
-        <Text style={[styles.time, onColor && { color: 'rgba(255,255,255,0.6)' }]}>{recipe.own ? 'моё' : timeAgo(meta.postedAgo)}</Text>
-      </View>
-      <Text style={[styles.type, onColor && { color: variant === 'grad' ? 'rgba(255,255,255,0.85)' : colors.brassLight }]} numberOfLines={1}>
-        {typeOf(recipe)} · {recipe.category}
-      </Text>
-      <Text style={[styles.title, onColor && { color: '#fff' }]}>{recipe.title}</Text>
-      <View style={styles.forRow}>
-        {recipe.skin.slice(0, 2).map((s) => (
-          <View key={s} style={[styles.for, onColor && styles.forOn]}>
-            <Icon name="check" size={11} color={onColor ? '#fff' : colors.violet} strokeWidth={2.4} />
-            <Text style={[styles.forText, onColor && { color: '#fff' }]}>{forLabel(s)}</Text>
-          </View>
-        ))}
-      </View>
-      <Text style={[styles.desc, onColor && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={2}>
-        {recipe.subtitle}. {recipe.tip}
-      </Text>
-      <Text style={[styles.ings, onColor && { color: 'rgba(255,255,255,0.6)' }]} numberOfLines={1}>
-        {recipe.ingredients
-          .slice(0, 3)
-          .map((i) => i.name)
-          .join(' · ')}
-      </Text>
-      <View style={[styles.foot, onColor && { borderColor: 'rgba(255,255,255,0.14)' }]}>
-        <LikeButton id={recipe.id} size={17} showCount dark={onColor} />
-        <Press haptic={false} onPress={() => router.push(`/comments/${recipe.id}`)} style={styles.stat} hitSlop={8}>
-          <Icon name="comment" size={16} color={onColor ? '#fff' : colors.ink} />
-          <Text style={[styles.statText, onColor && { color: '#fff' }]}>{count(recipe.id)}</Text>
-        </Press>
-        <Text style={[styles.meta, onColor && { color: 'rgba(255,255,255,0.6)' }]}>
-          {recipe.minutes} мин · {LEVELS[recipe.level]}
-        </Text>
-      </View>
-    </View>
-  );
+  const author = recipe.own ? 'Вы' : recipeMeta(recipe).author.name;
+  const top = actives(recipe);
   return (
-    <Tilt3D style={{ marginBottom: 10 }}>
-      <Press haptic={false} onPress={() => router.push(`/recipe/${recipe.id}`)}>
-        {variant === 'grad' ? (
-          <View style={[styles.card, styles.shadowV]}>
-            <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <View style={styles.bubble} />
-            {body}
+    <Press haptic={false} onPress={() => router.push(`/recipe/${recipe.id}`)} style={{ marginBottom: 12 }}>
+      <LinearGradient colors={FRAMES[index % FRAMES.length]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.frame}>
+        <View style={styles.card}>
+          <View style={styles.meta}>
+            <Text style={styles.metaText}>
+              {recipe.category} · {recipe.minutes} мин
+            </Text>
+            <Text style={styles.metaText}>{LEVELS[recipe.level]}</Text>
           </View>
-        ) : variant === 'dark' ? (
-          <View style={[styles.card, { backgroundColor: colors.ink }, styles.shadowD]}>
-            <View style={styles.darkGlow} />
-            {body}
-          </View>
-        ) : (
-          <LinearGradient colors={['#D9CEFF', '#F1EDFF', '#EBC4F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.frame, shadow]}>
-            <View style={[styles.card, { backgroundColor: '#fff', borderRadius: 19 }]}>
-              <View style={styles.lightGlow} />
-              {body}
+          <Text style={styles.title}>{recipe.title}</Text>
+          <Text style={styles.desc} numberOfLines={2}>
+            {recipe.subtitle}
+          </Text>
+          {top.length > 0 && (
+            <View style={styles.acts}>
+              {top.map((a) => (
+                <View key={a.name} style={styles.act}>
+                  <Text style={styles.actName} numberOfLines={1}>
+                    {a.name}
+                  </Text>
+                  {a.pct != null && <Text style={styles.actPct}>{formatPercent(a.pct)}</Text>}
+                </View>
+              ))}
             </View>
-          </LinearGradient>
-        )}
-      </Press>
-    </Tilt3D>
+          )}
+          <View style={styles.foot}>
+            <LikeButton id={recipe.id} size={16} showCount />
+            <Press haptic={false} onPress={() => router.push(`/comments/${recipe.id}`)} style={styles.stat} hitSlop={8}>
+              <Icon name="comment" size={16} color={colors.muted} />
+              <Text style={styles.statText}>{count(recipe.id)}</Text>
+            </Press>
+            <Text style={styles.author} numberOfLines={1}>
+              {author}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </Press>
   );
 }
 
 const styles = StyleSheet.create({
-  frame: { borderRadius: 20, padding: 1.5 },
-  card: { borderRadius: 20, overflow: 'hidden' },
-  shadowV: { shadowColor: colors.violet, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
-  shadowD: { shadowColor: colors.ink, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
-  bubble: { position: 'absolute', right: -40, top: -50, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.14)' },
-  darkGlow: { position: 'absolute', right: -60, top: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(123,92,250,0.35)' },
-  lightGlow: { position: 'absolute', right: -50, top: -60, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(224,139,245,0.1)' },
-  pad: { paddingHorizontal: 13, paddingTop: 11, paddingBottom: 9 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  author: { fontFamily: fonts.bold, fontSize: 12.5, color: colors.ink, flexShrink: 1 },
-  role: { fontFamily: fonts.semibold, fontSize: 10, color: colors.violet, backgroundColor: colors.tint, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99, overflow: 'hidden' },
-  roleOn: { color: '#fff', backgroundColor: 'rgba(255,255,255,0.18)' },
-  time: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 11.5, color: colors.muted },
-  type: { fontFamily: fonts.semibold, fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.violet, marginTop: 9 },
-  title: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.7, color: colors.ink, marginTop: 3 },
-  forRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 7 },
-  for: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: colors.tint },
-  forOn: { backgroundColor: 'rgba(255,255,255,0.16)' },
-  forText: { fontFamily: fonts.semibold, fontSize: 11, color: '#5A3FD6' },
-  desc: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 7 },
-  ings: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted, marginTop: 5 },
-  foot: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8, paddingTop: 7, borderTopWidth: 1, borderColor: colors.line },
+  frame: { borderRadius: 24, padding: 1.5, shadowColor: '#15172B', shadowOpacity: 0.1, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  card: { borderRadius: 22.5, backgroundColor: 'rgba(255,255,255,0.96)', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+  meta: { flexDirection: 'row', justifyContent: 'space-between' },
+  metaText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
+  title: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.6, color: colors.ink, marginTop: 5 },
+  desc: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2, marginTop: 3 },
+  acts: { flexDirection: 'row', gap: 5, marginTop: 10, overflow: 'hidden' },
+  act: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(21,23,43,0.07)', backgroundColor: '#fff', flexShrink: 1 },
+  actName: { fontFamily: fonts.medium, fontSize: 11.5, color: '#3A3D5C', flexShrink: 1 },
+  actPct: { fontFamily: fonts.semibold, fontSize: 11, color: colors.muted },
+  foot: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderColor: 'rgba(21,23,43,0.06)' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
-  meta: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 11.5, color: colors.muted },
+  statText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
+  author: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: 'rgba(21,23,43,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden', maxWidth: 140 },
 });

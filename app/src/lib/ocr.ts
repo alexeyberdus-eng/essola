@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { aiEnabled, aiScan } from './ai';
 
 type TextExtractor = { isSupported: boolean; extractTextFromImage(uri: string): Promise<string[]> };
 
@@ -9,9 +10,6 @@ export const nativeOcr = !!native?.isSupported;
 
 // Free cloud OCR (ocr.space) — optional, more accurate than the in-WebView engine.
 const cloudKey = process.env.EXPO_PUBLIC_OCR_SPACE_KEY;
-// Our Yandex Cloud function (server/yandex-scan): Vision OCR + YandexGPT clean-up. Preferred when configured.
-const scanUrl = process.env.EXPO_PUBLIC_SCAN_URL;
-const scanKey = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 
 type WebEngine = (dataUrl: string) => Promise<string>;
 let webEngine: WebEngine | null = null;
@@ -23,7 +21,7 @@ async function toJpegBase64(uri: string) {
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width: 2200 }); // small print on labels needs pixels
   const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: cloudKey || scanUrl ? 0.75 : 0.9, base64: true });
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: cloudKey || aiEnabled ? 0.75 : 0.9, base64: true });
   return `data:image/jpeg;base64,${saved.base64}`;
 }
 
@@ -40,13 +38,9 @@ async function cloud(dataUrl: string) {
 }
 
 async function server(dataUrl: string) {
-  const res = await fetch(scanUrl!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': scanKey }, body: JSON.stringify({ image: dataUrl }) });
-  if (!res.ok) throw new Error('SCAN_SERVER_FAILED');
-  const json = (await res.json()) as { text?: string; ingredients?: string[] };
-  // A cleaned list reads best as a plain comma-separated composition; raw OCR text is the fallback.
-  if (json.ingredients?.length) return `Состав: ${json.ingredients.join(', ')}`;
-  if (json.text?.trim()) return json.text;
-  throw new Error('SCAN_SERVER_EMPTY');
+  const list = await aiScan(dataUrl);
+  if (!list.length) throw new Error('SCAN_SERVER_EMPTY');
+  return `Состав: ${list.join(', ')}`;
 }
 
 /** Reads text from a photo: native OCR in a dev build, otherwise our scan server / cloud OCR (if configured) or the WebView engine. */
@@ -56,7 +50,7 @@ export async function recognizeText(uri: string): Promise<string> {
     return lines.join('\n');
   }
   const dataUrl = await toJpegBase64(uri);
-  if (scanUrl) {
+  if (aiEnabled) {
     try {
       return await server(dataUrl);
     } catch {

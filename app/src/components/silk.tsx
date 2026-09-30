@@ -8,24 +8,44 @@ import { colors, fonts, shadow } from '../theme';
 const native = Platform.OS !== 'web';
 
 /** White page with a soft lavender glow in the top corner. */
-export function Glow({ height = 420 }: { height?: number; flask?: boolean }) {
+const AURORA: { c: string; o: number; x: `${number}%`; y: number; r: number; dx: number; dy: number; t: number }[] = [
+  { c: '#FFBEA0', o: 0.55, x: '62%', y: -90, r: 190, dx: -26, dy: 30, t: 21000 },
+  { c: '#A0C8FF', o: 0.45, x: '-28%', y: 150, r: 200, dx: 30, dy: -24, t: 26000 },
+  { c: '#CDB4FF', o: 0.42, x: '58%', y: 420, r: 200, dx: -34, dy: 26, t: 23000 },
+  { c: '#AAEBD7', o: 0.45, x: '-20%', y: 680, r: 180, dx: 28, dy: -30, t: 29000 },
+];
+
+/** White page with a soft "aurora": four blurred colour washes drifting very slowly. */
+export function Glow(_: { height?: number; flask?: boolean }) {
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height }]}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {AURORA.map((b, i) => (
+        <Drift key={i} {...b} />
+      ))}
+    </View>
+  );
+}
+
+function Drift({ c, o, x, y, r, dx, dy, t }: (typeof AURORA)[number]) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([Animated.timing(v, { toValue: 1, duration: t, useNativeDriver: native }), Animated.timing(v, { toValue: 0, duration: t, useNativeDriver: native })]));
+    loop.start();
+    return () => loop.stop();
+  }, [v, t]);
+  const move = { transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }] };
+  return (
+    <Animated.View style={[{ position: 'absolute', left: x, top: y, width: r * 2, height: r * 2 }, move]}>
       <Svg width="100%" height="100%">
         <Defs>
-          <RadialGradient id="gv1" cx="100%" cy="0%" rx="70%" ry="45%">
-            <Stop offset="0" stopColor={colors.lilac} stopOpacity="0.16" />
-            <Stop offset="1" stopColor={colors.lilac} stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="gv2" cx="0%" cy="55%" rx="55%" ry="35%">
-            <Stop offset="0" stopColor={colors.orchid} stopOpacity="0.07" />
-            <Stop offset="1" stopColor={colors.orchid} stopOpacity="0" />
+          <RadialGradient id={`au${c}`} cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={c} stopOpacity={o} />
+            <Stop offset="1" stopColor={c} stopOpacity="0" />
           </RadialGradient>
         </Defs>
-        <Rect width="100%" height="100%" fill="url(#gv1)" />
-        <Rect width="100%" height="100%" fill="url(#gv2)" />
+        <Rect width="100%" height="100%" fill={`url(#au${c})`} />
       </Svg>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -210,9 +230,9 @@ export function Brand({ size = 23, tagline = true, light }: { size?: number; tag
     <View accessibilityRole="header" accessibilityLabel="essola lab">
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
         <Text style={[t, { color: light ? '#fff' : colors.ink }]}>essola </Text>
-        <GradText style={t}>lab</GradText>
+        <Text style={[t, { fontFamily: fonts.regular, color: light ? 'rgba(255,255,255,0.7)' : colors.muted }]}>lab</Text>
       </View>
-      {tagline && <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 3 }}>домашняя лаборатория косметики</Text>}
+      {tagline && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 3 }}>домашняя лаборатория косметики</Text>}
     </View>
   );
 }

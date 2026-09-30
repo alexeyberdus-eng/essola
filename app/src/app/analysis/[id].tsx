@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
 import { CompositionSummary } from '../../components/Summary';
+import { useAiSummary } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { recipeNo } from '../../components/RecipeCard';
 import { Card, FadeIn, Glow } from '../../components/silk';
@@ -34,7 +35,8 @@ export default function AnalysisScreen() {
   const scan = getScan(id);
   const result = useMemo(() => (scan ? analyze(scan.text, user?.skinType) : null), [scan, user?.skinType]);
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
-  const summary = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
+  const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
+  const summary = useAiSummary(result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<number | null>(null);
   const y = useRef(new Animated.Value(0)).current;

@@ -21,6 +21,7 @@ export type IconName =
   | 'image'
   | 'text'
   | 'check'
+  | 'chevronDown'
   | 'alert'
   | 'bolt'
   | 'logout'
@@ -139,6 +140,8 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
         );
       case 'text':
         return <Path d="M5 6.5h14M5 11h14M5 15.5h9M5 20h6" {...p} />;
+      case 'chevronDown':
+        return <Path d="m6 9 6 6 6-6" {...p} />;
       case 'check':
         return <Path d="m5 12.5 4.5 4.5L19 7.5" {...p} />;
       case 'alert':
