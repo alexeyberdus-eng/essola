@@ -40,9 +40,9 @@ export default function ScannerScreen() {
       setText(raw);
       setManual(true);
       setNotice(
-        result.items.length
-          ? 'Фото прочиталось неточно — проверьте текст ниже и поправьте ошибки. Или переснимите ближе, ровно и при хорошем свете.'
-          : 'Не удалось найти список ингредиентов. Снимите строку «Состав» / «Ingredients» крупнее.',
+        result.recognised === 0
+          ? 'В кадре нет списка ингредиентов — похоже, это инструкция или адрес производителя. Найдите на упаковке блок «Состав» или «Ingredients» (обычно мелкий шрифт, слова через запятую) и снимите только его, крупно.'
+          : 'Фото прочиталось неточно — проверьте текст ниже и поправьте ошибки. Или переснимите ближе, ровно и при хорошем свете.',
       );
       return;
     }
@@ -80,7 +80,7 @@ export default function ScannerScreen() {
     if (!camera.current || busy) return;
     tap('medium');
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.85 });
+      const photo = await camera.current.takePictureAsync({ quality: 0.95 });
       if (photo?.uri) await readImage(photo.uri);
     } catch {
       setNotice('Камера недоступна. Выберите фото из галереи.');
@@ -88,7 +88,7 @@ export default function ScannerScreen() {
   };
 
   const pick = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true });
     if (!res.canceled && res.assets[0]) await readImage(res.assets[0].uri);
   };
 

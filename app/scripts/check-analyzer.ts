@@ -44,5 +44,22 @@ const ru = analyze('Состав: вода, глицерин, масло ши, �
 assert.ok(!ru.unreadable);
 assert.deepEqual(ru.items.map((i) => i.ing.inci), ['Aqua', 'Glycerin', 'Butyrospermum Parkii Butter', 'Niacinamide', 'Panthenol', 'Parfum']);
 
+// Back label without an ingredient list (usage + manufacturer only) — must say "no list".
+const noList = analyze(
+  'Способ применения: нанесите на влажные волосы, распределите по всей длине, смойте. Избегайте попадания в глаза. ' +
+    "Изготовитель: L'Oreal, 14 rue Royale, 75008 Paris, Франция. Импортер в РФ: ООО Лореаль, 115035, Москва, ул. Садовническая, 82. " +
+    'Хранить при температуре от +5 до +25. Срок годности 36 месяцев.',
+);
+assert.equal(noList.recognised, 0, 'no ingredient list → nothing recognised');
+assert.ok(noList.unreadable);
+
+// List without a "Состав:" marker, surrounded by usage text — keep only the ingredient run.
+const framed = analyze(
+  'Подходит для ежедневного ухода, нанесите утром и вечером\nAqua, Glycerin, Niacinamide, Panthenol, Squalane, Tocopherol, Phenoxyethanol\nЛучший результат при регулярном применении, дерматологически протестировано',
+);
+assert.equal(framed.items[0].ing.inci, 'Aqua');
+assert.equal(framed.items.length, 7);
+assert.ok(!framed.unreadable);
+
 for (const [i, a] of [cream, shampoo, oil].entries()) console.log(SAMPLES[i].title.padEnd(22), a.scores, a.verdict.title);
 console.log('analyzer ok');

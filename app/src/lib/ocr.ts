@@ -18,9 +18,9 @@ export function registerWebOcr(engine: WebEngine | null) {
 
 async function toJpegBase64(uri: string) {
   const ctx = ImageManipulator.manipulate(uri);
-  ctx.resize({ width: 1600 });
+  ctx.resize({ width: 2200 }); // small print on labels needs pixels
   const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8, base64: true });
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: cloudKey ? 0.75 : 0.9, base64: true });
   return `data:image/jpeg;base64,${saved.base64}`;
 }
 

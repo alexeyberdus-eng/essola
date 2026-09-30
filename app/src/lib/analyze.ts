@@ -30,6 +30,8 @@ export type Analysis = {
   unknown: number;
   /** true when too little of the text matched real ingredients — likely a bad photo */
   unreadable: boolean;
+  /** how many entries matched the ingredient base exactly or fuzzily; 0 → no ingredient list in the text */
+  recognised: number;
 };
 
 const ORIGIN_SCORE: Record<Origin, number> = { natural: 1, mineral: 0.85, identical: 0.6, synthetic: 0.1 };
@@ -60,6 +62,11 @@ const STOP =
 
 /** Pulls the ingredient list out of free OCR text and splits it into entries. */
 export function splitIngredients(text: string): string[] {
+  return splitLines(text).map((t) => t.replace(/\s*\n\s*/g, ' '));
+}
+
+/** Same as splitIngredients, but entries keep their OCR line breaks (see analyze). */
+function splitLines(text: string): string[] {
   let body = text.replace(/\r/g, '');
   const start = body.match(START);
   if (start?.index !== undefined) body = body.slice(start.index + start[0].length);
@@ -68,15 +75,16 @@ export function splitIngredients(text: string): string[] {
 
   body = body
     .replace(/-\s*\n\s*/g, '') // words hyphenated across OCR lines
-    .replace(/\n+/g, ' ')
+    .replace(/[ \t]*\n[\s]*/g, '\n')
     .replace(/\[\+\/-\]|\+\/-|may contain|peut contenir|может содержать/gi, ',')
-    .replace(/\s+/g, ' ');
+    .replace(/[ \t]+/g, ' ');
 
   return body
     .split(/\s*[,;•·●|]\s*|\.\s+(?=[A-ZА-Я])/)
     .map((t) =>
       t
         .replace(/^[\s.:*\-–]+|[\s.:*]+$/g, '')
+        .replace(/\s*\n\s*/g, '\n')
         .replace(/\*+/g, '')
         .replace(/\b\d+([.,]\d+)?\s?%/g, '')
         .replace(/^(and|и)\s+/i, '')
@@ -191,16 +199,47 @@ function identifyExact(raw: string): { ing: Ingredient; match: Match } {
 
 const clamp = (n: number) => Math.round(Math.max(0, Math.min(100, n)));
 
+const isKnownMatch = (m: Match) => m === 'exact' || m === 'fuzzy';
+const isKnown = (it: AnalyzedItem) => isKnownMatch(it.match);
+
+/**
+ * A photo often catches usage text and the manufacturer's address around the list.
+ * Keep the densest contiguous run of recognised ingredients (maximum-sum window).
+ */
+function bestWindow(items: AnalyzedItem[]): AnalyzedItem[] {
+  let best = { sum: 0, from: 0, to: -1 };
+  let sum = 0;
+  let from = 0;
+  items.forEach((it, i) => {
+    sum += isKnown(it) ? 1 : it.match === 'guess' ? 0.3 : -1;
+    if (sum <= 0) {
+      sum = 0;
+      from = i + 1;
+    } else if (sum > best.sum) best = { sum, from, to: i };
+  });
+  const window = items.slice(best.from, best.to + 1);
+  if (window.filter(isKnown).length < 3 || window.length === items.length) return items;
+  return window.map((it, position) => ({ ...it, position }));
+}
+
 export function analyze(text: string, skin?: SkinType | null): Analysis {
   const seen = new Set<string>();
-  const items: AnalyzedItem[] = [];
-  for (const raw of splitIngredients(text)) {
-    const { ing, match } = identify(raw);
-    const id = match === 'unknown' ? normalize(raw) : ing.inci;
-    if (seen.has(id)) continue;
+  const all: AnalyzedItem[] = [];
+  const push = (raw: string, hit = identify(raw)) => {
+    const id = hit.match === 'unknown' ? normalize(raw) : hit.ing.inci;
+    if (seen.has(id)) return;
     seen.add(id);
-    items.push({ position: items.length, raw, ing, match });
+    all.push({ position: all.length, raw, ing: hit.ing, match: hit.match });
+  };
+  for (const token of splitLines(text)) {
+    const raw = token.replace(/\s*\n\s*/g, ' ');
+    const hit = identify(raw);
+    // "…вечером\nAqua": a line break may separate prose from the first ingredient.
+    const lines = token.split('\n').filter((l) => l.length > 1 && plausible(l));
+    if (!isKnownMatch(hit.match) && lines.length > 1 && lines.some((l) => isKnownMatch(identify(l).match))) lines.forEach((l) => push(l));
+    else push(raw, hit);
   }
+  const items = bestWindow(all);
 
   const n = items.length;
   const weight = (i: number) => 1 / Math.sqrt(i + 1);
@@ -277,11 +316,12 @@ export function analyze(text: string, skin?: SkinType | null): Analysis {
     personal,
     unknown: items.filter((it) => it.match === 'unknown').length,
     unreadable: isUnreadable(items),
+    recognised: items.filter(isKnown).length,
   };
 }
 
 function isUnreadable(items: AnalyzedItem[]) {
-  const recognised = items.filter((it) => it.match === 'exact' || it.match === 'fuzzy').length;
+  const recognised = items.filter(isKnown).length;
   return recognised < 2 || recognised / items.length < 0.4;
 }
 
