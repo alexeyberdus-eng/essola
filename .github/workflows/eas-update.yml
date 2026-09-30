@@ -7,6 +7,9 @@ on:
     branches: [main, claude/awesome-mccarthy-dlbgor]
     paths: ['app/**', '.github/workflows/eas-update.yml']
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Deploy AI scan function (Yandex Cloud)']
+    types: [completed]
 
 concurrency:
   group: eas-update
@@ -28,8 +31,9 @@ jobs:
         working-directory: app
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PUBLIC_SCAN_URL: ${{ secrets.EXPO_PUBLIC_SCAN_URL }}
-      EXPO_PUBLIC_SCAN_KEY: ${{ secrets.EXPO_PUBLIC_SCAN_KEY }}
+      YC_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +42,19 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
+
+      - name: Point the app at the AI scan function
+        if: env.YC_TOKEN != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        continue-on-error: true
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          yc config set token "$YC_TOKEN" && yc config set folder-id "$YC_FOLDER_ID"
+          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
+          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
+            echo "EXPO_PUBLIC_SCAN_URL=https://functions.yandexcloud.net/$ID" >> "$GITHUB_ENV"
+            echo "EXPO_PUBLIC_SCAN_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)" >> "$GITHUB_ENV"
+          fi
 
       - name: Install dependencies
         run: npm ci
