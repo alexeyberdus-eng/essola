@@ -61,8 +61,12 @@ jobs:
       - name: Publish update
         id: update
         run: |
+          # The permanent Expo Go link resolves through the "preview" channel; make sure it exists
+          # and points at the "preview" branch (both commands are no-ops once set up).
+          npx --yes eas-cli@latest channel:create preview --non-interactive || true
           npx --yes eas-cli@latest update --branch preview --message "${GITHUB_SHA::7}: $(git log -1 --pretty=%s | head -c 80)" --platform all --non-interactive --json > /tmp/update.json
           cat /tmp/update.json
+          npx --yes eas-cli@latest channel:edit preview --branch preview --non-interactive || true
           GROUP=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/update.json','utf8'))[0].group")
           RUNTIME=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/update.json','utf8'))[0].runtimeVersion")
           echo "group=$GROUP" >> "$GITHUB_OUTPUT"
