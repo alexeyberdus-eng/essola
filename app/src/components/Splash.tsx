@@ -14,6 +14,12 @@ export function Splash({ onDone }: { onDone: () => void }) {
   const drop = useRef(new Animated.Value(0)).current;
   const ripple = useRef(new Animated.Value(0)).current;
   const out = useRef(new Animated.Value(1)).current;
+  const finished = useRef(false);
+  const done = useRef(() => {
+    if (finished.current) return;
+    finished.current = true;
+    onDone();
+  });
 
   useEffect(() => {
     const t = (v: Animated.Value, duration: number, easing = Easing.out(Easing.cubic)) => Animated.timing(v, { toValue: 1, duration, easing, useNativeDriver: native });
@@ -25,11 +31,16 @@ export function Splash({ onDone }: { onDone: () => void }) {
       t(ripple, 600),
       Animated.delay(150),
       Animated.timing(out, { toValue: 0, duration: 380, useNativeDriver: native }),
-    ]).start(() => onDone());
-  }, [brand, pipette, drop, ripple, out, onDone]);
+    ]).start(() => done.current());
+    // Safety net: never keep the app behind the intro, even if an animation stalls.
+    const t2 = setTimeout(() => done.current(), 4500);
+    return () => clearTimeout(t2);
+    // Runs once on mount; parent re-renders must not restart the intro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.root, { opacity: out }]}>
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.root, { opacity: out }]}>
       <Glow height={900} />
       <Animated.View style={{ opacity: pipette, transform: [{ translateY: pipette.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }] }}>
         <Svg width={46} height={120} viewBox="0 0 46 120">
