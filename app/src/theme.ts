@@ -1,56 +1,65 @@
 import { Platform, TextStyle } from 'react-native';
 
-// "Travertine & sage": warm stone paper, sage greens, a dark olive anchor and brass accents — a natural lab.
+// "Essola violet": white, deep ink, one violet with a lavender→lilac gradient, soft lavender and blush tints.
 export const colors = {
-  bg: '#F2EEE6',
-  card: 'rgba(255,253,248,0.72)',
-  cardSolid: '#FBF8F2',
-  surf: '#E9E3D7',
-  trav: '#E6DDCF',
-  ink: '#23271F',
-  ink2: '#4E5247',
-  muted: '#8C897C',
-  faint: '#B4AE9F',
-  line: '#E2DBCD',
-  sage: '#8A9A7B',
-  sageDeep: '#5F7058',
-  sageSoft: '#E3E4D6',
-  olive: '#2B2F27',
-  olive2: '#3B4134',
-  onDark: '#EFEBE0',
-  onDarkMuted: 'rgba(239,235,224,0.55)',
-  brass: '#B08D57',
-  brassLight: '#D8BC86',
-  brassDeep: '#A07F48',
-  brassText: '#8A6A36',
-  brassSoft: '#EFE6D3',
-  water: '#AFC6CC',
-  peach: '#C98B6F',
-  // legacy names used across screens
-  honey: '#D8BC86',
-  honeyTop: '#E4CD9E',
-  honeyBottom: '#B08D57',
-  honeyText: '#8A6A36',
-  honeySoft: '#EFE6D3',
-  honeyLine: '#DCC9A2',
-  glow: '#E9E3D3',
-  good: '#4F7A48',
-  goodSoft: '#E1E7D8',
-  warn: '#9A6B2E',
-  warnSoft: '#F1E5CC',
-  bad: '#B5563F',
-  badSoft: '#F3E1D9',
-  night: '#141612',
-  nightCard: '#23271F',
+  bg: '#FFFFFF',
+  card: '#FFFFFF',
+  cardSolid: '#FFFFFF',
+  surf: '#F6F5F9',
+  trav: '#F6F5F9',
+  ink: '#16121F',
+  ink2: '#4A4658',
+  muted: '#8C869A',
+  faint: '#B9B4C6',
+  line: '#EFECF6',
+  // violet accent (legacy "sage/brass/olive" names map onto the new palette)
+  violet: '#7B5CFA',
+  violetDeep: '#6A4BF2',
+  lilac: '#A77BFF',
+  orchid: '#E08BF5',
+  tint: '#F1EDFF',
+  blush: '#FFF0F9',
+  sage: '#7B5CFA',
+  sageDeep: '#7B5CFA',
+  sageSoft: '#F1EDFF',
+  olive: '#16121F',
+  olive2: '#2A2140',
+  onDark: '#FFFFFF',
+  onDarkMuted: 'rgba(255,255,255,0.6)',
+  brass: '#7B5CFA',
+  brassLight: '#CDBEFF',
+  brassDeep: '#6A4BF2',
+  brassText: '#6A4BF2',
+  brassSoft: '#F1EDFF',
+  water: '#C9D3FF',
+  peach: '#F4B3D6',
+  honey: '#7B5CFA',
+  honeyTop: '#A77BFF',
+  honeyBottom: '#7B5CFA',
+  honeyText: '#6A4BF2',
+  honeySoft: '#F1EDFF',
+  honeyLine: '#DCD2FF',
+  glow: '#F1EDFF',
+  good: '#2F9E6A',
+  goodSoft: '#E6F6EE',
+  warn: '#C27A1A',
+  warnSoft: '#FDF1DE',
+  bad: '#D1435B',
+  badSoft: '#FCE8EC',
+  night: '#16121F',
+  nightCard: '#221C30',
 } as const;
+
+/** Signature gradient: lavender → lilac → orchid. */
+export const GRADIENT = [colors.violet, colors.lilac, colors.orchid] as const;
 
 export const fonts = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
-  display: 'Manrope_700Bold',
-  displayMedium: 'Manrope_600SemiBold',
+  display: 'Unbounded_500Medium',
+  displayMedium: 'Unbounded_400Regular',
   mono: 'IBMPlexMono_400Regular',
   monoMedium: 'IBMPlexMono_500Medium',
 } as const;
@@ -73,26 +82,26 @@ export const type = {
 
 /** Soft layered shadow: glass cards float above the paper. */
 export const shadow = Platform.select({
-  ios: { shadowColor: '#322D1E', shadowOpacity: 0.13, shadowRadius: 18, shadowOffset: { width: 0, height: 10 } },
+  ios: { shadowColor: '#3A2A8C', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 10 } },
   android: { elevation: 3 },
-  default: { boxShadow: '0 1px 0 rgba(255,255,255,.85) inset, 0 14px 34px -16px rgba(50,45,30,.3), 0 2px 6px -3px rgba(50,45,30,.08)' },
+  default: { boxShadow: '0 1px 0 rgba(255,255,255,.85) inset, 0 14px 34px -16px rgba(58,42,140,.28), 0 2px 6px -3px rgba(58,42,140,.08)' },
 }) as object;
 
 /** Deep shadow under dark olive blocks and primary buttons. */
 export const glowShadow = Platform.select({
-  ios: { shadowColor: '#14160F', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 10 } },
+  ios: { shadowColor: '#16121F', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 10 } },
   android: { elevation: 8 },
   default: { boxShadow: '0 16px 30px -12px rgba(20,20,10,.6)' },
 }) as object;
 
 /** Dot colours for ingredient risk 0–3. */
-export const RISK_COLOR = [colors.good, '#A39A4E', '#C28A3E', colors.bad];
+export const RISK_COLOR = [colors.good, '#9FB34A', '#E0962E', colors.bad];
 
 /** pH-strip palette: terracotta (risky) → sage (clean). */
-export const STRIP = ['#B5563F', '#C06E4C', '#C98B6F', '#CFA276', '#D8BC86', '#C9BF8C', '#B2B88A', '#9CAA84', '#8A9A7B', '#6F8266'];
+export const STRIP = ['#D1435B', '#E0663F', '#E8902F', '#E9B52C', '#C9C23A', '#9FC24A', '#6FBE5C', '#4BB26A', '#3AA56B', '#2F9E6A'];
 
 /** Colours of recipe phases in formula bars and the constructor flask. */
-export const PHASE_COLOR = { water: colors.water, oil: colors.brassLight, active: colors.sageDeep, emulsifier: '#D6CCBA', preservative: colors.peach } as const;
+export const PHASE_COLOR = { water: colors.water, oil: '#E6C6FF', active: colors.violet, emulsifier: '#E9E4F7', preservative: colors.peach } as const;
 
 export function scoreColor(score: number) {
   if (score >= 75) return colors.good;

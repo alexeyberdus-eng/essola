@@ -1,11 +1,12 @@
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
-import { Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
+import { Unbounded_400Regular, Unbounded_500Medium } from '@expo-google-fonts/unbounded';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Splash } from '../components/Splash';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CommunityProvider } from '../context/CommunityContext';
@@ -24,8 +25,8 @@ function Root() {
     Inter_700Bold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
+    Unbounded_400Regular,
+    Unbounded_500Medium,
   });
   const loaded = fontsLoaded && ready;
 
@@ -33,6 +34,7 @@ function Root() {
     if (loaded) SplashScreen.hideAsync().catch(() => {});
   }, [loaded]);
 
+  const [intro, setIntro] = useState(true);
   if (!loaded) return null;
   return (
     <>
@@ -41,6 +43,7 @@ function Root() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipe/[id]" options={{ animation: 'fade_from_bottom' }} />
         <Stack.Screen name="article/[id]" options={{ animation: 'fade_from_bottom' }} />
+        <Stack.Screen name="knowledge" />
         <Stack.Screen name="create" options={{ presentation: 'modal' }} />
         <Stack.Screen name="shelf-add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="analysis/[id]" />
@@ -49,6 +52,7 @@ function Root() {
         <Stack.Screen name="cook/[id]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
       </Stack>
+      {intro && <Splash onDone={() => setIntro(false)} />}
     </>
   );
 }

@@ -3,9 +3,8 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { Glass } from '../../components/lab';
 import { RecipeCard } from '../../components/RecipeCard';
-import { FadeIn, Glow } from '../../components/silk';
+import { Brand, FadeIn, GradText, Glow } from '../../components/silk';
 import { IconButton, Press, T, tap, Wordmark } from '../../components/ui';
 import { useCommunity } from '../../context/CommunityContext';
 import { useLibrary } from '../../context/LibraryContext';
@@ -68,22 +67,33 @@ export default function FeedScreen() {
   const header = (
     <View style={{ paddingTop: insets.top + 8 }}>
       <View style={styles.top}>
-        <Wordmark />
+        <Brand />
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <IconButton icon={sort === 'saved' ? 'heartFill' : 'heart'} label="Избранное" onPress={() => setSort(sort === 'saved' ? 'for-you' : 'saved')} color={sort === 'saved' ? colors.bad : colors.ink} />
+          <IconButton icon={sort === 'saved' ? 'heartFill' : 'heart'} label="Избранное" onPress={() => setSort(sort === 'saved' ? 'for-you' : 'saved')} color={sort === 'saved' ? colors.violet : colors.ink} />
           <Press onPress={() => {
             setDraft(null);
             router.push('/create');
           }} style={styles.add} accessibilityLabel="Свой рецепт">
-            <Icon name="plus" size={20} color={colors.brassLight} strokeWidth={1.9} />
+            <Icon name="plus" size={20} color="#fff" strokeWidth={1.9} />
           </Press>
         </View>
       </View>
-      <Text style={styles.kicker}>
-        Формулы · {RECIPES.length + myRecipes.length} рецептов{myRecipes.length ? ` · ${myRecipes.length} моих` : ''}
-      </Text>
+      <View style={styles.hello}>
+        <Text style={styles.h1}>Сварим что-то </Text>
+        <GradText style={styles.h1}>новое?</GradText>
+      </View>
+      <View style={styles.modes}>
+        <View style={[styles.mode, styles.modeOn]}>
+          <Icon name="flask" size={15} color="#fff" />
+          <Text style={[styles.modeText, { color: '#fff' }]}>Рецепты · {RECIPES.length + myRecipes.length}</Text>
+        </View>
+        <Press haptic={false} onPress={() => { tap(); router.push('/knowledge'); }} style={styles.mode}>
+          <Icon name="book" size={15} color={colors.ink2} />
+          <Text style={styles.modeText}>Знания</Text>
+        </Press>
+      </View>
 
-      <Glass style={styles.search} tint="rgba(255,253,248,0.6)">
+      <View style={styles.search}>
         <View style={styles.searchRow}>
           <Icon name="search" size={18} color={colors.muted} />
           <TextInput
@@ -108,7 +118,7 @@ export default function FeedScreen() {
             )}
           </Press>
         </View>
-      </Glass>
+      </View>
 
       {panel && (
         <View style={styles.panel}>
@@ -131,26 +141,24 @@ export default function FeedScreen() {
         </View>
       )}
 
+      <View style={styles.sort}>
+        {(
+          [
+            ['for-you', 'В топе'],
+            ['new', 'Новое'],
+            ['hot', 'Обсуждают'],
+          ] as const
+        ).map(([k, l]) => (
+          <Press key={k} haptic={false} onPress={() => { tap(); setSort(k); }} style={[styles.sortChip, sort === k && styles.sortChipOn]}>
+            <Text style={[styles.sortText, sort === k && styles.sortOn]}>{l}</Text>
+          </Press>
+        ))}
+      </View>
       <Chips
         value={cat}
         onChange={setCat}
         options={[['all', 'Все'], ...(myRecipes.length ? ([['mine', 'Мои']] as const) : []), ...CATEGORIES.map((c) => [c, c] as const)]}
       />
-      <View style={styles.sort}>
-        {(
-          [
-            ['for-you', 'Для вас'],
-            ['new', 'Новые'],
-            ['hot', 'Обсуждают'],
-            ['easy', 'Просто'],
-          ] as const
-        ).map(([k, l]) => (
-          <Press key={k} haptic={false} onPress={() => setSort(k)}>
-            <Text style={[styles.sortText, sort === k && styles.sortOn]}>{l}</Text>
-            {sort === k && <View style={styles.sortLine} />}
-          </Press>
-        ))}
-      </View>
     </View>
   );
 
@@ -169,7 +177,7 @@ export default function FeedScreen() {
         scrollEventThrottle={16}
         renderItem={({ item, index }: { item: Recipe; index: number }) => (
           <FadeIn index={index}>
-            <RecipeCard recipe={item} dark={index === 0} index={index} />
+            <RecipeCard recipe={item} variant={index % 3 === 0 ? (index === 0 ? 'grad' : 'dark') : 'light'} index={index} />
           </FadeIn>
         )}
         ListEmptyComponent={
@@ -181,7 +189,7 @@ export default function FeedScreen() {
       />
       {/* frosted status-bar strip that fades in while scrolling */}
       <Animated.View pointerEvents="none" style={[styles.topFade, { height: insets.top, opacity: scrollY.interpolate({ inputRange: [0, 60], outputRange: [0, 1], extrapolate: 'clamp' }) }]}>
-        <Glass style={StyleSheet.absoluteFill} tint="rgba(242,238,230,0.6)" />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.94)" }]} />
       </Animated.View>
     </View>
   );
@@ -194,7 +202,7 @@ function Chips<K extends string>({ options, value, onChange }: { options: readon
       data={options as (readonly [K, string])[]}
       keyExtractor={([k]) => k}
       showsHorizontalScrollIndicator={false}
-      style={{ marginHorizontal: -space.gutter, marginTop: 12 }}
+      style={{ marginHorizontal: -space.gutter, marginTop: 10, marginBottom: 12 }}
       contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}
       renderItem={({ item: [k, l] }) => (
         <Press haptic={false} onPress={() => { tap(); onChange(k); }} style={[styles.chip, value === k && styles.chipOn]}>
@@ -221,25 +229,32 @@ function FilterRow<K extends string | number>({ title, options, value, onChange 
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
-  add: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.olive, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(216,188,134,0.45)' },
-  kicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
-  search: { height: 52, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', ...shadow },
-  searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 16, paddingRight: 6 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52 },
+  add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
+  h1: { fontFamily: fonts.display, fontSize: 25, lineHeight: 31, letterSpacing: -1, color: colors.ink },
+  modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: colors.surf, marginTop: 14 },
+  mode: { flex: 1, height: 38, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  modeOn: { backgroundColor: colors.ink },
+  modeText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
+  kicker: { fontFamily: fonts.semibold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
+  search: { height: 50, borderRadius: 16, backgroundColor: colors.surf, marginTop: 12 },
+  searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 6 },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
-  filterBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.olive, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: colors.brassLight, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: colors.olive },
-  panel: { marginTop: 10, padding: 14, gap: 12, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
-  reset: { fontFamily: fonts.semibold, fontSize: 13, color: colors.brassText },
-  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: 'rgba(230,221,207,0.7)', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.olive },
+  filterBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: colors.lilac, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: '#fff' },
+  panel: { marginTop: 10, padding: 14, gap: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, ...shadow },
+  reset: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
+  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.tint },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
-  chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
-  sort: { flexDirection: 'row', gap: 18, marginTop: 16, marginBottom: 14 },
-  sortText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
-  sortOn: { color: colors.ink, fontFamily: fonts.semibold },
-  sortLine: { height: 2, borderRadius: 2, backgroundColor: colors.brass, marginTop: 5 },
+  chipTextOn: { color: colors.violet, fontFamily: fonts.semibold },
+  sort: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  sortChip: { height: 36, paddingHorizontal: 15, borderRadius: 12, backgroundColor: colors.surf, justifyContent: 'center' },
+  sortChipOn: { backgroundColor: colors.ink },
+  sortText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
+  sortOn: { color: '#fff' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
   emptyText: { fontFamily: fonts.regular, fontSize: 13.5, color: colors.muted, textAlign: 'center' },
   topFade: { position: 'absolute', top: 0, left: 0, right: 0 },

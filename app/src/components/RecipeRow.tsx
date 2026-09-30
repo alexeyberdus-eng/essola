@@ -69,7 +69,7 @@ export function LikeButton({ id, size = 19, withCount, showCount, dark }: { id: 
       <View>
         <Burst trigger={burst} size={size} />
         <Animated.View style={{ transform: [{ scale: pop }] }}>
-          <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? (dark ? colors.brassLight : colors.bad) : dark ? colors.onDarkMuted : withCount || showCount ? colors.ink : colors.muted} />
+          <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? (dark ? colors.brassLight : colors.violet) : dark ? colors.onDarkMuted : withCount || showCount ? colors.ink : colors.muted} />
         </Animated.View>
       </View>
       {(withCount || showCount) && <Text style={[styles.pillText, showCount && styles.countText, dark && { color: colors.onDark }]}>{formatCount(likeCount(id))}</Text>}

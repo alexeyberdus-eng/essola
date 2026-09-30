@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   note: { borderRadius: radius.lg, padding: 16, gap: 6, marginTop: 16 },
   noteHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   noteTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
-  sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(242,238,230,0.94)' },
+  sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.94)' },
 });
 
 function Discussion({ recipeId }: { recipeId: string }) {

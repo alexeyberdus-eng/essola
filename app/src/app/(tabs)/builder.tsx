@@ -3,8 +3,10 @@ import { useMemo, useState } from 'react';
 import { FlatList, LayoutAnimation, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { DarkBlock, Flask, FormulaBar, RollingNumber } from '../../components/lab';
+import { DarkBlock, Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
+import { CompositionSummary } from '../../components/Summary';
+import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_LABEL, INGREDIENTS } from '../../data/ingredients';
 import { normalize } from '../../lib/analyze';
@@ -12,6 +14,13 @@ import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, ph
 import { colors, fonts, PHASE_COLOR, shadow, space, TAB_SPACE } from '../../theme';
 
 const VOLUMES = [30, 50, 100, 200];
+const KIND_USE: Record<Kind, string> = {
+  cream: 'Лицо и шея: утром и вечером на чистую кожу, горошина на всё лицо',
+  toner: 'Лицо: после умывания, ватным диском или распылить, затем крем',
+  serum: 'Лицо: 3–4 капли после тоника, перед кремом',
+  oil: 'Лицо, тело, кончики волос: 2–3 капли на влажную кожу',
+  balm: 'Губы, руки, сухие участки: по необходимости в течение дня',
+};
 
 export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
@@ -24,7 +33,13 @@ export default function BuilderScreen() {
 
   const sum = total(items);
   const list = useMemo(() => checks(items), [items]);
-  const score = useMemo(() => predict(items).scores.overall, [items]);
+  const prediction = useMemo(() => predict(items), [items]);
+  const score = prediction.scores.overall;
+  const summary = useMemo(() => {
+    const k = KINDS.find((x) => x.key === kind)!;
+    const s = summarize(prediction.items.map((i) => i.ing), k.label);
+    return { ...s, use: [KIND_USE[kind], ...s.use.slice(1)] };
+  }, [prediction, kind]);
   const layers = phaseSums(items);
 
   const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'));
@@ -97,13 +112,12 @@ export default function BuilderScreen() {
               <View>
                 <Text style={styles.darkKicker}>Сумма</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-                  <RollingNumber value={Math.floor(sum)} style={styles.sum} />
-                  <Text style={styles.sum}>,{String(Math.round((sum % 1) * 10))}%</Text>
+                  <Text style={styles.sum}>{pctText(sum)}</Text>
                 </View>
               </View>
               <View>
                 <Text style={styles.darkKicker}>Прогноз Essola</Text>
-                <RollingNumber value={score} style={styles.score} suffix="/100" />
+                <Text style={styles.score}>{score}/100</Text>
               </View>
               <View style={styles.vols}>
                 {VOLUMES.map((v) => (
@@ -132,6 +146,8 @@ export default function BuilderScreen() {
             ))}
           </View>
         </DarkBlock>
+
+        <CompositionSummary s={summary} title="Что даст эта формула" />
 
         {PHASE_ORDER.map((ph) => {
           const rows = items.filter((i) => i.phase === ph);
@@ -258,7 +274,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
   kicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
-  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: 'rgba(230,221,207,0.7)', justifyContent: 'center' },
+  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
   chipOn: { backgroundColor: colors.olive },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
@@ -281,12 +297,12 @@ const styles = StyleSheet.create({
   phDot: { width: 8, height: 8, borderRadius: 3 },
   phTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
-  rowLine: { borderTopWidth: 1, borderColor: 'rgba(226,219,205,0.8)' },
+  rowLine: { borderTopWidth: 1, borderColor: '#EFECF6' },
   name: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
-  step: { width: 26, height: 26, borderRadius: 9, backgroundColor: 'rgba(230,221,207,0.7)', alignItems: 'center', justifyContent: 'center' },
+  step: { width: 26, height: 26, borderRadius: 9, backgroundColor: '#F3F1F8', alignItems: 'center', justifyContent: 'center' },
   pct: { width: 44, textAlign: 'center', fontFamily: fonts.monoMedium, fontSize: 13, color: colors.ink, paddingVertical: 2 },
   g: { width: 58, textAlign: 'right', fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink2 },
-  addBtn: { marginTop: 10, height: 46, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#CFC6B5', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  addBtn: { marginTop: 10, height: 46, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D9D2EC', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   addText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
   saveBar: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row' },
   pHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter },

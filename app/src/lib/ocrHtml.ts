@@ -24,29 +24,40 @@ function getWorker() {
       logger: function (m) { if (m.status && typeof m.progress === 'number') post({ type: 'progress', status: m.status, progress: m.progress }); }
     });
     // Latin for INCI lists + Cyrillic for Russian labels ("Состав: вода, глицерин…").
-    workerP = Tesseract.createWorker(['rus', 'eng'], 1, opts).then(function (w) { post({ type: 'ready' }); return w; });
+    workerP = Tesseract.createWorker(['rus', 'eng'], 1, opts)
+      // PSM 6 = one uniform block of text: fits a dense ingredient paragraph better than full-page layout analysis.
+      .then(function (w) { return w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1', user_defined_dpi: '300' }).then(function () { return w; }); })
+      .then(function (w) { post({ type: 'ready' }); return w; });
     workerP.catch(function (e) { workerP = null; post({ type: 'fatal', error: String(e && e.message || e) }); });
   }
   return workerP;
 }
-// Grayscale + contrast stretch: glossy packaging and coloured print read much better.
+// Grayscale, upscale small photos, robust contrast stretch (ignores glare) and inverts light-on-dark print.
 function prepare(dataUrl) {
   return new Promise(function (resolve) {
     var img = new Image();
     img.onload = function () {
       try {
+        var scale = img.width < 1800 ? 1800 / img.width : 1;
         var c = document.createElement('canvas');
-        c.width = img.width; c.height = img.height;
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
         var x = c.getContext('2d');
-        x.drawImage(img, 0, 0);
-        var d = x.getImageData(0, 0, c.width, c.height), p = d.data, lo = 255, hi = 0, i, g;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(img, 0, 0, c.width, c.height);
+        var d = x.getImageData(0, 0, c.width, c.height), p = d.data, i, g, hist = new Array(256).fill(0), n = p.length / 4, sum = 0;
         for (i = 0; i < p.length; i += 4) {
-          g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
-          p[i] = g; if (g < lo) lo = g; if (g > hi) hi = g;
+          g = Math.round(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]);
+          p[i] = g; hist[g]++; sum += g;
         }
+        var acc = 0, lo = 0, hi = 255;
+        for (i = 0; i < 256; i++) { acc += hist[i]; if (acc > n * 0.02) { lo = i; break; } }
+        acc = 0;
+        for (i = 255; i >= 0; i--) { acc += hist[i]; if (acc > n * 0.02) { hi = i; break; } }
+        var invert = sum / n < 110; // white text on dark packaging
         var k = 255 / Math.max(1, hi - lo);
         for (i = 0; i < p.length; i += 4) {
           g = Math.min(255, Math.max(0, (p[i] - lo) * k));
+          if (invert) g = 255 - g;
           p[i] = p[i + 1] = p[i + 2] = g;
         }
         x.putImageData(d, 0, 0);

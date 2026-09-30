@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#FFFCF6",
+    "backgroundColor": "#FFFFFF",
     "ios": {
       "bundleIdentifier": "com.essola.lab",
       "supportsTablet": false,
@@ -39,7 +39,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFCF6"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       [

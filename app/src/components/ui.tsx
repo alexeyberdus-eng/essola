@@ -239,7 +239,7 @@ const s = StyleSheet.create({
   btn: { height: 54, borderRadius: 18, overflow: 'hidden', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   btnText: { fontFamily: fonts.semibold, fontSize: 15 },
   iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, ...shadow, alignItems: 'center', justifyContent: 'center' },
-  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: 'rgba(230,221,207,0.65)', justifyContent: 'center' },
+  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
   segSm: { height: 30, paddingHorizontal: 12, borderRadius: 99 },
   segOn: { backgroundColor: colors.olive },
   segText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },

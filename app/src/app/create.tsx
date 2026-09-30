@@ -195,12 +195,12 @@ function AddLine({ label, onPress }: { label: string; onPress: () => void }) {
 const styles = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingTop: 16 },
   navTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
-  photo: { height: 170, borderRadius: 22, overflow: 'hidden', borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#CFC6B5', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,253,248,0.5)' },
+  photo: { height: 170, borderRadius: 22, overflow: 'hidden', borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D9D2EC', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.9)' },
   photoText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink2 },
   hint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   label: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted },
   input: { minHeight: 46, borderRadius: 14, backgroundColor: colors.cardSolid, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', ...shadow },
-  chip: { height: 34, paddingHorizontal: 13, borderRadius: 99, backgroundColor: 'rgba(230,221,207,0.7)', justifyContent: 'center' },
+  chip: { height: 34, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
   chipOn: { backgroundColor: colors.olive },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   ingRow: { flexDirection: 'row', gap: 8 },
@@ -208,5 +208,5 @@ const styles = StyleSheet.create({
   stepNo: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.olive, color: colors.brassLight, textAlign: 'center', lineHeight: 24, fontFamily: fonts.monoMedium, fontSize: 12, marginTop: 11, overflow: 'hidden' },
   addLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
   addText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink2 },
-  sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(242,238,230,0.94)' },
+  sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.94)' },
 });

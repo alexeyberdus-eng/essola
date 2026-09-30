@@ -22,7 +22,7 @@ const webOcr = !nativeOcr && Platform.OS !== 'web';
 const native = Platform.OS !== 'web';
 
 type Mode = 'barcode' | 'label';
-type Lookup = { code: string; state: 'searching' | 'missing' } | null;
+type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
 
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
@@ -42,6 +42,7 @@ export default function ScannerScreen() {
   const [lookup, setLookup] = useState<Lookup>(null);
   const [wave, setWave] = useState(0);
   const pendingCode = useRef<string | null>(null);
+  const pendingName = useRef<string | null>(null);
   const scanning = useRef(false);
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
@@ -74,10 +75,11 @@ export default function ScannerScreen() {
     tap('success');
     const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
     const code = meta?.barcode ?? pendingCode.current ?? undefined;
-    const name = title ?? `Состав от ${date}`;
+    const name = title ?? pendingName.current ?? `Состав от ${date}`;
     if (code && !meta?.source) rememberBarcode(code, name, raw);
     const scan = saveScan({ title: name, text: raw, overall: result.scores.overall, barcode: code, source: meta?.source });
     pendingCode.current = null;
+    pendingName.current = null;
     setText('');
     setNotice(null);
     setManual(false);
@@ -93,12 +95,14 @@ export default function ScannerScreen() {
     setNotice(null);
     setLookup({ code: data, state: 'searching' });
     const known = barcodes[data];
-    const found = known ? { title: known.title, text: known.text, source: 'база Essola' } : await lookupBarcode(data);
+    const res = known ? { product: { title: known.title, text: known.text, source: 'база Essola' }, name: known.title } : await lookupBarcode(data);
+    const found = res.product;
     if (found) {
       finish(found.text, found.title, { barcode: data, source: found.source });
     } else {
       pendingCode.current = data;
-      setLookup({ code: data, state: 'missing' });
+      pendingName.current = res.name;
+      setLookup({ code: data, state: 'missing', name: res.name });
     }
     setTimeout(() => (scanning.current = false), 800);
   };
@@ -283,8 +287,8 @@ export default function ScannerScreen() {
             <View style={styles.live}>
               {lookup.state === 'searching' ? <ActivityIndicator color={colors.sageDeep} /> : <Icon name="alert" size={20} color={colors.brassText} />}
               <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>{lookup.state === 'searching' ? 'Ищем в открытых базах' : 'В базах этого товара нет'}</Text>
-                <Text style={styles.mono}>Open Beauty Facts · база Essola</Text>
+                <Text style={styles.sheetTitle}>{lookup.state === 'searching' ? 'Ищем в открытых базах' : lookup.name ? 'Нашли товар, но без состава' : 'В базах этого товара нет'}</Text>
+                <Text style={styles.mono} numberOfLines={2}>{lookup.name ?? 'Open Beauty Facts · Open Food Facts · база Essola'}</Text>
               </View>
             </View>
             <View style={styles.steps}>
@@ -401,7 +405,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 10,
   },
-  grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#D3CABB', alignSelf: 'center', marginBottom: 14 },
+  grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#E2DCF0', alignSelf: 'center', marginBottom: 14 },
   sheetTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.4, color: colors.ink },
   sheetText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.muted, marginTop: 4 },
   mono: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted, marginTop: 2 },
@@ -414,7 +418,7 @@ const styles = StyleSheet.create({
   square: { width: 52, height: 52, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 3, borderColor: colors.olive, padding: 5 },
   shutterIn: { flex: 1, borderRadius: 34, backgroundColor: colors.olive },
-  shutterGhost: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, borderColor: '#CFC6B5', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  shutterGhost: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, borderColor: '#D9D2EC', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   notice: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.brassText, backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12 },
   manualTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 6 },
   manualTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },

@@ -3,9 +3,11 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { DarkBlock, Glass, RollingNumber, Ring, Tube } from '../../components/lab';
+import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
+import { CompositionSummary } from '../../components/Summary';
+import { summarize } from '../../lib/effects';
 import { recipeNo } from '../../components/RecipeCard';
-import { Card, CountUp, FadeIn, Glow } from '../../components/silk';
+import { Card, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, Press, Seg, T, Tag, tap } from '../../components/ui';
 import { useUserContent } from '../../context/UserContentContext';
 import { Similar, similarRecipes, storeQuery, STORES } from '../../lib/similar';
@@ -32,6 +34,7 @@ export default function AnalysisScreen() {
   const scan = getScan(id);
   const result = useMemo(() => (scan ? analyze(scan.text, user?.skinType) : null), [scan, user?.skinType]);
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
+  const summary = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<number | null>(null);
   const y = useRef(new Animated.Value(0)).current;
@@ -85,18 +88,18 @@ export default function AnalysisScreen() {
           <Text style={styles.kicker} numberOfLines={1}>
             {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : 'Скан состава'}
           </Text>
-          <View style={styles.head}>
+          <DarkBlock style={styles.head}>
+            <Ring value={scores.overall} size={104} stroke={10} color={colors.lilac} track="rgba(255,255,255,0.14)">
+              <RollingNumber value={scores.overall} style={styles.ringNum} />
+              <Text style={styles.ringOf}>из 100</Text>
+            </Ring>
             <View style={{ flex: 1 }}>
+              <Text style={styles.headSub}>{items.length} ингредиентов</Text>
               <Text style={styles.title} numberOfLines={3}>
                 {scan.title}
               </Text>
-              <Text style={styles.sub}>{items.length} ингредиентов</Text>
             </View>
-            <Ring value={scores.overall} size={108} stroke={8}>
-              <RollingNumber value={scores.overall} style={styles.ringNum} />
-              <Text style={styles.ringOf}>/100</Text>
-            </Ring>
-          </View>
+          </DarkBlock>
           <View style={[styles.verdict, { backgroundColor: verdictTone === colors.good ? colors.goodSoft : verdictTone === colors.warn ? colors.warnSoft : colors.badSoft }]}>
             <Text style={styles.verdictText}>
               <Text style={{ fontFamily: fonts.semibold, color: verdictTone }}>{result.verdict.title}</Text> · {result.verdict.text}
@@ -105,22 +108,24 @@ export default function AnalysisScreen() {
         </FadeIn>
 
         <FadeIn index={1}>
-          <Card style={styles.tubes}>
+          <View style={styles.tubes}>
             {(
               [
-                ['Безопасно', scores.safety],
+                ['Безопасность', scores.safety],
                 ['Польза', scores.efficacy],
-                ['Природно', scores.natural],
-                ['Поры', scores.pores],
+                ['Природность', scores.natural],
+                ['Чистые поры', scores.pores],
               ] as const
             ).map(([l, v], i) => (
               <View key={l} style={styles.tubeCol}>
-                <Tube value={v} delay={200 + i * 120} />
-                <CountUp value={v} style={styles.tubeNum} />
+                <Ring value={v} size={48} stroke={5} color={colors.violet} track="rgba(123,92,250,0.14)" delay={200 + i * 120}>
+                  <Text style={styles.tubeNum}>{v}</Text>
+                </Ring>
                 <Text style={styles.tubeLabel}>{l}</Text>
               </View>
             ))}
-          </Card>
+          </View>
+          <CompositionSummary s={summary} />
         </FadeIn>
 
         {!!result.freeFrom.length && (
@@ -242,7 +247,7 @@ export default function AnalysisScreen() {
 
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: y.interpolate({ inputRange: [0, 60], outputRange: [0, 1], extrapolate: 'clamp' }) }]}>
-          <Glass style={StyleSheet.absoluteFill} tint="rgba(242,238,230,0.6)" />
+          <Glass style={StyleSheet.absoluteFill} tint="rgba(255,255,255,0.94)" />
         </Animated.View>
         <IconButton icon="arrowLeft" label="Назад" onPress={back} />
         <Text style={styles.navTitle}>Разбор</Text>
@@ -317,17 +322,18 @@ const styles = StyleSheet.create({
   nav: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 10 },
   navTitle: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },
   kicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
-  title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 29, letterSpacing: -0.9, color: colors.ink },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8, padding: 16 },
+  headSub: { fontFamily: fonts.medium, fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  title: { fontFamily: fonts.display, fontSize: 19, lineHeight: 23, letterSpacing: -0.7, color: '#fff', marginTop: 4 },
   sub: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 5 },
-  ringNum: { fontFamily: fonts.display, fontSize: 32, lineHeight: 36, letterSpacing: -1, color: colors.ink },
-  ringOf: { fontFamily: fonts.mono, fontSize: 10, color: colors.muted, marginTop: -2 },
+  ringNum: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1, color: '#fff' },
+  ringOf: { fontFamily: fonts.medium, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: -2 },
   verdict: { marginTop: 12, padding: 12, borderRadius: 16 },
   verdictText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18.5, color: colors.ink2 },
-  tubes: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 16, marginTop: 12 },
-  tubeCol: { alignItems: 'center', width: 74 },
-  tubeNum: { fontFamily: fonts.display, fontSize: 18, lineHeight: 22, color: colors.ink, marginTop: 8 },
-  tubeLabel: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
+  tubes: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  tubeCol: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: 18, backgroundColor: colors.tint },
+  tubeNum: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
+  tubeLabel: { fontFamily: fonts.semibold, fontSize: 10, color: colors.ink2, textAlign: 'center' },
   section: { fontFamily: fonts.display, fontSize: 19, letterSpacing: -0.5, color: colors.ink, marginTop: 24, marginBottom: 10 },
   anHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   an: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 8 },
@@ -335,15 +341,15 @@ const styles = StyleSheet.create({
   mono: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted },
   anTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },
   anSub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
-  go: { width: 34, height: 34, borderRadius: 12, backgroundColor: 'rgba(230,221,207,0.8)', alignItems: 'center', justifyContent: 'center' },
-  store: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 38, borderRadius: 12, backgroundColor: 'rgba(230,221,207,0.7)' },
+  go: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#F3F1F8', alignItems: 'center', justifyContent: 'center' },
+  store: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 38, borderRadius: 12, backgroundColor: '#F3F1F8' },
   storeText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.ink2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
   personal: { marginTop: 14, backgroundColor: colors.sageSoft, borderRadius: radius.lg, padding: 16, gap: 6 },
-  personalGhost: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC6B5' },
+  personalGhost: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed', borderColor: '#D9D2EC' },
   personalHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   personalTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.sageDeep },
-  rowWrap: { borderBottomWidth: 1, borderColor: 'rgba(226,219,205,0.9)' },
+  rowWrap: { borderBottomWidth: 1, borderColor: '#EFECF6' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   pos: { width: 20, fontFamily: fonts.monoMedium, fontSize: 11, color: colors.muted },
   name: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },

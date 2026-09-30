@@ -33,7 +33,7 @@ function CommentLike({ comment }: { comment: Comment }) {
     <Pressable onPress={onPress} hitSlop={12} style={styles.likeBtn} accessibilityRole="button" accessibilityLabel={liked ? 'Убрать отметку' : 'Нравится'}>
       <Burst trigger={burst} size={14} />
       <Animated.View style={{ transform: [{ scale: pop }] }}>
-        <Icon name={liked ? 'heartFill' : 'heart'} size={14} color={liked ? colors.bad : colors.faint} />
+        <Icon name={liked ? 'heartFill' : 'heart'} size={14} color={liked ? colors.violet : colors.faint} />
       </Animated.View>
     </Pressable>
   );

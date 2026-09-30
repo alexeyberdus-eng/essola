@@ -1,15 +1,32 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { colors, fonts, shadow } from '../theme';
-import { LabBackground } from './lab';
 
 const native = Platform.OS !== 'web';
 
-/** Lab paper behind every screen: grid, scale, crosshairs and slowly drifting natural tints. */
-export function Glow({ flask = true }: { height?: number; flask?: boolean }) {
-  return <LabBackground flask={flask} />;
+/** White page with a soft lavender glow in the top corner. */
+export function Glow({ height = 420 }: { height?: number; flask?: boolean }) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height }]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="gv1" cx="100%" cy="0%" rx="70%" ry="45%">
+            <Stop offset="0" stopColor={colors.lilac} stopOpacity="0.16" />
+            <Stop offset="1" stopColor={colors.lilac} stopOpacity="0" />
+          </RadialGradient>
+          <RadialGradient id="gv2" cx="0%" cy="55%" rx="55%" ry="35%">
+            <Stop offset="0" stopColor={colors.orchid} stopOpacity="0.07" />
+            <Stop offset="1" stopColor={colors.orchid} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#gv1)" />
+        <Rect width="100%" height="100%" fill="url(#gv2)" />
+      </Svg>
+    </View>
+  );
 }
 
 /** White surface lifted on a layered soft shadow. */
@@ -152,13 +169,13 @@ export function ProductPhoto({ kind, tone, height, radius = 16, style }: { kind:
   );
 }
 
-const AVATAR_TONES = ['#D8BC86', '#C9B79C', '#A9B899', '#D9A88F', '#AFC6CC', '#CFC3AE'];
+const AVATAR_TONES = ['#7B5CFA', '#A77BFF', '#C08BF5', '#8C6CFF', '#6A4BF2', '#B08CFF'];
 export function Avatar({ name, size = 34 }: { name: string; size?: number }) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: AVATAR_TONES[h % AVATAR_TONES.length], alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontFamily: fonts.semibold, fontSize: size * 0.4, color: colors.ink }}>{name.slice(0, 1).toUpperCase()}</Text>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: size * 0.4, color: '#fff' }}>{name.slice(0, 1).toUpperCase()}</Text>
     </View>
   );
 }
@@ -173,3 +190,29 @@ const s = StyleSheet.create({
   },
   cardSoft: { backgroundColor: colors.surf, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
 });
+
+/** Text filled with the signature lavender gradient ("lab", "новое?"). */
+export function GradText({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  if (Platform.OS === 'web') return <Text style={[style, { color: colors.violet }]}>{children}</Text>;
+  return (
+    <MaskedView maskElement={<Text style={style}>{children}</Text>}>
+      <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }}>
+        <Text style={[style, { opacity: 0 }]}>{children}</Text>
+      </LinearGradient>
+    </MaskedView>
+  );
+}
+
+/** "essola lab" + tagline. */
+export function Brand({ size = 23, tagline = true, light }: { size?: number; tagline?: boolean; light?: boolean }) {
+  const t = { fontFamily: fonts.display, fontSize: size, letterSpacing: -size * 0.05, lineHeight: size * 1.15 };
+  return (
+    <View accessibilityRole="header" accessibilityLabel="essola lab">
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+        <Text style={[t, { color: light ? '#fff' : colors.ink }]}>essola </Text>
+        <GradText style={t}>lab</GradText>
+      </View>
+      {tagline && <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 3 }}>домашняя лаборатория косметики</Text>}
+    </View>
+  );
+}

@@ -22,7 +22,7 @@ export default function IngredientScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow />
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
-        <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/wiki'))} />
+        <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/knowledge'))} />
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 40 }}>
         <FadeIn>

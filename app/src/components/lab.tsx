@@ -180,7 +180,7 @@ function liquidGlass() {
   return LiquidGlass;
 }
 
-export function Glass({ children, style, tint = 'rgba(250,247,240,0.55)', intensity = 40, interactive }: GlassProps) {
+export function Glass({ children, style, tint = 'rgba(255,255,255,0.9)', intensity = 40, interactive }: GlassProps) {
   const LG = liquidGlass();
   const flat = StyleSheet.flatten(style) ?? {};
   const r = (flat.borderRadius as number) ?? 0;
@@ -194,7 +194,7 @@ export function Glass({ children, style, tint = 'rgba(250,247,240,0.55)', intens
   return (
     <View style={[style, { overflow: 'hidden' }]}>
       {Platform.OS === 'web' ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(250,247,240,0.86)' }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.9)' }]} />
       ) : (
         <BlurView intensity={intensity} tint="light" style={StyleSheet.absoluteFill} />
       )}

@@ -14,7 +14,7 @@ export default function ArticleScreen() {
   const a = ARTICLES.find((x) => x.id === id);
   const y = useRef(new Animated.Value(0)).current;
   if (!a) return null;
-  const back = () => (router.canGoBack() ? router.back() : router.replace('/wiki'));
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/knowledge'));
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow flask={false} />
@@ -43,7 +43,7 @@ export default function ArticleScreen() {
       </Animated.ScrollView>
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: y.interpolate({ inputRange: [0, 80], outputRange: [0, 1], extrapolate: 'clamp' }) }]}>
-          <Glass style={StyleSheet.absoluteFill} tint="rgba(242,238,230,0.6)" />
+          <Glass style={StyleSheet.absoluteFill} tint="rgba(255,255,255,0.94)" />
         </Animated.View>
         <IconButton icon="arrowLeft" label="Назад" onPress={back} />
       </View>

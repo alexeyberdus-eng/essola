@@ -3,15 +3,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, FlatList, LayoutAnimation, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
-import { Icon } from '../../components/Icon';
-import { DarkBlock, Glass } from '../../components/lab';
-import { Breathe, Card, FadeIn, Glow } from '../../components/silk';
-import { Press, Seg, tap } from '../../components/ui';
-import { ARTICLE_CATS, ArticleCat, ARTICLES, Article, Term, TERMS } from '../../data/articles';
-import { FN_LABEL, Fn, INGREDIENTS, Ingredient } from '../../data/ingredients';
-import { normalize } from '../../lib/analyze';
-import { ingredientId, recipesWith, WIKI_GROUPS } from '../../lib/wiki';
-import { colors, fonts, RISK_COLOR, shadow, space, TAB_SPACE } from '../../theme';
+import { Icon } from '../components/Icon';
+import { DarkBlock, Glass } from '../components/lab';
+import { Breathe, Card, FadeIn, Glow } from '../components/silk';
+import { IconButton, Press, Seg, tap } from '../components/ui';
+import { ARTICLE_CATS, ArticleCat, ARTICLES, Article, Term, TERMS } from '../data/articles';
+import { FN_LABEL, Fn, INGREDIENTS, Ingredient } from '../data/ingredients';
+import { normalize } from '../lib/analyze';
+import { ingredientId, recipesWith, WIKI_GROUPS } from '../lib/wiki';
+import { colors, fonts, RISK_COLOR, shadow, space, TAB_SPACE } from '../theme';
 
 type Mode = 'articles' | 'glossary';
 type Row = { kind: 'article'; a: Article } | { kind: 'term'; t: Term } | { kind: 'head'; title: string; sub: string } | { kind: 'ing'; ing: Ingredient };
@@ -60,6 +60,7 @@ export default function KnowledgeScreen() {
   const header = (
     <View style={{ paddingTop: insets.top + 8 }}>
       <View style={styles.top}>
+        <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <Text style={styles.h1}>Знания</Text>
       </View>
       <View style={styles.seg} onLayout={(e) => setSegW(e.nativeEvent.layout.width)}>
@@ -87,7 +88,7 @@ export default function KnowledgeScreen() {
         ))}
       </View>
 
-      <Glass style={styles.search} tint="rgba(255,253,248,0.6)">
+      <Glass style={styles.search} tint="rgba(255,255,255,0.9)">
         <View style={styles.searchRow}>
           <Icon name="search" size={18} color={colors.muted} />
           <TextInput
@@ -155,7 +156,7 @@ export default function KnowledgeScreen() {
         data={rows}
         keyExtractor={(r, i) => (r.kind === 'article' ? r.a.id : r.kind === 'term' ? r.t.term : r.kind === 'ing' ? r.ing.inci : `h${i}`)}
         ListHeaderComponent={header}
-        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE }}
+        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 30 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         renderItem={({ item, index }) => (
@@ -285,9 +286,9 @@ function IngredientCard({ ing }: { ing: Ingredient }) {
 }
 
 const styles = StyleSheet.create({
-  top: { height: 48, justifyContent: 'center' },
+  top: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 12 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
-  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: 'rgba(230,221,207,0.7)', padding: 4, marginTop: 4 },
+  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#F3F1F8', padding: 4, marginTop: 4 },
   knob: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 12, backgroundColor: colors.cardSolid, ...shadow },
   segItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   artTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 19, color: colors.ink, marginTop: 3 },
   artLead: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 3 },
   abc: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12 },
-  letter: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(230,221,207,0.7)' },
+  letter: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F1F8' },
   letterOn: { backgroundColor: colors.olive },
   letterText: { fontFamily: fonts.monoMedium, fontSize: 12, color: colors.ink2 },
   head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 16, marginBottom: 8 },
