@@ -1,5 +1,5 @@
 # Publishes the app to Expo's servers (EAS Update) on every push and posts a permanent
-# Expo Go link + QR code to the issue "📱 Essola в Expo Go". No tunnel or VPN needed.
+# Expo Go link + QR code to the issue "📱 Essola в Expo Go". No tunnel needed.
 name: EAS Update
 
 on:
@@ -87,7 +87,7 @@ jobs:
               '## Откройте Essola на телефоне',
               '',
               '1. Установите **Expo Go** и войдите в свой аккаунт Expo.',
-              '2. Наведите камеру iPhone на QR-код. VPN не нужен, ссылка постоянная.',
+              '2. Наведите камеру iPhone на QR-код. Ссылка постоянная, компьютер для запуска не нужен.',
               '',
               `<img src="${qr(exact)}" width="280" alt="QR-код для Expo Go">`,
               '',
