@@ -89,17 +89,17 @@ jobs:
               '1. Установите **Expo Go** и войдите в свой аккаунт Expo.',
               '2. Наведите камеру iPhone на QR-код. Ссылка постоянная, компьютер для запуска не нужен.',
               '',
-              `<img src="${qr(exact)}" width="280" alt="QR-код для Expo Go">`,
+              `<img src="${qr(latest)}" width="280" alt="QR-код для Expo Go">`,
+              '',
+              'QR всегда открывает самую свежую версию. Если видите старую — закройте Essola в Expo Go (смахните вверх) и откройте снова.',
               '',
               'Если QR не сработал: Expo Go → «Enter URL manually»:',
               '',
               '```',
-              exact,
+              latest,
               '```',
               '',
-              `Или откройте [страницу обновления на expo.dev](${page}) — там официальный QR-код.`,
-              '',
-              `Ссылка на самую свежую версию (не меняется): \`${latest}\``,
+              `Только эта версия: \`${exact}\` · [страница на expo.dev](${page})`,
               '',
               `🟢 Версия \`${context.sha.slice(0, 7)}\`, опубликована ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК.`,
             ].join('\n');
@@ -107,4 +107,4 @@ jobs:
             const existing = issues.find((i) => i.title === process.env.ISSUE_TITLE && !i.pull_request);
             if (existing) await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
             else await github.rest.issues.create({ ...context.repo, title: process.env.ISSUE_TITLE, body });
-            await core.summary.addHeading('Essola — EAS Update').addRaw(`<img src="${qr(exact)}" width="240">`).addCodeBlock(exact).addLink('expo.dev', page).write();
+            await core.summary.addHeading('Essola — EAS Update').addRaw(`<img src="${qr(latest)}" width="240">`).addCodeBlock(latest).addLink('expo.dev', page).write();
