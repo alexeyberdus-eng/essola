@@ -36,7 +36,13 @@ export type IconName =
   | 'comment'
   | 'send'
   | 'external'
-  | 'filter';
+  | 'filter'
+  | 'barcode'
+  | 'more'
+  | 'torch'
+  | 'trash'
+  | 'shelf'
+  | 'camera';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -174,6 +180,28 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
         return <Path d="M12 6v12M6 12h12" {...p} />;
       case 'minus':
         return <Path d="M6 12h12" {...p} />;
+      case 'barcode':
+        return (
+          <>
+            <Path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" {...p} />
+            <Path d="M7.5 9v6M10 9v6M12.5 9v6M15 9v6M17 9v6" {...p} />
+          </>
+        );
+      case 'more':
+        return <Path d="M6 12h.01M12 12h.01M18 12h.01" {...p} strokeWidth={strokeWidth * 2.2} />;
+      case 'torch':
+        return <Path d="M9 3.5h6l-1 5h-4l-1-5ZM10 8.5h4v11a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-11Z" {...p} />;
+      case 'trash':
+        return <Path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7" {...p} />;
+      case 'shelf':
+        return <Path d="M3.5 20.5h17M3.5 12.5h17M6 12.5V6h3v6.5M11 12.5V4h2.5v8.5M16 12.5l1.5-5.5 2.4.7-1.4 4.8M6 20.5v-5h3v5M11.5 20.5v-6h3v6" {...p} />;
+      case 'camera':
+        return (
+          <>
+            <Path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.3l1.4-2h5.6l1.4 2h2.3A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" {...p} />
+            <Circle cx="12" cy="13" r="3.5" {...p} />
+          </>
+        );
       case 'history':
         return (
           <>

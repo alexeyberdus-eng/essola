@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode, useRef } from 'react';
 import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
-import { colors, fonts, glowShadow, radius, STRIP, type } from '../theme';
+import { colors, fonts, glowShadow, radius, shadow, STRIP, type } from '../theme';
 import { Icon, IconName } from './Icon';
 
 export function T({ v = 'body', style, ...rest }: TextProps & { v?: keyof typeof type }) {
@@ -57,11 +57,13 @@ export function Press({
   );
 }
 
-type ButtonVariant = 'honey' | 'dark' | 'outline';
+type ButtonVariant = 'honey' | 'dark' | 'outline' | 'brass';
+// 'honey' is the primary action: dark olive with a brass edge (name kept for existing screens).
 const BTN: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
-  honey: { bg: colors.honey, fg: colors.ink },
-  dark: { bg: colors.ink, fg: colors.bg },
-  outline: { bg: colors.card, fg: colors.ink, border: colors.line },
+  honey: { bg: colors.olive, fg: colors.onDark, border: 'rgba(216,188,134,0.45)' },
+  dark: { bg: colors.olive, fg: colors.onDark },
+  brass: { bg: colors.brass, fg: colors.olive },
+  outline: { bg: colors.card, fg: colors.ink, border: 'rgba(255,255,255,0.9)' },
 };
 
 export function Button({
@@ -88,17 +90,17 @@ export function Button({
     <Press
       onPress={onPress}
       disabled={disabled || loading}
-      style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, variant === 'honey' && glowShadow, style]}
+      style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, variant !== 'outline' && glowShadow, variant === 'outline' && shadow, style]}
     >
-      {variant === 'honey' && (
-        // Silk accent: soft vertical honey gradient with a light top edge.
-        <LinearGradient colors={[colors.honeyTop, colors.honeyBottom]} style={[StyleSheet.absoluteFill, s.btnFill]} />
+      {(variant === 'honey' || variant === 'dark') && (
+        <LinearGradient colors={[colors.olive2, colors.olive]} style={[StyleSheet.absoluteFill, s.btnFill]} />
       )}
+      {variant === 'brass' && <LinearGradient colors={[colors.brassLight, colors.brassDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, s.btnFill]} />}
       {loading ? (
         <ActivityIndicator color={c.fg} />
       ) : (
         <View style={s.btnContent}>
-          {icon && <Icon name={icon} size={18} color={c.fg} strokeWidth={1.8} />}
+          {icon && <Icon name={icon} size={18} color={variant === 'honey' ? colors.brassLight : c.fg} strokeWidth={1.8} />}
           <Text style={[s.btnText, { color: c.fg }]}>{label}</Text>
           {iconRight && <Icon name={iconRight} size={18} color={c.fg} strokeWidth={1.8} />}
         </View>
@@ -135,7 +137,7 @@ export function Seg<K extends string>({
         const on = o.key === value;
         return (
           <Press key={o.key} onPress={() => onChange(o.key)} style={[s.seg, small && s.segSm, on && s.segOn]}>
-            <Text style={[s.segText, small && { fontSize: 12 }, on && { color: colors.ink, fontFamily: fonts.semibold }]}>{o.label}</Text>
+            <Text style={[s.segText, small && { fontSize: 12 }, on && { color: colors.onDark, fontFamily: fonts.semibold }]}>{o.label}</Text>
           </Press>
         );
       })}
@@ -165,7 +167,7 @@ export function Hairline({ style }: { style?: StyleProp<ViewStyle> }) {
 export function Wordmark({ size = 25, badge = 'lab' }: { size?: number; badge?: string | null }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} accessibilityRole="header" accessibilityLabel="Essola">
-      <Text style={{ fontFamily: fonts.semibold, fontSize: size, letterSpacing: -size * 0.055, color: colors.ink }}>essola</Text>
+      <Text style={{ fontFamily: fonts.display, fontSize: size, letterSpacing: -size * 0.06, color: colors.ink }}>essola</Text>
       {badge && (
         <View style={s.badge}>
           <Text style={s.badgeText}>{badge}</Text>
@@ -233,18 +235,18 @@ export function LinkText({ label, onPress }: { label: string; onPress: () => voi
 
 const s = StyleSheet.create({
   btnContent: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 },
-  btnFill: { borderRadius: 14, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
-  btn: { height: 52, borderRadius: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  btnFill: { borderRadius: 18 },
+  btn: { height: 54, borderRadius: 18, overflow: 'hidden', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   btnText: { fontFamily: fonts.semibold, fontSize: 15 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },
+  iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, ...shadow, alignItems: 'center', justifyContent: 'center' },
+  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: 'rgba(230,221,207,0.65)', justifyContent: 'center' },
   segSm: { height: 30, paddingHorizontal: 12, borderRadius: 99 },
-  segOn: { backgroundColor: colors.honey },
+  segOn: { backgroundColor: colors.olive },
   segText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
   tagText: { fontFamily: fonts.medium, fontSize: 11.5 },
-  badge: { backgroundColor: colors.honey, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2, marginTop: 2 },
-  badgeText: { fontFamily: fonts.monoMedium, fontSize: 9, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.ink },
+  badge: { backgroundColor: colors.olive, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2, marginTop: 2 },
+  badgeText: { fontFamily: fonts.monoMedium, fontSize: 9, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.brassLight },
   strip: { flexDirection: 'row', gap: 3, height: 14, marginTop: 10 },
   stripCell: { flex: 1, borderRadius: 3 },
   pointer: {
@@ -264,6 +266,6 @@ const s = StyleSheet.create({
   metric: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.line },
   metricLabel: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
   metricBar: { width: '38%', height: 4, borderRadius: 2, backgroundColor: colors.surf },
-  metricFill: { height: 4, borderRadius: 2, backgroundColor: colors.ink },
+  metricFill: { height: 4, borderRadius: 2, backgroundColor: colors.sageDeep },
   metricValue: { width: 28, textAlign: 'right', fontFamily: fonts.monoMedium, fontSize: 13, color: colors.ink },
 });

@@ -1,4 +1,5 @@
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
+import { Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
@@ -9,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CommunityProvider } from '../context/CommunityContext';
 import { LibraryProvider } from '../context/LibraryContext';
+import { UserContentProvider } from '../context/UserContentContext';
 import { colors } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -22,6 +24,8 @@ function Root() {
     Inter_700Bold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
   });
   const loaded = fontsLoaded && ready;
 
@@ -35,7 +39,10 @@ function Root() {
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="recipe/[id]" />
+        <Stack.Screen name="recipe/[id]" options={{ animation: 'fade_from_bottom' }} />
+        <Stack.Screen name="article/[id]" options={{ animation: 'fade_from_bottom' }} />
+        <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="shelf-add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="analysis/[id]" />
         <Stack.Screen name="comments/[id]" />
         <Stack.Screen name="ingredient/[id]" />
@@ -52,7 +59,9 @@ export default function RootLayout() {
       <AuthProvider>
         <LibraryProvider>
           <CommunityProvider>
-            <Root />
+            <UserContentProvider>
+              <Root />
+            </UserContentProvider>
           </CommunityProvider>
         </LibraryProvider>
       </AuthProvider>

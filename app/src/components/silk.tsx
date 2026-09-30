@@ -3,29 +3,13 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { colors, fonts, shadow } from '../theme';
+import { LabBackground } from './lab';
 
 const native = Platform.OS !== 'web';
 
-/** Warm light pooling in the top corners — replaces flat white behind headers. */
-export function Glow({ height = 360 }: { height?: number }) {
-  return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height }]}>
-      <Svg width="100%" height="100%">
-        <Defs>
-          <RadialGradient id="g1" cx="88%" cy="-6%" rx="75%" ry="60%">
-            <Stop offset="0" stopColor={colors.glow} stopOpacity="1" />
-            <Stop offset="1" stopColor={colors.glow} stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="g2" cx="-8%" cy="12%" rx="60%" ry="45%">
-            <Stop offset="0" stopColor="#FFF8E4" stopOpacity="1" />
-            <Stop offset="1" stopColor="#FFF8E4" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#g1)" />
-        <Rect width="100%" height="100%" fill="url(#g2)" />
-      </Svg>
-    </View>
-  );
+/** Lab paper behind every screen: grid, scale, crosshairs and slowly drifting natural tints. */
+export function Glow({ flask = true }: { height?: number; flask?: boolean }) {
+  return <LabBackground flask={flask} />;
 }
 
 /** White surface lifted on a layered soft shadow. */
@@ -168,7 +152,7 @@ export function ProductPhoto({ kind, tone, height, radius = 16, style }: { kind:
   );
 }
 
-const AVATAR_TONES = ['#F5C542', '#C9B79C', '#9DBF9A', '#E0A993', '#A9B8D6', '#D9C6E8'];
+const AVATAR_TONES = ['#D8BC86', '#C9B79C', '#A9B899', '#D9A88F', '#AFC6CC', '#CFC3AE'];
 export function Avatar({ name, size = 34 }: { name: string; size?: number }) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
@@ -184,7 +168,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(40,30,10,0.05)',
+    borderColor: 'rgba(255,255,255,0.85)',
     ...shadow,
   },
   cardSoft: { backgroundColor: colors.surf, borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },

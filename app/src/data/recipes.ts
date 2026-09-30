@@ -18,6 +18,10 @@ export type Recipe = {
   tone: [string, string];
   motif: Motif;
   baseLikes: number;
+  /** Recipes created in the app by the user. */
+  own?: boolean;
+  photo?: string;
+  createdAt?: string;
 };
 
 export const CATEGORIES: Category[] = ['Лицо', 'Тело', 'Волосы', 'Губы', 'Руки', 'Ванна'];
@@ -863,6 +867,12 @@ export const RECIPES: Recipe[] = [
   },
 ];
 
+let userRecipes: Recipe[] = [];
+/** Called by UserContentProvider so screens can open own recipes by id. */
+export function setUserRecipes(list: Recipe[]) {
+  userRecipes = list;
+}
+
 export function getRecipe(id: string) {
-  return RECIPES.find((r) => r.id === id);
+  return RECIPES.find((r) => r.id === id) ?? userRecipes.find((r) => r.id === id);
 }

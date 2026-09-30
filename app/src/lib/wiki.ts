@@ -3,14 +3,15 @@ import { RECIPES, Recipe } from '../data/recipes';
 import { identify } from './analyze';
 
 /** "Сквалан оливковый" → Squalane: try the full name, then drop trailing words. */
-function resolve(name: string): string | null {
+export function resolveIngredient(name: string): Ingredient | null {
   const words = name.replace(/\(.*?\)/g, ' ').trim().split(/\s+/);
   for (let n = words.length; n >= 1; n--) {
     const m = identify(words.slice(0, n).join(' '));
-    if (m.match === 'exact' || m.match === 'fuzzy') return m.ing.inci;
+    if (m.match === 'exact' || m.match === 'fuzzy') return m.ing;
   }
   return null;
 }
+const resolve = (name: string) => resolveIngredient(name)?.inci ?? null;
 
 /** INCI names used by each recipe, resolved from the Russian ingredient names. */
 export const RECIPE_INCI: Map<string, string[]> = new Map(

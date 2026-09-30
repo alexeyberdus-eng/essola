@@ -12,15 +12,16 @@ export function formatCount(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k` : String(n);
 }
 
-const SPARKS = [0, 60, 120, 180, 240, 300];
+// Bubbles float up from the heart like in a flask; angles point mostly upwards.
+const SPARKS = [-160, -125, -95, -70, -40, -15];
 
-/** Golden particles flying out of a heart when it gets liked. */
+/** Bubbles rising out of a heart when it gets liked. */
 export function Burst({ trigger, size }: { trigger: Animated.Value; size: number }) {
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
       {SPARKS.map((deg) => {
         const rad = (deg * Math.PI) / 180;
-        const dist = size * 0.95;
+        const dist = size * (1.1 + (deg % 3) * 0.15);
         return (
           <Animated.View
             key={deg}
@@ -31,7 +32,7 @@ export function Burst({ trigger, size }: { trigger: Animated.Value; size: number
                 transform: [
                   { translateX: trigger.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(rad) * dist] }) },
                   { translateY: trigger.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(rad) * dist] }) },
-                  { scale: trigger.interpolate({ inputRange: [0, 1], outputRange: [1.2, 0.3] }) },
+                  { scale: trigger.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.1] }) },
                 ],
               },
             ]}
@@ -42,7 +43,7 @@ export function Burst({ trigger, size }: { trigger: Animated.Value; size: number
   );
 }
 
-export function LikeButton({ id, size = 19, withCount, showCount }: { id: string; size?: number; withCount?: boolean; showCount?: boolean }) {
+export function LikeButton({ id, size = 19, withCount, showCount, dark }: { id: string; size?: number; withCount?: boolean; showCount?: boolean; dark?: boolean }) {
   const { isLiked, toggleLike, likeCount } = useLibrary();
   const liked = isLiked(id);
   const pop = useRef(new Animated.Value(1)).current;
@@ -68,10 +69,10 @@ export function LikeButton({ id, size = 19, withCount, showCount }: { id: string
       <View>
         <Burst trigger={burst} size={size} />
         <Animated.View style={{ transform: [{ scale: pop }] }}>
-          <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? colors.bad : withCount || showCount ? colors.ink : colors.muted} />
+          <Icon name={liked ? 'heartFill' : 'heart'} size={size} color={liked ? (dark ? colors.brassLight : colors.bad) : dark ? colors.onDarkMuted : withCount || showCount ? colors.ink : colors.muted} />
         </Animated.View>
       </View>
-      {(withCount || showCount) && <Text style={[styles.pillText, showCount && styles.countText]}>{formatCount(likeCount(id))}</Text>}
+      {(withCount || showCount) && <Text style={[styles.pillText, showCount && styles.countText, dark && { color: colors.onDark }]}>{formatCount(likeCount(id))}</Text>}
     </Pressable>
   );
 }
@@ -110,7 +111,7 @@ export function RecipeRow({ recipe, last }: { recipe: Recipe; last?: boolean }) 
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.line },
-  tile: { borderRadius: 12, backgroundColor: colors.honeySoft, alignItems: 'center', justifyContent: 'center' },
+  tile: { borderRadius: 12, backgroundColor: colors.sageSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontFamily: fonts.semibold, fontSize: 15.5, letterSpacing: -0.2, color: colors.ink },
   sub: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
   meta: { flexDirection: 'row', gap: 10, marginTop: 5 },
@@ -126,7 +127,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  spark: { position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: colors.honey },
+  spark: { position: 'absolute', width: 7, height: 7, borderRadius: 4, borderWidth: 1.2, borderColor: colors.sageDeep, backgroundColor: 'rgba(255,255,255,0.7)' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   countText: { fontFamily: fonts.medium, fontSize: 13.5 },
   pillText: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink },

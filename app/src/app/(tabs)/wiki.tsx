@@ -1,92 +1,150 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, FlatList, LayoutAnimation, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, G, Path } from 'react-native-svg';
 import { Icon } from '../../components/Icon';
+import { DarkBlock, Glass } from '../../components/lab';
 import { Breathe, Card, FadeIn, Glow } from '../../components/silk';
-import { Press, Seg, T } from '../../components/ui';
+import { Press, Seg, tap } from '../../components/ui';
+import { ARTICLE_CATS, ArticleCat, ARTICLES, Article, Term, TERMS } from '../../data/articles';
 import { FN_LABEL, Fn, INGREDIENTS, Ingredient } from '../../data/ingredients';
 import { normalize } from '../../lib/analyze';
 import { ingredientId, recipesWith, WIKI_GROUPS } from '../../lib/wiki';
-import { colors, fonts, RISK_COLOR, space, TAB_SPACE } from '../../theme';
+import { colors, fonts, RISK_COLOR, shadow, space, TAB_SPACE } from '../../theme';
 
-type Toggle = 'safe' | 'natural' | 'noAllergen';
-const TOGGLES: { key: Toggle; label: string }[] = [
-  { key: 'safe', label: 'Безопасные' },
-  { key: 'natural', label: 'Натуральные' },
-  { key: 'noAllergen', label: 'Без аллергенов' },
-];
+type Mode = 'articles' | 'glossary';
+type Row = { kind: 'article'; a: Article } | { kind: 'term'; t: Term } | { kind: 'head'; title: string; sub: string } | { kind: 'ing'; ing: Ingredient };
+const native = Platform.OS !== 'web';
 
-const GUIDE = INGREDIENTS.find((i) => i.inci === 'Niacinamide')!;
-
-export default function WikiScreen() {
+export default function KnowledgeScreen() {
   const insets = useSafeAreaInsets();
+  const [mode, setMode] = useState<Mode>('articles');
+  const [cat, setCat] = useState<'all' | ArticleCat>('all');
   const [q, setQ] = useState('');
+  const [letter, setLetter] = useState<string | null>(null);
   const [group, setGroup] = useState<'all' | Fn>('all');
-  const [toggles, setToggles] = useState<Set<Toggle>>(new Set());
+  const knob = useRef(new Animated.Value(0)).current;
+  const [segW, setSegW] = useState(0);
 
-  const list = useMemo(() => {
-    const nq = normalize(q);
-    return INGREDIENTS.filter((ing) => {
+  useEffect(() => {
+    Animated.spring(knob, { toValue: mode === 'articles' ? 0 : 1, speed: 16, bounciness: 10, useNativeDriver: native }).start();
+  }, [mode, knob]);
+
+  const nq = normalize(q);
+  const featured = ARTICLES.find((a) => a.featured)!;
+  const rows: Row[] = useMemo(() => {
+    if (mode === 'articles') {
+      return ARTICLES.filter((a) => (cat === 'all' || a.cat === cat) && (!nq || normalize(a.title + ' ' + a.lead).includes(nq)) && (cat !== 'all' || nq || !a.featured)).map((a) => ({ kind: 'article' as const, a }));
+    }
+    const terms = TERMS.filter((t) => (!letter || t.term.toUpperCase().startsWith(letter)) && (!nq || normalize(t.term + ' ' + t.def).includes(nq)));
+    const ings = INGREDIENTS.filter((ing) => {
       if (group !== 'all' && !ing.fn.includes(group)) return false;
-      if (toggles.has('safe') && ing.risk > 1) return false;
-      if (toggles.has('natural') && !(ing.origin === 'natural' || ing.origin === 'mineral')) return false;
-      if (toggles.has('noAllergen') && ing.flags.includes('allergen')) return false;
+      if (letter && !ing.ru.toUpperCase().startsWith(letter)) return false;
       if (!nq) return true;
       return [ing.ru, ing.inci, ing.note, ...ing.aliases, ...ing.fn.map((f) => FN_LABEL[f])].some((t) => normalize(t).includes(nq));
-    }).sort((a, b) => b.act - a.act || a.risk - b.risk);
-  }, [q, group, toggles]);
+    }).sort((a, b) => a.ru.localeCompare(b.ru, 'ru'));
+    return [
+      ...(terms.length ? [{ kind: 'head' as const, title: 'Термины', sub: `${terms.length}` }] : []),
+      ...terms.map((t) => ({ kind: 'term' as const, t })),
+      { kind: 'head' as const, title: 'Ингредиенты', sub: `${ings.length}` },
+      ...ings.map((ing) => ({ kind: 'ing' as const, ing })),
+    ];
+  }, [mode, cat, nq, letter, group]);
 
-  const flip = (t: Toggle) =>
-    setToggles((prev) => {
-      const next = new Set(prev);
-      next.has(t) ? next.delete(t) : next.add(t);
-      return next;
-    });
+  const letters = useMemo(() => {
+    const set = new Set([...TERMS.map((t) => t.term[0].toUpperCase()), ...INGREDIENTS.map((i) => i.ru[0]?.toUpperCase())].filter((l) => l && /[А-Я]/.test(l)));
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, []);
 
   const header = (
     <View style={{ paddingTop: insets.top + 8 }}>
-      <T v="title" style={{ fontSize: 30, lineHeight: 34 }}>
-        Энциклопедия
-      </T>
-      <Text style={styles.lead}>{INGREDIENTS.length} ингредиентов: что делает, насколько безопасно, где встречается</Text>
-      <View style={styles.search}>
-        <Icon name="search" size={18} color={colors.muted} />
-        <TextInput value={q} onChangeText={setQ} placeholder="Ингредиент, INCI или задача: «поры»" placeholderTextColor={colors.faint} style={styles.searchInput} />
-        {!!q && (
-          <Press haptic={false} onPress={() => setQ('')}>
-            <Icon name="close" size={16} color={colors.muted} />
-          </Press>
+      <View style={styles.top}>
+        <Text style={styles.h1}>Знания</Text>
+      </View>
+      <View style={styles.seg} onLayout={(e) => setSegW(e.nativeEvent.layout.width)}>
+        {!!segW && (
+          <Animated.View style={[styles.knob, { width: segW / 2 - 4, transform: [{ translateX: knob.interpolate({ inputRange: [0, 1], outputRange: [0, segW / 2 - 4] }) }] }]} />
         )}
+        {(
+          [
+            ['articles', 'Статьи'],
+            ['glossary', 'Глоссарий'],
+          ] as const
+        ).map(([k, l]) => (
+          <Press
+            key={k}
+            haptic={false}
+            onPress={() => {
+              tap();
+              setMode(k);
+              setQ('');
+            }}
+            style={styles.segItem}
+          >
+            <Text style={[styles.segText, mode === k && styles.segOn]}>{l}</Text>
+          </Press>
+        ))}
       </View>
-      <View style={styles.toggles}>
-        {TOGGLES.map((t) => {
-          const on = toggles.has(t.key);
-          return (
-            <Press key={t.key} onPress={() => flip(t.key)} style={[styles.toggle, on && styles.toggleOn]}>
-              {on && <Icon name="check" size={13} color={colors.honeyText} strokeWidth={2.2} />}
-              <Text style={[styles.toggleText, on && { color: colors.honeyText }]}>{t.label}</Text>
-            </Press>
-          );
-        })}
-      </View>
-      <Seg small inset={space.gutter} value={group} onChange={setGroup} options={WIKI_GROUPS} />
 
-      {!q && group === 'all' && toggles.size === 0 && (
-        <Press haptic={false} onPress={() => router.push(`/ingredient/${ingredientId(GUIDE)}`)} style={{ marginTop: 16 }}>
-          <View style={styles.guide}>
-            <LinearGradient colors={['#FFF6D6', '#FFFDF6', '#FFF0C4']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.guideKicker}>Гид · 4 мин</Text>
-              <Text style={styles.guideTitle}>Ниацинамид: всё, что нужно знать</Text>
-              <Text style={styles.guideSub}>Концентрации, сочетания и мифы</Text>
-            </View>
-            <View style={styles.orb} />
+      <Glass style={styles.search} tint="rgba(255,253,248,0.6)">
+        <View style={styles.searchRow}>
+          <Icon name="search" size={18} color={colors.muted} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder={mode === 'articles' ? 'Поиск по статьям' : 'Термин, ингредиент или INCI'}
+            placeholderTextColor={colors.faint}
+            style={styles.searchInput}
+          />
+          {!!q && (
+            <Press haptic={false} onPress={() => setQ('')}>
+              <Icon name="close" size={16} color={colors.muted} />
+            </Press>
+          )}
+        </View>
+      </Glass>
+
+      {mode === 'articles' ? (
+        <>
+          <View style={{ marginTop: 12 }}>
+            <Seg small inset={space.gutter} value={cat} onChange={setCat} options={[{ key: 'all', label: 'Все' }, ...ARTICLE_CATS.map((c) => ({ key: c as 'all' | ArticleCat, label: c }))]} />
           </View>
-        </Press>
+          {cat === 'all' && !nq && (
+            <Press haptic={false} onPress={() => router.push(`/article/${featured.id}`)} style={{ marginTop: 14 }}>
+              <DarkBlock style={styles.hero}>
+                <Molecule />
+                <Text style={styles.heroKicker}>Главное · {featured.minutes} мин</Text>
+                <Text style={styles.heroTitle}>{featured.title}</Text>
+                <Text style={styles.heroLead}>{featured.lead}</Text>
+              </DarkBlock>
+            </Press>
+          )}
+          <View style={{ height: 12 }} />
+        </>
+      ) : (
+        <>
+          <View style={styles.abc}>
+            {letters.map((l) => (
+              <Press
+                key={l}
+                haptic={false}
+                onPress={() => {
+                  tap();
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setLetter(letter === l ? null : l);
+                }}
+                style={[styles.letter, letter === l && styles.letterOn]}
+              >
+                <Text style={[styles.letterText, letter === l && { color: colors.brassLight }]}>{l}</Text>
+              </Press>
+            ))}
+          </View>
+          <View style={{ marginTop: 10 }}>
+            <Seg small inset={space.gutter} value={group} onChange={setGroup} options={WIKI_GROUPS} />
+          </View>
+        </>
       )}
-      <Text style={styles.count}>{list.length} найдено</Text>
     </View>
   );
 
@@ -94,19 +152,108 @@ export default function WikiScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow />
       <FlatList
-        data={list}
-        keyExtractor={(i) => i.inci}
+        data={rows}
+        keyExtractor={(r, i) => (r.kind === 'article' ? r.a.id : r.kind === 'term' ? r.t.term : r.kind === 'ing' ? r.ing.inci : `h${i}`)}
         ListHeaderComponent={header}
         contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         renderItem={({ item, index }) => (
           <FadeIn index={index % 10}>
-            <IngredientCard ing={item} />
+            {item.kind === 'article' && <ArticleCard a={item.a} />}
+            {item.kind === 'term' && <TermCard t={item.t} />}
+            {item.kind === 'ing' && <IngredientCard ing={item.ing} />}
+            {item.kind === 'head' && (
+              <View style={styles.head}>
+                <Text style={styles.headTitle}>{item.title}</Text>
+                <Text style={styles.headSub}>{item.sub}</Text>
+              </View>
+            )}
           </FadeIn>
         )}
+        ListEmptyComponent={<Text style={styles.empty}>Ничего не нашлось</Text>}
       />
     </View>
+  );
+}
+
+/** Niacinamide-like molecule, slowly turning — the lab signature of the featured article. */
+function Molecule() {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 24000, easing: Easing.linear, useNativeDriver: native }));
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  return (
+    <Animated.View style={[styles.mol, { transform: [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}>
+      <Svg width={150} height={150} viewBox="0 0 120 100">
+        <G fill="none" stroke={colors.brassLight} strokeWidth={1.6} opacity={0.9}>
+          <Path d="M40 30 60 18l20 12v24L60 66 40 54Z" />
+          <Path d="M60 66v16M80 30l16-9M40 30 24 21M80 54l14 8" />
+        </G>
+        <G fill={colors.brassLight}>
+          {[
+            [60, 18, 3.5],
+            [80, 30, 3.5],
+            [80, 54, 3.5],
+            [60, 66, 3.5],
+            [40, 54, 3.5],
+            [40, 30, 3.5],
+            [60, 82, 5],
+            [96, 21, 5],
+            [24, 21, 4],
+            [94, 62, 4],
+          ].map(([cx, cy, r], i) => (
+            <Circle key={i} cx={cx} cy={cy} r={r} />
+          ))}
+        </G>
+      </Svg>
+    </Animated.View>
+  );
+}
+
+function ArticleCard({ a }: { a: Article }) {
+  return (
+    <Press haptic={false} onPress={() => router.push(`/article/${a.id}`)}>
+      <Card style={styles.art}>
+        <View style={styles.artIcon}>
+          <Icon name={a.icon} size={20} color={colors.sageDeep} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.mono}>
+            {a.cat} · {a.minutes} мин
+          </Text>
+          <Text style={styles.artTitle}>{a.title}</Text>
+          <Text style={styles.artLead} numberOfLines={2}>
+            {a.lead}
+          </Text>
+        </View>
+      </Card>
+    </Press>
+  );
+}
+
+function TermCard({ t }: { t: Term }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Press
+      haptic={false}
+      onPress={() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setOpen(!open);
+      }}
+    >
+      <Card style={styles.term}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={styles.termName}>{t.term}</Text>
+          <Icon name={open ? 'minus' : 'plus'} size={16} color={colors.muted} />
+        </View>
+        <Text style={styles.termDef} numberOfLines={open ? undefined : 1}>
+          {t.def}
+        </Text>
+      </Card>
+    </Press>
   );
 }
 
@@ -138,26 +285,44 @@ function IngredientCard({ ing }: { ing: Ingredient }) {
 }
 
 const styles = StyleSheet.create({
-  lead: { fontFamily: fonts.regular, fontSize: 13.5, color: colors.muted, marginTop: 4 },
-  search: { height: 48, borderRadius: 99, backgroundColor: colors.surf, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10, marginTop: 16 },
+  top: { height: 48, justifyContent: 'center' },
+  h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
+  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: 'rgba(230,221,207,0.7)', padding: 4, marginTop: 4 },
+  knob: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 12, backgroundColor: colors.cardSolid, ...shadow },
+  segItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },
+  segOn: { color: colors.ink },
+  search: { height: 50, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginTop: 12 },
+  searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
-  toggles: { flexDirection: 'row', gap: 6, marginVertical: 12, flexWrap: 'wrap' },
-  toggle: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 32, paddingHorizontal: 12, borderRadius: 99, borderWidth: 1, borderColor: colors.line },
-  toggleOn: { backgroundColor: colors.honeySoft, borderColor: colors.honeyLine },
-  toggleText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
-  guide: { borderRadius: 20, padding: 18, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#F7E6A8' },
-  guideKicker: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.honeyText },
-  guideTitle: { fontFamily: fonts.semibold, fontSize: 19, lineHeight: 23, letterSpacing: -0.5, color: colors.ink, marginTop: 6 },
-  guideSub: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4 },
-  orb: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.honey, marginLeft: 12, borderWidth: 6, borderColor: '#FFE9A6' },
-  count: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 18, marginBottom: 10 },
-  card: { padding: 14, marginBottom: 10 },
+  hero: { padding: 18, minHeight: 190 },
+  mol: { position: 'absolute', right: -14, top: 20 },
+  heroKicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.brassLight },
+  heroTitle: { fontFamily: fonts.display, fontSize: 24, lineHeight: 27, letterSpacing: -0.9, color: colors.onDark, marginTop: 8, maxWidth: 220 },
+  heroLead: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: 'rgba(239,235,224,0.75)', marginTop: 8, maxWidth: 230 },
+  art: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, marginBottom: 8 },
+  artIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.sageSoft, alignItems: 'center', justifyContent: 'center' },
+  mono: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted },
+  artTitle: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 19, color: colors.ink, marginTop: 3 },
+  artLead: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 3 },
+  abc: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12 },
+  letter: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(230,221,207,0.7)' },
+  letterOn: { backgroundColor: colors.olive },
+  letterText: { fontFamily: fonts.monoMedium, fontSize: 12, color: colors.ink2 },
+  head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 16, marginBottom: 8 },
+  headTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.5, color: colors.ink },
+  headSub: { fontFamily: fonts.monoMedium, fontSize: 10.5, color: colors.muted },
+  term: { padding: 13, marginBottom: 8 },
+  termName: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  termDef: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18.5, color: colors.ink2, marginTop: 4 },
+  card: { padding: 14, marginBottom: 8 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { fontFamily: fonts.semibold, fontSize: 15.5, color: colors.ink, flex: 1 },
   dot: { width: 9, height: 9, borderRadius: 5 },
   inci: { fontFamily: fonts.mono, fontSize: 11.5, color: colors.muted, marginTop: 2 },
   note: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.ink2, marginTop: 6 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 9 },
-  tag: { fontFamily: fonts.medium, fontSize: 11.5, color: colors.ink2, backgroundColor: colors.surf, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, overflow: 'hidden' },
+  tag: { fontFamily: fonts.medium, fontSize: 11.5, color: colors.ink2, backgroundColor: colors.sageSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, overflow: 'hidden' },
   metaText: { fontFamily: fonts.mono, fontSize: 11, color: colors.muted },
+  empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 40 },
 });
