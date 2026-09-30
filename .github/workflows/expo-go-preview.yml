@@ -3,10 +3,9 @@
 # The server lives up to ~5.5 hours; re-run the workflow to get a fresh link.
 name: Expo Go preview
 
+# Fallback only: trycloudflare tunnels are often unreachable without a VPN in Russia.
+# The main way to open the app is the EAS Update workflow (eas-update.yml).
 on:
-  push:
-    branches: [main, claude/awesome-mccarthy-dlbgor]
-    paths: ['app/**', '.github/workflows/expo-go-preview.yml']
   workflow_dispatch:
 
 concurrency:
@@ -18,7 +17,7 @@ permissions:
   issues: write
 
 env:
-  ISSUE_TITLE: '📱 Essola в Expo Go'
+  ISSUE_TITLE: '📱 Essola в Expo Go (запасной туннель)'
 
 jobs:
   serve:
