@@ -51,7 +51,7 @@ jobs:
           npx --yes eas-cli@latest whoami
           npx --yes eas-cli@latest init --non-interactive --force
           PROJECT_ID=$(node -p "require('./app.json').expo.extra.eas.projectId")
-          OWNER=$(npx --yes eas-cli@latest whoami | head -1 | tr -d '[:space:]')
+          OWNER=$(npx --yes eas-cli@latest whoami | head -1 | awk '{print $1}')
           # Point expo-updates at this project's update server.
           node -e "const f='./app.json';const j=require(f);j.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
           echo "id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
