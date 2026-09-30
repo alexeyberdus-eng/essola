@@ -1,0 +1,56 @@
+# One-off, low-volume check of what Gold Apple publishes for crawlers: robots.txt,
+# sitemaps and the structured data on a couple of product pages (price, barcode, INCI).
+name: Gold Apple data probe
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/workflows/goldapple-probe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      UA: 'Mozilla/5.0 (compatible; EssolaBot/0.1; +https://github.com/alexeyberdus-eng/essola)'
+    steps:
+      - name: robots.txt
+        run: |
+          curl -sS -m 20 -A "$UA" -D /tmp/h -o /tmp/robots.txt https://goldapple.ru/robots.txt || true
+          head -5 /tmp/h; echo; head -c 4000 /tmp/robots.txt; echo
+
+      - name: Sitemaps
+        run: |
+          SITEMAPS=$(grep -i '^sitemap:' /tmp/robots.txt | awk '{print $2}' | tr -d '\r' | head -5)
+          [ -z "$SITEMAPS" ] && SITEMAPS=https://goldapple.ru/sitemap.xml
+          echo "$SITEMAPS"
+          for s in $SITEMAPS; do
+            echo "== $s"
+            curl -sS -m 30 -A "$UA" --compressed -o /tmp/sm "$s" -w "HTTP %{http_code}, %{size_download} bytes\n" || true
+            (file /tmp/sm; head -c 1500 /tmp/sm | tr '>' '>\n' | head -40) || true
+            sleep 2
+          done
+
+      - name: Product page structured data
+        run: |
+          # Find product URLs in the first product sitemap, else use a known product path pattern.
+          grep -oE 'https://goldapple\.ru/[^<]+' /tmp/sm | head -200 > /tmp/urls || true
+          wc -l /tmp/urls
+          for s in $(grep -iE 'product|goods|catalog' /tmp/urls | grep -iE '\.xml' | head -1); do
+            curl -sS -m 30 -A "$UA" --compressed -o /tmp/sm2 "$s" || true
+            grep -oE 'https://goldapple\.ru/[^<]+' /tmp/sm2 | head -50 > /tmp/urls
+          done
+          head -5 /tmp/urls
+          for u in $(grep -vE '\.xml' /tmp/urls | head -2); do
+            echo "================ $u"
+            curl -sS -m 30 -A "$UA" --compressed -o /tmp/p.html "$u" -w "HTTP %{http_code}, %{size_download} bytes\n" || true
+            echo "-- JSON-LD:"; grep -oE '<script type="application/ld\+json"[^>]*>[^<]{0,1500}' /tmp/p.html | head -3
+            echo "-- gtin/ean/barcode:"; grep -oiE '"(gtin13|gtin|ean|barcode)"[^,]{0,40}' /tmp/p.html | head -5
+            echo "-- price:"; grep -oiE '"price"[^,]{0,30}' /tmp/p.html | head -3
+            echo "-- composition:"; grep -oiE '(состав|ingredients|aqua)[^<]{0,200}' /tmp/p.html | head -3
+            sleep 3
+          done
