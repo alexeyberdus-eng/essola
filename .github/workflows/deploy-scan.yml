@@ -13,24 +13,24 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      YC_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
       YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
       VLM_MODEL: ${{ secrets.YC_VLM_MODEL }}
     steps:
       - uses: actions/checkout@v4
       - name: Skip until Yandex secrets are set
-        if: env.YC_TOKEN == '' || env.YC_FOLDER_ID == '' || env.YC_API_KEY == ''
-        run: echo "Add YC_OAUTH_TOKEN, YC_FOLDER_ID and YC_API_KEY to GitHub Secrets to deploy." && exit 0
+        if: env.YC_SA_KEY == '' || env.YC_FOLDER_ID == '' || env.YC_API_KEY == ''
+        run: echo "Add YC_SA_KEY, YC_FOLDER_ID and YC_API_KEY to GitHub Secrets to deploy." && exit 0
       - name: Install yc CLI
-        if: env.YC_TOKEN != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
           echo "$HOME/yc/bin" >> "$GITHUB_PATH"
       - name: Deploy function
-        if: env.YC_TOKEN != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
         run: |
-          yc config set token "$YC_TOKEN"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json"
           yc config set folder-id "$YC_FOLDER_ID"
           yc serverless function get --name essola-scan >/dev/null 2>&1 || yc serverless function create --name essola-scan
           yc serverless function allow-unauthenticated-invoke essola-scan

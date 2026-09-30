@@ -31,7 +31,7 @@ jobs:
         working-directory: app
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      YC_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
       YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
     steps:
@@ -44,12 +44,12 @@ jobs:
           cache-dependency-path: app/package-lock.json
 
       - name: Point the app at the AI scan function
-        if: env.YC_TOKEN != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
         continue-on-error: true
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
           export PATH="$HOME/yc/bin:$PATH"
-          yc config set token "$YC_TOKEN" && yc config set folder-id "$YC_FOLDER_ID"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set folder-id "$YC_FOLDER_ID"
           ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
           if [ -n "$ID" ] && [ "$ID" != "null" ]; then
             echo "EXPO_PUBLIC_SCAN_URL=https://functions.yandexcloud.net/$ID" >> "$GITHUB_ENV"
