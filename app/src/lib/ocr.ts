@@ -9,6 +9,9 @@ export const nativeOcr = !!native?.isSupported;
 
 // Free cloud OCR (ocr.space) — optional, more accurate than the in-WebView engine.
 const cloudKey = process.env.EXPO_PUBLIC_OCR_SPACE_KEY;
+// Our Yandex Cloud function (server/yandex-scan): Vision OCR + YandexGPT clean-up. Preferred when configured.
+const scanUrl = process.env.EXPO_PUBLIC_SCAN_URL;
+const scanKey = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 
 type WebEngine = (dataUrl: string) => Promise<string>;
 let webEngine: WebEngine | null = null;
@@ -20,7 +23,7 @@ async function toJpegBase64(uri: string) {
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width: 2200 }); // small print on labels needs pixels
   const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: cloudKey ? 0.75 : 0.9, base64: true });
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: cloudKey || scanUrl ? 0.75 : 0.9, base64: true });
   return `data:image/jpeg;base64,${saved.base64}`;
 }
 
@@ -36,13 +39,30 @@ async function cloud(dataUrl: string) {
   return json.ParsedResults.map((r) => r.ParsedText).join('\n');
 }
 
-/** Reads text from a photo: native OCR in a dev build, otherwise cloud (if keyed) or the WebView engine. */
+async function server(dataUrl: string) {
+  const res = await fetch(scanUrl!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': scanKey }, body: JSON.stringify({ image: dataUrl }) });
+  if (!res.ok) throw new Error('SCAN_SERVER_FAILED');
+  const json = (await res.json()) as { text?: string; ingredients?: string[] };
+  // A cleaned list reads best as a plain comma-separated composition; raw OCR text is the fallback.
+  if (json.ingredients?.length) return `Состав: ${json.ingredients.join(', ')}`;
+  if (json.text?.trim()) return json.text;
+  throw new Error('SCAN_SERVER_EMPTY');
+}
+
+/** Reads text from a photo: native OCR in a dev build, otherwise our scan server / cloud OCR (if configured) or the WebView engine. */
 export async function recognizeText(uri: string): Promise<string> {
   if (native?.isSupported) {
     const lines = await native.extractTextFromImage(uri.replace('file://', ''));
     return lines.join('\n');
   }
   const dataUrl = await toJpegBase64(uri);
+  if (scanUrl) {
+    try {
+      return await server(dataUrl);
+    } catch {
+      // fall through to the other engines
+    }
+  }
   if (cloudKey) {
     try {
       return await cloud(dataUrl);
