@@ -35,22 +35,26 @@ jobs:
             sleep 2
           done
 
-      - name: Product page structured data
+      - name: robots.txt header (rules for all bots)
+        run: sed -n '1,40p' /tmp/robots.txt
+
+      - name: Product sitemap and pages
         run: |
-          # Find product URLs in the first product sitemap, else use a known product path pattern.
-          grep -oE 'https://goldapple\.ru/[^<]+' /tmp/sm | head -200 > /tmp/urls || true
-          wc -l /tmp/urls
-          for s in $(grep -iE 'product|goods|catalog' /tmp/urls | grep -iE '\.xml' | head -1); do
-            curl -sS -m 30 -A "$UA" --compressed -o /tmp/sm2 "$s" || true
-            grep -oE 'https://goldapple\.ru/[^<]+' /tmp/sm2 | head -50 > /tmp/urls
+          for n in 1 5; do
+            curl -sS -m 60 -A "$UA" --compressed -o /tmp/sm$n "https://goldapple.ru/sitemap-$n.xml" -w "sitemap-$n: HTTP %{http_code}, %{size_download} bytes\n" || true
+            echo "urls: $(grep -c '<loc>' /tmp/sm$n)"; grep -oE '<loc>[^<]+' /tmp/sm$n | sed 's/<loc>//' | head -4
+            sleep 2
           done
-          head -5 /tmp/urls
-          for u in $(grep -vE '\.xml' /tmp/urls | head -2); do
+          cat /tmp/sm1 /tmp/sm5 | grep -oE '<loc>https://goldapple\.ru/[0-9]{6,}[^<]*' | sed 's/<loc>//' | head -2 > /tmp/products
+          echo "product urls:"; cat /tmp/products
+          for u in $(cat /tmp/products); do
             echo "================ $u"
             curl -sS -m 30 -A "$UA" --compressed -o /tmp/p.html "$u" -w "HTTP %{http_code}, %{size_download} bytes\n" || true
-            echo "-- JSON-LD:"; grep -oE '<script type="application/ld\+json"[^>]*>[^<]{0,1500}' /tmp/p.html | head -3
-            echo "-- gtin/ean/barcode:"; grep -oiE '"(gtin13|gtin|ean|barcode)"[^,]{0,40}' /tmp/p.html | head -5
-            echo "-- price:"; grep -oiE '"price"[^,]{0,30}' /tmp/p.html | head -3
-            echo "-- composition:"; grep -oiE '(состав|ingredients|aqua)[^<]{0,200}' /tmp/p.html | head -3
+            echo "-- title:"; grep -oE '<title>[^<]{0,200}' /tmp/p.html | head -1
+            echo "-- JSON-LD:"; grep -oE 'application/ld\+json"?[^>]*>[^<]{0,1200}' /tmp/p.html | head -2
+            echo "-- gtin/barcode:"; grep -oiE '"(gtin13|gtin|ean|barcode)"[^,]{0,40}' /tmp/p.html | head -3
+            echo "-- price:"; grep -oiE '"(price|actualPrice|amount)"[^,]{0,40}' /tmp/p.html | head -5
+            echo "-- composition:"; grep -oiE '(состав|ingredients)[^<]{0,300}' /tmp/p.html | head -3
+            echo "-- aqua:"; grep -oiE '.{0,80}aqua.{0,200}' /tmp/p.html | head -2
             sleep 3
           done
