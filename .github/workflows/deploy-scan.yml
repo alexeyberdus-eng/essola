@@ -37,7 +37,8 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           (cd server/yandex-scan && zip -q ../../scan.zip index.js)
           BUCKET="essola-products-$YC_FOLDER_ID"
-          yc storage bucket get --name "$BUCKET" >/dev/null 2>&1 || yc storage bucket create --name "$BUCKET" || echo "::warning::Could not create bucket $BUCKET"
+          yc config set storage-endpoint storage.yandexcloud.net || true
+          (yc storage bucket get --name "$BUCKET" >/dev/null 2>&1 || yc storage bucket create --name "$BUCKET") || echo "::warning::Could not create bucket $BUCKET"
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")

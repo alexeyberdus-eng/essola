@@ -9,6 +9,7 @@ import { CountUp, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, LinkText, Press } from '../../components/ui';
 import { HairType, useAuth } from '../../context/AuthContext';
 import { SavedScan, useLibrary } from '../../context/LibraryContext';
+import { profileSummary, useProfile } from '../../lib/profile';
 import { daysLeft, ShelfItem, useUserContent } from '../../context/UserContentContext';
 import { DarkBlock, Ring } from '../../components/lab';
 import { RECIPES } from '../../data/recipes';
@@ -37,7 +38,8 @@ type TabKey = 'recipes' | 'scans' | 'shelf';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, updateProfile, signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { profile } = useProfile();
   const { liked, scans } = useLibrary();
   const { myRecipes, shelf } = useUserContent();
   const favourites = RECIPES.filter((r) => liked.has(r.id));
@@ -92,32 +94,19 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
-        {user && (
-          <View style={styles.skin}>
-            <Text style={styles.label}>Тип кожи · для персональных подсказок</Text>
-            <View style={styles.chips}>
-              {SKIN.map((sk) => {
-                const on = user.skinType === sk.id;
-                return (
-                  <Press key={sk.id} onPress={() => updateProfile({ skinType: on ? null : sk.id })} style={[styles.chip, on && styles.chipOn]}>
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{sk.label}</Text>
-                  </Press>
-                );
-              })}
-            </View>
-            <Text style={[styles.label, { marginTop: 8 }]}>Тип волос · можно выбрать несколько</Text>
-            <View style={styles.chips}>
-              {HAIR.map((h) => {
-                const on = user.hair.includes(h.id);
-                return (
-                  <Press key={h.id} onPress={() => updateProfile({ hair: on ? user.hair.filter((x) => x !== h.id) : [...user.hair, h.id] })} style={[styles.chip, on && styles.chipOn]}>
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{h.label}</Text>
-                  </Press>
-                );
-              })}
-            </View>
+        <Press onPress={() => router.push('/about-me' as never)} style={styles.me}>
+          <LinearGradient colors={['#F1ECFF', '#FFF0E8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
+          <View style={styles.meIcon}>
+            <Icon name={profile.done ? 'user' : 'spark'} size={20} color={colors.violet} strokeWidth={2} />
           </View>
-        )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.meTitle}>{profile.done ? 'Мой профиль кожи и волос' : 'Расскажите о себе'}</Text>
+            <Text style={styles.meText} numberOfLines={2}>
+              {profile.done ? profileSummary(profile) || 'Заполнено' : 'Кожа, волосы, задачи, беременность, аллергии — и все оценки станут персональными'}
+            </Text>
+          </View>
+          <Icon name="arrowRight" size={16} color={colors.violet} />
+        </Press>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 22 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {tabs.map((t) => {
@@ -283,6 +272,10 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  me: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: '#E4DCFF', overflow: 'hidden' },
+  meIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  meTitle: { fontFamily: fonts.display, fontSize: 16.5, color: colors.ink },
+  meText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.ink2, marginTop: 2 },
   group: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 10, marginBottom: 4 },
   scanCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, ...shadow },
   ringScore: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },

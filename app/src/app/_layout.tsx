@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CommunityProvider } from '../context/CommunityContext';
 import { LibraryProvider } from '../context/LibraryContext';
 import { UserContentProvider } from '../context/UserContentContext';
+import { ProfileProvider } from '../lib/profile';
 import { colors } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -55,6 +56,7 @@ function Root() {
         <Stack.Screen name="ingredient/[id]" />
         <Stack.Screen name="cook/[id]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="about-me" options={{ presentation: 'modal' }} />
       </Stack>
       {intro && <Splash onDone={() => setIntro(false)} />}
     </>
@@ -65,6 +67,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <ProfileProvider>
         <LibraryProvider>
           <CommunityProvider>
             <UserContentProvider>
@@ -72,6 +75,7 @@ export default function RootLayout() {
             </UserContentProvider>
           </CommunityProvider>
         </LibraryProvider>
+        </ProfileProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
