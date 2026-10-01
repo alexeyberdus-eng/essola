@@ -55,7 +55,7 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
             <Text style={styles.metaText}>
               {recipe.category} · {recipe.minutes} мин
             </Text>
-            <Text style={styles.metaText}>{LEVELS[recipe.level]}</Text>
+
           </View>
           <View style={styles.head}>
             <View style={{ flex: 1 }}>

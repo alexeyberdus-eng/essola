@@ -45,15 +45,13 @@ export default function KnowledgeScreen() {
       return [ing.ru, ing.inci, ing.note, ...ing.aliases, ...ing.fn.map((f) => FN_LABEL[f])].some((t) => normalize(t).includes(nq));
     }).sort((a, b) => a.ru.localeCompare(b.ru, 'ru'));
     return [
-      ...(terms.length ? [{ kind: 'head' as const, title: 'Термины', sub: `${terms.length}` }] : []),
-      ...terms.map((t) => ({ kind: 'term' as const, t })),
       { kind: 'head' as const, title: 'Ингредиенты', sub: `${ings.length}` },
       ...ings.map((ing) => ({ kind: 'ing' as const, ing })),
     ];
   }, [mode, cat, nq, letter, group]);
 
   const letters = useMemo(() => {
-    const set = new Set([...TERMS.map((t) => t.term[0].toUpperCase()), ...INGREDIENTS.map((i) => i.ru[0]?.toUpperCase())].filter((l) => l && /[А-Я]/.test(l)));
+    const set = new Set([...INGREDIENTS.map((i) => i.ru[0]?.toUpperCase())].filter((l) => l && /[А-Я]/.test(l)));
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
   }, []);
 
@@ -64,13 +62,10 @@ export default function KnowledgeScreen() {
         <Text style={styles.h1}>Знания</Text>
       </View>
       <View style={styles.seg} onLayout={(e) => setSegW(e.nativeEvent.layout.width)}>
-        {!!segW && (
-          <Animated.View style={[styles.knob, { width: segW / 2 - 4, transform: [{ translateX: knob.interpolate({ inputRange: [0, 1], outputRange: [0, segW / 2 - 4] }) }] }]} />
-        )}
         {(
           [
             ['articles', 'Статьи'],
-            ['glossary', 'Глоссарий'],
+            ['glossary', 'Ингредиенты'],
           ] as const
         ).map(([k, l]) => (
           <Press
@@ -81,7 +76,7 @@ export default function KnowledgeScreen() {
               setMode(k);
               setQ('');
             }}
-            style={styles.segItem}
+            style={[styles.segItem, mode === k && styles.segItemOn]}
           >
             <Text style={[styles.segText, mode === k && styles.segOn]}>{l}</Text>
           </Press>
@@ -94,7 +89,7 @@ export default function KnowledgeScreen() {
           <TextInput
             value={q}
             onChangeText={setQ}
-            placeholder={mode === 'articles' ? 'Поиск по статьям' : 'Термин, ингредиент или INCI'}
+            placeholder={mode === 'articles' ? 'Поиск по статьям' : 'Ингредиент или INCI'}
             placeholderTextColor={colors.faint}
             style={styles.searchInput}
           />
@@ -290,7 +285,8 @@ const styles = StyleSheet.create({
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
   seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#F3F1F8', padding: 4, marginTop: 4 },
   knob: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 12, backgroundColor: colors.cardSolid, ...shadow },
-  segItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  segItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  segItemOn: { backgroundColor: colors.cardSolid, ...shadow },
   segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },
   segOn: { color: colors.ink },
   search: { height: 50, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginTop: 12 },
