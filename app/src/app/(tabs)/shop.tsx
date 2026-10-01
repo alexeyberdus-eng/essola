@@ -1,5 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
+import { ProductBase } from '../../components/ProductBase';
 import { FlatList, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -11,7 +12,29 @@ import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
 type Cat = 'all' | (typeof SHOP_CATEGORIES)[number];
 
+type Mode = 'base' | 'shop';
+
+/** «Средства»: search the product base, or the essola shop of ingredients. */
 export default function ShopScreen() {
+  const [mode, setMode] = useState<Mode>('base');
+  const toggle = (
+    <View style={styles.toggle}>
+      {(
+        [
+          ['base', 'База средств'],
+          ['shop', 'Магазин essola'],
+        ] as const
+      ).map(([k, l]) => (
+        <Press key={k} haptic={false} onPress={() => { tap(); setMode(k); }} style={[styles.tg, mode === k && styles.tgOn]}>
+          <Text style={[styles.tgText, mode === k && styles.tgTextOn]}>{l}</Text>
+        </Press>
+      ))}
+    </View>
+  );
+  return mode === 'base' ? <ProductBase toggle={toggle} /> : <ShopStore toggle={toggle} />;
+}
+
+function ShopStore({ toggle }: { toggle: ReactNode }) {
   const insets = useSafeAreaInsets();
   const [cat, setCat] = useState<Cat>('all');
   const [q, setQ] = useState('');
@@ -23,6 +46,7 @@ export default function ShopScreen() {
   const header = (
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
+      {toggle}
       <View style={styles.hero}>
         <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.heroCircle} />
@@ -138,6 +162,11 @@ function ProductCard({ p }: { p: Product }) {
 }
 
 const styles = StyleSheet.create({
+  toggle: { flexDirection: 'row', marginTop: 14, padding: 4, borderRadius: 16, backgroundColor: 'rgba(21,23,43,0.05)' },
+  tg: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  tgOn: { backgroundColor: '#fff', shadowColor: '#15172B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  tgText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
+  tgTextOn: { fontFamily: fonts.semibold, color: colors.ink },
   hero: { marginTop: 16, borderRadius: 24, padding: 18, overflow: 'hidden' },
   heroCircle: { position: 'absolute', right: -40, top: -50, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.15)' },
   heroKicker: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' },

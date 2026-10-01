@@ -13,7 +13,7 @@ type BarProps = {
 
 const TABS: Record<string, { icon: IconName; label: string }> = {
   index: { icon: 'home', label: 'Лента' },
-  shop: { icon: 'bag', label: 'Магазин' },
+  shop: { icon: 'bag', label: 'Средства' },
   scanner: { icon: 'barcode', label: 'Скан' },
   builder: { icon: 'flask', label: 'Конструктор' },
   profile: { icon: 'user', label: 'Кабинет' },

@@ -175,7 +175,7 @@ export default function ScannerScreen() {
       setBusy(true);
       setNotice(null);
       try {
-        const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri), pendingCode.current);
+        const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri), pendingCode.current, pendingName.current);
         if (notCosmetic) return finish(`NOT_COSMETIC: ${notCosmetic}`);
         if (!list.length || !analyze(list.join(', ')).items.length) throw new Error('EMPTY');
         finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);

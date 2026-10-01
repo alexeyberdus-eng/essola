@@ -60,10 +60,12 @@ jobs:
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
           for B in '{"mode":"review","kind":"Крем","items":["Aqua 75% (основа)","Glycerin 5% (увлажнитель)","Olivem 1000 6% (эмульгатор)","Squalane 10% (смягчающее)","Niacinamide 4% (актив)"],"notes":["В формуле есть вода — нужен консервант (0,5–1%)"]}' \
                    '{"mode":"url","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
-                   '{"mode":"product","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
+                   '{"mode":"save","url":"https://goldapple.ru/zz-smoke-test","title":"zz-smoke тест","ingredients":["Aqua","Glycerin","Niacinamide"]}' \
+                   '{"mode":"search","q":"zz-smoke"}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done
+          echo "OBF search:"; curl -s -m 20 -A "Essola/1.0" "https://world.openbeautyfacts.org/cgi/search.pl?search_terms=cerave&search_simple=1&action=process&json=1&page_size=3&fields=code,product_name,brands,ingredients_text" | head -c 600; echo
           printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
           curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             --data-binary @/tmp/scan.json -w '\nHTTP %{http_code} in %{time_total}s\n'

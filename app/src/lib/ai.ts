@@ -14,8 +14,8 @@ async function call<T>(body: object): Promise<T> {
 }
 
 /** Photo (data URL) → ingredient list read by the vision model. */
-export async function aiScan(dataUrl: string, barcode?: string | null): Promise<{ ingredients: string[]; notCosmetic?: string }> {
-  const { ingredients, notCosmetic } = await call<{ ingredients?: string[]; notCosmetic?: string }>({ mode: 'scan', image: dataUrl, barcode: barcode ?? undefined });
+export async function aiScan(dataUrl: string, barcode?: string | null, title?: string | null): Promise<{ ingredients: string[]; notCosmetic?: string }> {
+  const { ingredients, notCosmetic } = await call<{ ingredients?: string[]; notCosmetic?: string }>({ mode: 'scan', image: dataUrl, barcode: barcode ?? undefined, title: title ?? undefined });
   return { ingredients: ingredients ?? [], notCosmetic };
 }
 
@@ -114,3 +114,13 @@ export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:goldapple\.ru|letu\.ru)\/\S+/i
 
 /** Saves a composition read from a shop page into the shared base. */
 export const saveProduct = (url: string, title: string, ingredients: string[]) => call({ mode: 'save', url, title, ingredients }).catch(() => {});
+
+/** Products in our shared base whose title matches the query. */
+export async function searchProducts(q: string): Promise<CachedProduct[]> {
+  if (!aiEnabled) return [];
+  try {
+    return (await call<{ items: CachedProduct[] }>({ mode: 'search', q })).items ?? [];
+  } catch {
+    return [];
+  }
+}

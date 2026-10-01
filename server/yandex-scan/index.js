@@ -79,18 +79,36 @@ async function cacheGet(key, iam) {
     return null;
   }
 }
-async function cachePut(key, iam, data) {
+async function cachePut(key, iam, data, raw = false) {
   if (!BUCKET || !key || !iam) return;
+  if (!raw && data && data.title && Array.isArray(data.ingredients)) await indexAdd(iam, key, data.title, data.source, data.ingredients.length).catch(() => {});
   try {
     const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, {
       method: 'PUT',
       headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, at: new Date().toISOString() }),
+      body: JSON.stringify(raw ? data : { ...data, at: new Date().toISOString() }),
     });
     if (!res.ok) console.log('cache put', res.status, (await res.text()).slice(0, 200));
   } catch (e) {
     console.log('cache put failed', String(e));
   }
+}
+
+// Small search index of everything cached: [{k, t, s, n}] — key, title, source, ingredient count.
+async function indexAdd(iam, key, title, source, n) {
+  if (!title) return;
+  const idx = (await cacheGet('index.json', iam)) || [];
+  const list = Array.isArray(idx) ? idx.filter((x) => x.k !== key) : [];
+  list.push({ k: key, t: String(title).slice(0, 160), s: source || '', n });
+  await cachePut('index.json', iam, list, true);
+}
+async function search(q, iam) {
+  const words = String(q || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return [];
+  const idx = (await cacheGet('index.json', iam)) || [];
+  const hits = (Array.isArray(idx) ? idx : []).filter((x) => words.every((w) => x.t.toLowerCase().includes(w))).slice(0, 20);
+  const products = await Promise.all(hits.map((h) => cacheGet(h.k, iam)));
+  return products.filter((p) => p && p.ingredients?.length).map((p, i) => ({ ...p, key: hits[i].k }));
 }
 
 const SHOPS = /(^|\.)(goldapple\.ru|letu\.ru)$/i;
@@ -166,6 +184,9 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'product') {
       const product = await cacheGet(keyFor(req), iam);
       return reply(200, { product });
+    }
+    if (req.mode === 'search') {
+      return reply(200, { items: await search(req.q, iam) });
     }
     if (req.mode === 'save') {
       // A composition the user's phone read from a shop page: keep it for everyone.
