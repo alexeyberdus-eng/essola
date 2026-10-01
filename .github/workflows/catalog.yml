@@ -1,0 +1,43 @@
+name: Build product catalog
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['app/scripts/build-catalog.ts', '.github/workflows/catalog.yml']
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build catalog from Open Beauty Facts
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --yes tsx scripts/build-catalog.ts "$RUNNER_TEMP/catalog.json"
+          ls -la "$RUNNER_TEMP/catalog.json"
+      - name: Upload to Object Storage
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          curl -sS -f -X PUT "https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID/catalog.json" \
+            -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/catalog.json" -w 'HTTP %{http_code}\n'
+          ID=$(yc serverless function get --name essola-scan --folder-id "$YC_FOLDER_ID" --format json | jq -r .id)
+          APP_KEY=$(printf '%s' "${{ secrets.YC_API_KEY }}" | sha256sum | cut -c1-40)
+          curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d '{"mode":"catalog","size":2}' | head -c 600; echo

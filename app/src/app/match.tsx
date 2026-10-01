@@ -3,7 +3,7 @@ import { Hint } from '../components/Hint';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { Found, pageOBF } from '../components/ProductBase';
+import { Found, pageBase } from '../components/ProductBase';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { useLibrary } from '../context/LibraryContext';
 import { analyze } from '../lib/analyze';
@@ -72,7 +72,7 @@ export default function Match() {
     if (what !== 'products' || !chosen.length) return;
     let alive = true;
     setLoading(true);
-    Promise.all(chosen.map((g) => pageOBF(g.q, ZONE_TAG[zone], 1)))
+    Promise.all(chosen.map((g) => pageBase(g.q, ZONE_TAG[zone], 1, 'best').then((r) => r.list)))
       .then((pages) => {
         if (!alive) return;
         const seen = new Set<string>();

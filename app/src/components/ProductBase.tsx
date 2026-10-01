@@ -5,7 +5,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../context/LibraryContext';
-import { searchProducts } from '../lib/ai';
+import { catalogPage, searchProducts } from '../lib/ai';
 import { analyze } from '../lib/analyze';
 import { personalize } from '../lib/personal';
 import { useProfile } from '../lib/profile';
@@ -86,6 +86,16 @@ export async function pageOBF(q: string, tag: string | undefined, page: number):
   }
 }
 
+/** Feed page: our pre-scored catalog first (fast, sorted on the server), Open Beauty Facts when it has nothing. */
+export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular'): Promise<{ list: Found[]; sorted: boolean }> {
+  const c = await catalogPage(q, tag, sort, page);
+  if (c && (c.total > 0 || page > 1)) {
+    const list = c.items.map((x) => ({ key: `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: 'Open Beauty Facts', barcode: x.k }));
+    return { list, sorted: true };
+  }
+  return { list: await pageOBF(q, tag, page), sorted: false };
+}
+
 /** Product base: a feed from our shared base and Open Beauty Facts, infinite scroll, sorting and categories; scored on the device. */
 export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -99,6 +109,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [end, setEnd] = useState(false);
+  const [serverSorted, setServerSorted] = useState(false);
   const seq = useRef(0);
   const tag = CATS.find((c) => c.key === cat)?.tag;
 
@@ -112,19 +123,20 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
               list.map((x) => ({ key: `our:${x.url ?? x.title}`, title: x.title ?? 'Средство', image: x.image ?? null, text: `Ingredients: ${x.ingredients.join(', ')}`, source: 'База essola' })),
             )
           : Promise.resolve([] as Found[]),
-        pageOBF(query, tag, p),
+        pageBase(query, tag, p, sort),
       ]);
       if (my !== seq.current) return;
+      setServerSorted(open.sorted);
       setItems((prev) => {
-        const all = p === 1 ? [...ours, ...open] : [...prev, ...open];
+        const all = p === 1 ? [...ours, ...open.list] : [...prev, ...open.list];
         const seen = new Set<string>();
         return all.filter((x) => (seen.has(x.key) ? false : (seen.add(x.key), true)));
       });
-      setEnd(open.length === 0);
+      setEnd(open.list.length === 0);
       setPage(p);
       setBusy(false);
     },
-    [query, tag],
+    [query, tag, sort],
   );
 
   useEffect(() => {
@@ -146,10 +158,12 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       })
       // Lists we can't read well (e.g. translated into French) would get a misleading score.
       .filter((x) => x.ok);
+    // The catalog arrives sorted by overall score; re-sorting by personal score would reshuffle pages.
+    if (serverSorted) return list;
     if (sort === 'best') return [...list].sort((a, b) => b.score - a.score);
     if (sort === 'worst') return [...list].sort((a, b) => a.score - b.score);
     return list;
-  }, [items, profile, sort]);
+  }, [items, profile, sort, serverSorted]);
 
   const open = (p: Found, overall: number) => {
     tap();
