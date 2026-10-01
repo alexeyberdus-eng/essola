@@ -1,6 +1,8 @@
 // Yandex Cloud Function for essola lab.
 //  mode "scan":     label photo -> clean INCI list (vision model, Alice AI VLM by default)
 //  mode "describe": ingredient list -> short "what this composition does" (text model)
+//  mode "review":   builder formula -> technologist's advice: what to add / reduce / remove (text model)
+//  mode "analogs":  composition -> Gold Apple products found via Yandex Search API, ranked by the text model
 // Scores are NOT produced here: the app computes them from its own ingredient base.
 // Env: YC_API_KEY, YC_FOLDER_ID, APP_KEY, VLM_MODEL (model id from AI Studio), TEXT_MODEL (default yandexgpt-lite).
 const URL = 'https://llm.api.cloud.yandex.net/v1/chat/completions'; // OpenAI-compatible AI Studio API
@@ -11,6 +13,41 @@ const SCAN = `На фото упаковка косметики. Найди сп
 const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Верни ТОЛЬКО JSON:
 {"lead":"1–2 предложения: что это за средство и для какой кожи","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"use":["куда и как применять, до 12 слов"]}
 effects: 2–4 пункта, use: 1–3 пункта. Без медицинских обещаний, без выдуманных ингредиентов.`;
+
+const REVIEW = `Ты косметолог-технолог. Тебе дают черновик формулы (ингредиент и доля в %). Оцени её и подскажи, как улучшить. Верни ТОЛЬКО JSON:
+{"verdict":"1–2 предложения: насколько формула рабочая и безопасная","add":[{"name":"ингредиент","pct":"0.5–1%","why":"до 12 слов"}],"reduce":[{"name":"ингредиент","to":"доля","why":"до 12 слов"}],"remove":[{"name":"ингредиент","why":"до 12 слов"}],"warn":["важное предупреждение, до 14 слов"]}
+Учитывай тип средства, сумму 100%, консервант для водных формул, эмульгатор для эмульсий, рабочие концентрации активов. Каждый список 0–3 пункта, пустой если нечего сказать. Без медицинских обещаний. /no_think`;
+const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. Если состава товара не видно, оценивай по активам и типу средства из названия и фрагмента и ставь не выше 70. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
+{"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
+Максимум 5 товаров, по убыванию match. /no_think`;
+const SEARCH_URL = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
+
+const strip = (x) => x.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+
+/** Yandex web search limited to one shop; returns [{url,title,text}]. */
+async function search(queryText, iam) {
+  const body = JSON.stringify({
+    query: { searchType: 'SEARCH_TYPE_RU', queryText },
+    groupSpec: { groupMode: 'GROUP_MODE_FLAT', groupsOnPage: '10', docsInGroup: '1' },
+    maxPassages: '2',
+    l10n: 'LOCALIZATION_RU',
+    folderId: process.env.YC_FOLDER_ID,
+    responseFormat: 'FORMAT_XML',
+  });
+  const auths = [`Api-Key ${process.env.YC_API_KEY}`, iam && `Bearer ${iam}`].filter(Boolean);
+  let res;
+  for (const a of auths) {
+    res = await fetch(SEARCH_URL, { method: 'POST', headers: { Authorization: a, 'Content-Type': 'application/json' }, body });
+    if (res.ok || (res.status !== 401 && res.status !== 403)) break;
+  }
+  if (!res.ok) throw new Error(`search ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const xml = Buffer.from((await res.json()).rawData || '', 'base64').toString('utf8');
+  return [...xml.matchAll(/<doc\b[\s\S]*?<\/doc>/g)].map(([d]) => ({
+    url: strip((d.match(/<url>([\s\S]*?)<\/url>/) || [])[1] || ''),
+    title: strip((d.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || ''),
+    text: [...d.matchAll(/<passage>([\s\S]*?)<\/passage>/g)].map((x) => strip(x[1])).join(' ').slice(0, 260),
+  }));
+}
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json' };
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
@@ -35,17 +72,43 @@ async function chat(model, messages, maxTokens) {
   return { raw: text.slice(0, 200) };
 }
 
-module.exports.handler = async (event) => {
+module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   const h = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
   if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY) return reply(401, { error: 'unauthorized' });
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
     const req = JSON.parse(raw);
+    const textModel = process.env.TEXT_MODEL || 'yandexgpt-lite/latest';
+    if (req.mode === 'review') {
+      const list = (req.items || []).slice(0, 40).join(', ');
+      if (!list) return reply(400, { error: 'empty' });
+      const out = await chat(process.env.REVIEW_MODEL || textModel, [{ role: 'system', content: REVIEW }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 900);
+      return reply(200, out);
+    }
+    if (req.mode === 'analogs') {
+      const list = (req.ingredients || []).slice(0, 25).join(', ');
+      const keys = (req.keys || []).slice(0, 3).join(' ');
+      if (!list) return reply(400, { error: 'empty' });
+      const docs = (await search(`${req.kind || 'косметика'} ${keys} site:goldapple.ru`, context?.token?.access_token))
+        .filter((d) => /goldapple\.ru\/\d/.test(d.url) && d.title)
+        .slice(0, 8);
+      console.log('analogs docs:', docs.length);
+      if (!docs.length) return reply(200, { items: [] });
+      const found = docs.map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n');
+      const out = await chat(textModel, [{ role: 'system', content: ANALOGS }, { role: 'user', content: `Состав пользователя: ${list}\nТовары:\n${found}` }], 700);
+      const items = (Array.isArray(out.items) ? out.items : [])
+        .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(100, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
+        .filter((x) => x.url && x.match >= 20)
+        .sort((a, b) => b.match - a.match)
+        .slice(0, 5)
+        .map(({ text, ...x }) => x);
+      return reply(200, { items });
+    }
     if (req.mode === 'describe') {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
-      const out = await chat(process.env.TEXT_MODEL || 'yandexgpt-lite/latest', [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Состав: ${list}` }], 600);
+      const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Состав: ${list}` }], 600);
       return reply(200, out);
     }
     const image = String(req.image || '');

@@ -38,8 +38,11 @@ jobs:
           (cd server/yandex-scan && zip -q ../../scan.zip index.js)
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
-          yc serverless function version create --function-name essola-scan --runtime nodejs18 --entrypoint index.handler \
-            --memory 256m --execution-timeout 60s --source-path scan.zip --environment "$ENVV" >/dev/null
+          SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
+          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 256m --execution-timeout 60s --source-path scan.zip"
+          # The service account lets the function call Search API with an IAM token; fall back to a plain version.
+          yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
+            || yc serverless function version create $V --environment "$ENVV" >/dev/null
           ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
           echo "Function URL: https://functions.yandexcloud.net/$ID"
       - name: Smoke test (AI describe)
@@ -50,8 +53,10 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
-          echo "Models visible to the key:"
-          curl -s -m 20 "https://llm.api.cloud.yandex.net/v1/models" -H "Authorization: Bearer $YC_API_KEY" -H "OpenAI-Project: $YC_FOLDER_ID" | head -c 3000; echo
+          for B in '{"mode":"review","kind":"Крем","items":["Aqua 75%","Glycerin 5%","Olivem 1000 6%","Squalane 10%","Niacinamide 4%"]}' \
+                   '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
+            curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
+          done
           printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
           curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             --data-binary @/tmp/scan.json -w '\nHTTP %{http_code} in %{time_total}s\n'
