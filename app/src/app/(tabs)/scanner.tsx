@@ -60,9 +60,10 @@ export default function ScannerScreen() {
 
   const close = () => router.navigate('/');
 
-  const finish = (raw: string, title?: string, meta?: { barcode?: string; source?: string }) => {
+  const finish = (raw: string, title?: string, meta?: { barcode?: string; source?: string }, force = false) => {
     const result = analyze(raw);
-    if (!result.items.length || result.unreadable) {
+    // A manual "Разобрать" goes through whenever anything was recognised; only photos get bounced back.
+    if (!result.items.length || (result.unreadable && !force)) {
       setText(raw);
       setManual(true);
       setNotice(
@@ -187,7 +188,7 @@ export default function ScannerScreen() {
               textAlignVertical="top"
             />
           </View>
-          <Button label="Разобрать состав" icon="spark" onPress={() => finish(text)} disabled={text.trim().length < 3} />
+          <Button label="Разобрать состав" icon="spark" onPress={() => finish(text, undefined, undefined, true)} disabled={text.trim().length < 3} />
           <T v="label" style={{ marginTop: 14 }}>
             Или попробуйте пример
           </T>
@@ -313,7 +314,6 @@ export default function ScannerScreen() {
           </View>
         ) : busy ? (
           <View style={styles.live}>
-            <ActivityIndicator color={colors.sageDeep} />
             <Text style={styles.liveText}>{ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
           </View>
         ) : barcode ? (
@@ -350,6 +350,35 @@ export default function ScannerScreen() {
           </View>
         )}
       </View>
+      {busy && <Reading />}
+    </View>
+  );
+}
+
+/** Full-screen loader while the AI reads the label: a flask with a rotating ring and rising bubbles. */
+function Reading() {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1600, easing: Easing.linear, useNativeDriver: Platform.OS !== 'web' }));
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const rise = (d: number) => ({
+    opacity: spin.interpolate({ inputRange: [0, d, Math.min(d + 0.5, 1), 1], outputRange: [0, 1, 0, 0] }),
+    transform: [{ translateY: spin.interpolate({ inputRange: [0, 1], outputRange: [6, -26] }) }],
+  });
+  return (
+    <View style={styles.reading} pointerEvents="auto">
+      <View style={styles.readingBox}>
+        <Animated.View style={[styles.readingRing, { transform: [{ rotate }] }]} />
+        <Icon name="flask" size={34} color={colors.ink} strokeWidth={1.6} />
+        {[0.1, 0.4].map((d, i) => (
+          <Animated.View key={d} style={[styles.bubble, { left: 46 + i * 10 }, rise(d)]} />
+        ))}
+      </View>
+      <Text style={styles.readingTitle}>ИИ читает состав</Text>
+      <Text style={styles.readingText}>Распознаю ингредиенты и считаю баллы…</Text>
     </View>
   );
 }
@@ -365,6 +394,12 @@ function Step({ ok, text }: { ok?: boolean; text: string }) {
 
 const C = 30;
 const styles = StyleSheet.create({
+  reading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.94)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  readingBox: { width: 104, height: 104, alignItems: 'center', justifyContent: 'center' },
+  readingRing: { position: 'absolute', width: 104, height: 104, borderRadius: 52, borderWidth: 3, borderColor: 'rgba(63,75,201,0.12)', borderTopColor: colors.violet, borderRightColor: '#C9B4FF' },
+  bubble: { position: 'absolute', top: 44, width: 7, height: 7, borderRadius: 4, backgroundColor: '#A6C8FF' },
+  readingTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, marginTop: 22 },
+  readingText: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginTop: 6 },
   screen: { flex: 1, backgroundColor: colors.night },
   permission: { alignItems: 'center', justifyContent: 'center', gap: 10, padding: 36, paddingBottom: 260 },
   permTitle: { fontFamily: fonts.display, fontSize: 21, color: '#fff', marginTop: 8 },

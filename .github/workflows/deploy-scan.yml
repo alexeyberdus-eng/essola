@@ -39,7 +39,7 @@ jobs:
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           yc serverless function version create --function-name essola-scan --runtime nodejs18 --entrypoint index.handler \
-            --memory 256m --execution-timeout 30s --source-path scan.zip --environment "$ENVV" >/dev/null
+            --memory 256m --execution-timeout 60s --source-path scan.zip --environment "$ENVV" >/dev/null
           ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
           echo "Function URL: https://functions.yandexcloud.net/$ID"
       - name: Smoke test (AI describe)
@@ -50,3 +50,6 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
+          printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
+          curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            --data-binary @/tmp/scan.json -w '\nHTTP %{http_code} in %{time_total}s\n'
