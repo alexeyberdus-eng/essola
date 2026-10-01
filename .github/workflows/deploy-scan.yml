@@ -53,7 +53,7 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
-          for B in '{"mode":"review","kind":"Крем","items":["Aqua 75%","Glycerin 5%","Olivem 1000 6%","Squalane 10%","Niacinamide 4%"]}' \
+          for B in '{"mode":"review","kind":"Крем","items":["Aqua 75% (основа)","Glycerin 5% (увлажнитель)","Olivem 1000 6% (эмульгатор)","Squalane 10% (смягчающее)","Niacinamide 4% (актив)"],"notes":["В формуле есть вода — нужен консервант (0,5–1%)"]}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done

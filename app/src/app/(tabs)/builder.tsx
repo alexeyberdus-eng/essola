@@ -43,14 +43,18 @@ export default function BuilderScreen() {
     return { ...s, use: [KIND_USE[kind], ...s.use.slice(1)] };
   }, [prediction, kind]);
   const summary = local;
-  const formula = items.map((i) => `${i.inci || i.name} ${i.pct}%`);
+  // Roles come from our base, so the model doesn't have to guess what a trade name is.
+  const formula = items.map((i) => {
+    const fn = INGREDIENTS.find((x) => x.inci === i.inci)?.fn[0];
+    return `${i.inci || i.name} ${i.pct}%${fn ? ` (${FN_LABEL[fn].toLowerCase()})` : ` (${PHASE_LABEL[i.phase].toLowerCase()})`}`;
+  });
   const sig = `${kind}|${formula.join(',')}`;
   const shown = review?.sig === sig ? review : null;
   const askReview = async () => {
     tap('medium');
     setReview({ sig, busy: true });
     try {
-      const data = await aiReview(formula, local.kind);
+      const data = await aiReview(formula, local.kind, list.filter((c) => !c.ok).map((c) => c.text));
       setReview({ sig, data });
     } catch {
       setReview({ sig, error: true });

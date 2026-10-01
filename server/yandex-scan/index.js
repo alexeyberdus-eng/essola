@@ -7,16 +7,18 @@
 // Env: YC_API_KEY, YC_FOLDER_ID, APP_KEY, VLM_MODEL (model id from AI Studio), TEXT_MODEL (default yandexgpt-lite).
 const URL = 'https://llm.api.cloud.yandex.net/v1/chat/completions'; // OpenAI-compatible AI Studio API
 
-const SCAN = `На фото упаковка косметики. Найди список ингредиентов (после «Состав», «Ingredients», «INCI») и верни ТОЛЬКО JSON:
-{"ingredients":["Aqua","Glycerin",...]}
-Правила: сохраняй порядок; каждый ингредиент — отдельный элемент; если состав на русском, переведи каждый ингредиент в международное название INCI (например «масло ши» → "Butyrospermum Parkii Butter", «пчелиный воск» → "Cera Alba"); раскрывай группы («масла: ши, касторовое» → два отдельных ингредиента); исправляй опечатки; не выдумывай того, чего нет на фото. Если состава не видно: {"ingredients":[]}. /no_think`;
+const SCAN = `Выпиши с фото состав косметики (после «Состав»/«Ingredients») по порядку, каждый ингредиент в INCI (русские переведи: «масло ши» → Butyrospermum Parkii Butter), группы раскрывай, опечатки исправляй, ничего не выдумывай. Ответ — только список через «; ». Нет состава — пустой ответ. /no_think`;
 const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Верни ТОЛЬКО JSON:
 {"lead":"1–2 предложения: что это за средство и для какой кожи","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"use":["куда и как применять, до 12 слов"]}
 effects: 2–4 пункта, use: 1–3 пункта. Без медицинских обещаний, без выдуманных ингредиентов.`;
 
-const REVIEW = `Ты косметолог-технолог. Тебе дают черновик формулы (ингредиент и доля в %). Оцени её и подскажи, как улучшить. Верни ТОЛЬКО JSON:
-{"verdict":"1–2 предложения: насколько формула рабочая и безопасная","add":[{"name":"ингредиент","pct":"0.5–1%","why":"до 12 слов"}],"reduce":[{"name":"ингредиент","to":"доля","why":"до 12 слов"}],"remove":[{"name":"ингредиент","why":"до 12 слов"}],"warn":["важное предупреждение, до 14 слов"]}
-Внимательно определи роль каждого ингредиента (торговые названия вроде Olivem 1000 — это эмульгаторы, не советуй добавить то, что уже есть). Учитывай тип средства, сумму 100%, консервант для водных формул, эмульгатор для эмульсий, рабочие концентрации активов. Каждый список 0–3 пункта, пустой если нечего сказать. Без медицинских обещаний. /no_think`;
+const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма, консервант, эмульгатор, pH) уже сделаны — не повторяй их, кроме случаев из «Замечания». Дай точечные улучшения. Ответ строго строками, без пояснений и markdown:
+В: вывод одним предложением
++ ингредиент | доля | зачем (до 8 слов)
+- ингредиент | до какой доли | почему (до 8 слов)
+x ингредиент | почему (до 8 слов)
+! важное предупреждение (до 10 слов)
+Строк «+», «-», «x», «!» — по 0–2, только по делу. /no_think`;
 const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
 {"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
 Максимум 5 товаров, по убыванию match. /no_think`;
@@ -52,7 +54,8 @@ async function search(queryText, iam) {
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json' };
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
 
-async function chat(model, messages, maxTokens) {
+let lastUsage;
+async function chat(model, messages, maxTokens, raw = false) {
   const res = await fetch(URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.YC_API_KEY}`, 'OpenAI-Project': process.env.YC_FOLDER_ID, 'Content-Type': 'application/json' },
@@ -60,9 +63,11 @@ async function chat(model, messages, maxTokens) {
   });
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
+  lastUsage = json?.usage;
   const msg = json?.choices?.[0]?.message ?? {};
   const text = (msg.content || msg.reasoning_content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
   console.log('model reply', json?.choices?.[0]?.finish_reason, JSON.stringify(json?.usage), text.slice(0, 300));
+  if (raw) return text.trim();
   const m = text.match(/\{[\s\S]*\}/);
   try {
     if (m) return JSON.parse(m[0]);
@@ -84,8 +89,18 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
-      const out = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 1000);
-      return reply(200, out);
+      const notes = (req.notes || []).slice(0, 6).join('; ');
+      const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}` }], 350, true);
+      const out = { add: [], reduce: [], remove: [], warn: [] };
+      for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
+        const [head, ...rest] = line.slice(1).split('|').map((x) => x.trim());
+        if (/^В:/i.test(line)) out.verdict = line.replace(/^В:\s*/i, '');
+        else if (line[0] === '+' && head) out.add.push({ name: head, pct: rest[0], why: rest[1] });
+        else if ((line[0] === '-' || line[0] === '−') && head) out.reduce.push({ name: head, to: rest[0], why: rest[1] });
+        else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
+        else if (line[0] === '!' && head) out.warn.push(head);
+      }
+      return reply(200, { ...out, _usage: lastUsage });
     }
     if (req.mode === 'analogs') {
       const list = (req.ingredients || []).slice(0, 25).join(', ');
@@ -107,7 +122,7 @@ module.exports.handler = async (event, context) => {
         .sort((a, b) => b.match - a.match)
         .slice(0, 5)
         .map(({ text, ...x }) => x);
-      return reply(200, { items });
+      return reply(200, { items, _usage: lastUsage });
     }
     if (req.mode === 'describe') {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
@@ -125,7 +140,10 @@ module.exports.handler = async (event, context) => {
     let out = null, last;
     for (const m of models) {
       try {
-        out = await chat(m, msg, 4000);
+        const t = await chat(m, msg, 2500, true);
+        const json = t.includes('"ingredients"') && t.match(/\[[\s\S]*?\]/);
+        const list = json ? [...json[0].matchAll(/"([^"\n]{2,89})"/g)].map((x) => x[1]) : t.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[^:\n]{0,20}:\s*/, '').split(/\s*[;\n]\s*/).map((x) => x.replace(/^(\d+[.)]\s+|[-*•]\s+)/, '').replace(/[.]$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
+        out = { ingredients: list, raw: t.slice(0, 200) };
         console.log('vision model ok:', m);
         break;
       } catch (e) {
@@ -136,7 +154,7 @@ module.exports.handler = async (event, context) => {
     if (!out) throw last;
     const ingredients = Array.isArray(out.ingredients) ? out.ingredients.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
     console.log('scan ingredients:', ingredients.length);
-    return reply(200, ingredients.length ? { ingredients } : { ingredients, why: out.raw ?? '' });
+    return reply(200, ingredients.length ? { ingredients, _usage: lastUsage } : { ingredients, why: out.raw ?? '', _usage: lastUsage });
   } catch (e) {
     console.error(e);
     return reply(500, { error: 'failed', detail: String(e && e.message || e).slice(0, 400) });
