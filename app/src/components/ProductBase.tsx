@@ -84,8 +84,10 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       (items ?? []).map((p) => {
         const a = analyze(p.text);
         const me = personalize(a, profile);
-        return { p, overall: a.scores.overall, me, n: a.items.length };
-      }),
+        return { p, overall: a.scores.overall, me, n: a.items.length, ok: !a.unreadable };
+      })
+        // Lists we can't read well (e.g. translated into French) would get a misleading score.
+        .filter((x) => x.ok),
     [items, profile],
   );
 
