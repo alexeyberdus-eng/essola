@@ -44,7 +44,7 @@ module.exports.handler = async (event) => {
     if (!image || image.length > 12_000_000) return reply(400, { error: 'bad_image' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
     // Vision models differ per account; try the configured one first, then known multimodal ids.
-    const models = [process.env.VLM_MODEL, 'aliceai-vlm/latest', 'qwen3.6-35b-a3b/latest', 'qwen3.6-35b/latest', 'qwen2.5-vl-32b-instruct/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
+    const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
     const msg = [{ role: 'user', content: [{ type: 'text', text: SCAN }, { type: 'image_url', image_url: { url } }] }];
     let out = null, last;
     for (const m of models) {
