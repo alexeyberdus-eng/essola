@@ -72,6 +72,7 @@ export default function ProfileScreen() {
                   <Text style={styles.name} numberOfLines={1}>
                     {user.name || user.email?.split('@')[0] || 'Моя лаборатория'}
                   </Text>
+                  {!!user.nick && <Text style={styles.nick}>@{user.nick}</Text>}
                   <Text style={styles.mail} numberOfLines={1}>
                     {user.email ?? 'Почта скрыта через Apple'}
                   </Text>
@@ -271,6 +272,7 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  nick: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   me: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: '#E4DCFF', overflow: 'hidden' },
   meIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   meTitle: { fontFamily: fonts.display, fontSize: 16.5, color: colors.ink },

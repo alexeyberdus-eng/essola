@@ -14,10 +14,21 @@ const PERKS: [IconName, string][] = [
   ['user', 'Разбор под ваш тип кожи'],
 ];
 
+const NICK_A = ['glow', 'silk', 'petal', 'honey', 'velvet', 'aqua', 'rose', 'lilac', 'pearl', 'mint', 'peach', 'lotus', 'amber', 'dewy', 'sunny'];
+const NICK_B = ['lab', 'potion', 'drop', 'serum', 'bloom', 'balm', 'mist', 'cream', 'leaf', 'cloud', 'flask', 'muse'];
+/** Friendly English nickname like "silk_potion27". */
+function makeNick() {
+  const pick = (xs: string[]) => xs[Math.floor(Math.random() * xs.length)];
+  return `${pick(NICK_A)}_${pick(NICK_B)}${Math.floor(Math.random() * 90 + 10)}`;
+}
+
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { appleAvailable, signInWithApple, requestEmailCode, verifyEmailCode } = useAuth();
   const [email, setEmail] = useState('');
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+  const [nick, setNick] = useState(makeNick);
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [demo, setDemo] = useState(false);
@@ -93,6 +104,21 @@ export default function AuthScreen() {
 
         {step === 'email' ? (
           <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={[styles.field, { flex: 1 }]}>
+                <TextInput value={first} onChangeText={setFirst} placeholder="Имя" placeholderTextColor={colors.faint} style={styles.input} autoComplete="given-name" />
+              </View>
+              <View style={[styles.field, { flex: 1 }]}>
+                <TextInput value={last} onChangeText={setLast} placeholder="Фамилия" placeholderTextColor={colors.faint} style={styles.input} autoComplete="family-name" />
+              </View>
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.at}>@</Text>
+              <TextInput value={nick} onChangeText={(v) => setNick(v.replace(/[^a-z0-9_.]/gi, '').toLowerCase().slice(0, 24))} placeholder="ник" placeholderTextColor={colors.faint} autoCapitalize="none" style={styles.input} />
+              <Press haptic={false} onPress={() => setNick(makeNick())} hitSlop={8} accessibilityLabel="Другой ник">
+                <Icon name="swap" size={17} color={colors.violet} />
+              </Press>
+            </View>
             <View style={styles.field}>
               <Icon name="mail" size={18} color={colors.muted} />
               <TextInput
@@ -144,7 +170,7 @@ export default function AuthScreen() {
               disabled={code.length !== 6}
               onPress={() =>
                 run(async () => {
-                  await verifyEmailCode(email.trim(), code);
+                  await verifyEmailCode(email.trim(), code, { name: [first.trim(), last.trim()].filter(Boolean).join(' ') || undefined, nick: nick || undefined });
                   done();
                 })
               }
@@ -172,6 +198,7 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
+  at: { fontFamily: fonts.semibold, fontSize: 16, color: colors.violet },
   wrap: { flexGrow: 1, paddingHorizontal: space.gutter + 4, gap: space.xl },
   top: { flexDirection: 'row', justifyContent: 'flex-end' },
   close: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },

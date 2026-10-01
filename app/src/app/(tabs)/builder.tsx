@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Hint } from '../../components/Hint';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, LayoutAnimation, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -127,6 +128,7 @@ export default function BuilderScreen() {
           <Text style={styles.h1}>Конструктор</Text>
           {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
         </View>
+        <Hint id="builder" title="Конструктор формул" text="Выберите тип средства, добавьте ингредиенты через поиск и задайте доли в процентах. Описание появится сразу, а технолог подскажет, что улучшить." />
         <Text style={styles.ask}>Что делаем?</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>

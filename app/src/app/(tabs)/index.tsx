@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Hint } from '../../components/Hint';
 import { useMemo, useRef, useState } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -85,6 +86,7 @@ export default function FeedScreen() {
           <Text style={{ color: colors.muted, fontFamily: fonts.regular }}>сварим?</Text>
         </Text>
       </View>
+      <Hint id="home" title="Добро пожаловать в essola lab" text="Здесь рецепты домашней косметики. «Подбор» найдёт рецепты и средства под ваши цели, «Знания» — статьи и база ингредиентов." />
       <View style={styles.modes}>
         <View style={[styles.mode, styles.modeOn]}>
           <Icon name="flask" size={15} color="#fff" />

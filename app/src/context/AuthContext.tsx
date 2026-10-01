@@ -10,6 +10,8 @@ export type User = {
   id: string;
   email: string | null;
   name: string | null;
+  /** Public nickname shown on recipes and comments. */
+  nick?: string | null;
   provider: 'apple' | 'email';
   since: string;
   skinType: SkinType | null;
@@ -25,7 +27,7 @@ type AuthValue = {
   appleAvailable: boolean;
   signInWithApple: () => Promise<void>;
   requestEmailCode: (email: string) => Promise<{ demo: boolean }>;
-  verifyEmailCode: (email: string, code: string) => Promise<void>;
+  verifyEmailCode: (email: string, code: string, extra?: { name?: string; nick?: string }) => Promise<void>;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -44,6 +46,7 @@ function fromSupabase(u: SupabaseUser): User {
     id: u.id,
     email: u.email ?? null,
     name: (meta.full_name as string) || (meta.name as string) || null,
+    nick: (meta.nick as string) || null,
     provider,
     since: u.created_at,
     skinType: (meta.skin_type as SkinType) ?? null,
@@ -121,17 +124,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const verifyEmailCode = useCallback(
-    async (email: string, code: string) => {
+    async (email: string, code: string, extra?: { name?: string; nick?: string }) => {
       if (supabase) {
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) throw new Error('Неверный или просроченный код');
+        if (extra?.name || extra?.nick) await supabase.auth.updateUser({ data: { full_name: extra.name, nick: extra.nick } });
         return;
       }
       if (!/^\d{6}$/.test(code)) throw new Error('Код состоит из 6 цифр');
       await saveLocal({
         id: `email:${email.toLowerCase()}`,
         email,
-        name: null,
+        name: extra?.name || null,
+        nick: extra?.nick || null,
         provider: 'email',
         since: new Date().toISOString(),
         skinType: null,

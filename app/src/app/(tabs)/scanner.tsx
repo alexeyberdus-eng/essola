@@ -1,4 +1,5 @@
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import { Hint } from '../../components/Hint';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -299,6 +300,7 @@ export default function ScannerScreen() {
   const sheet = (
       <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
         {full && <View style={styles.grab} />}
+        {!full && <Hint id="scanner" title="Как сканировать" text="Сфотографируйте блок «Состав» на упаковке крупно и ровно — оценим за пару секунд. Можно отсканировать штрихкод или вставить ссылку на товар." />}
         {lookup ? (
           <View>
             <View style={styles.live}>

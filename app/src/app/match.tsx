@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Hint } from '../components/Hint';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -114,7 +115,8 @@ export default function Match() {
           <IconButton icon="arrowLeft" label="Назад" onPress={() => router.back()} />
         </View>
         <Text style={styles.h1}>Подбор под ваши цели</Text>
-        <Text style={styles.sub}>Выберите зону и что хочется получить — подберём рецепты с подходящими активами{profile.done ? ' и учтём ваш профиль' : ''}.</Text>
+        <Text style={styles.sub}>Выберите зону
+ и что хочется получить — подберём рецепты с подходящими активами{profile.done ? ' и учтём ваш профиль' : ''}.</Text>
 
         <Text style={styles.label}>Зона</Text>
         <View style={styles.chips}>
