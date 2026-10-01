@@ -118,8 +118,10 @@ function Section({ icon, title, hint, children }: { icon: 'drop' | 'spark' | 'le
         <View style={styles.sIcon}>
           <Icon name={icon} size={16} color={colors.violet} strokeWidth={2} />
         </View>
-        <Text style={styles.sTitle}>{title}</Text>
-        {hint && <Text style={styles.sHint}>{hint}</Text>}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sTitle}>{title}</Text>
+          {hint && <Text style={styles.sHint}>{hint}</Text>}
+        </View>
       </View>
       {children}
     </View>
@@ -155,7 +157,7 @@ const styles = StyleSheet.create({
   sHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   sIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
   sTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },
-  sHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginLeft: 'auto' },
+  sHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf },
   chipOn: { backgroundColor: colors.ink },

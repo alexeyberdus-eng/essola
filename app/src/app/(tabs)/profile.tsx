@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { saveMe } from '../../lib/social';
+import { myId, saveMe } from '../../lib/social';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
@@ -114,6 +114,19 @@ export default function ProfileScreen() {
           </View>
           <Icon name="arrowRight" size={16} color={colors.violet} />
         </Press>
+
+        <View style={styles.socialRow}>
+          <Press haptic={false} onPress={async () => router.push(`/user/${await myId()}` as never)} style={styles.socialTile}>
+            <Icon name="user" size={20} color={colors.violet} strokeWidth={2} />
+            <Text style={styles.socialTitle}>Мой профиль</Text>
+            <Text style={styles.socialText}>как его видят другие</Text>
+          </Press>
+          <Press haptic={false} onPress={() => router.push('/community' as never)} style={styles.socialTile}>
+            <Icon name="heart" size={20} color={colors.violet} strokeWidth={2} />
+            <Text style={styles.socialTitle}>Сообщество</Text>
+            <Text style={styles.socialText}>рецепты и авторы</Text>
+          </Press>
+        </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 22 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {tabs.map((t) => {
@@ -277,6 +290,10 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  socialRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  socialTile: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7' },
+  socialTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },
+  socialText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   nick: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   me: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: '#E4DCFF', overflow: 'hidden' },
   meIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },

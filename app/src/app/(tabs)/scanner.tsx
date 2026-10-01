@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   readingTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, marginTop: 22 },
   readingText: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginTop: 6 },
   screen: { flex: 1, backgroundColor: colors.night },
-  permission: { alignItems: 'center', justifyContent: 'center', gap: 10, padding: 36, paddingBottom: 260 },
+  permission: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 36, paddingTop: 90, paddingBottom: 36 },
   permTitle: { fontFamily: fonts.display, fontSize: 21, color: '#fff', marginTop: 8 },
   permText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: '#B9B2A3', textAlign: 'center' },
   frame: { position: 'absolute', left: 40, right: 40, alignItems: 'center', justifyContent: 'center' },

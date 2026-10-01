@@ -1,6 +1,12 @@
 import type { Analysis, AnalyzedItem } from './analyze';
 
-const name = (it: AnalyzedItem) => (it.ing.ru || it.raw).toLowerCase();
+// Lowercase only the first letter of a plain word ("Глицерин" → "глицерин"), keep acronyms ("Керамид AP"); group ceramides.
+const name = (it: AnalyzedItem) => {
+  const n = it.ing.ru || it.raw;
+  if (/^(церамид|керамид)/i.test(n)) return 'церамиды';
+  return /^[А-ЯЁA-Z][а-яёa-z]/.test(n) ? n.charAt(0).toLowerCase() + n.slice(1) : n;
+};
+const names = (xs: AnalyzedItem[]) => [...new Set(xs.map(name))];
 const join = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} и ${xs[xs.length - 1]}`);
 
 /**
@@ -17,10 +23,11 @@ export function opinion(a: Analysis): { title: string; paragraphs: string[] } {
   const water = has(/^aqua$|water|juice|hydrosol|flower water/i);
   const kind = surf ? 'очищающее средство' : has(/zinc oxide|titanium dioxide|octocrylene|avobenzone|methoxydibenzoylmethane|tinosorb|triazine|homosalate/i) && fn('uv').length >= 1 ? 'солнцезащитное средство' : emuls ? 'крем или лосьон' : water ? 'лёгкое водное средство (тоник, сыворотка или гель)' : 'безводное средство на маслах (бальзам или масло)';
 
-  const actives = known.filter((it) => it.ing.act >= 2).slice(0, 4);
+  const actives = known.filter((it) => it.ing.act >= 2).slice(0, 6);
   const base = known.slice(0, 5).filter((it) => it.ing.risk === 0 && !it.ing.fn.includes('base')).slice(0, 2);
-  const risky = known.filter((it) => it.ing.risk >= 2).slice(0, 3);
   const allergens = known.filter((it) => it.ing.flags.includes('allergen') || it.ing.fn.includes('fragrance')).slice(0, 3);
+  // An ingredient named once: fragrance is both risky and an allergen, so it goes to allergens only.
+  const risky = known.filter((it) => it.ing.risk >= 2 && !allergens.includes(it)).slice(0, 3);
   const clog = known.filter((it) => it.ing.com >= 3).slice(0, 3);
   const drying = known.filter((it) => it.ing.flags.includes('drying-alcohol') || it.ing.flags.includes('sulfate')).slice(0, 2);
 
@@ -30,22 +37,26 @@ export function opinion(a: Analysis): { title: string; paragraphs: string[] } {
     `По составу это ${kind}. ${score >= 75 ? 'Формула продуманная и в целом безопасная.' : score >= 55 ? 'Формула рабочая, но с оговорками.' : 'Состав спорный — есть компоненты, к которым стоит присмотреться.'}`,
   );
 
-  if (actives.length) p.push(`Сильная сторона — ${join(actives.map(name))}. ${actives[0].ing.ru}: ${actives[0].ing.note.charAt(0).toLowerCase()}${actives[0].ing.note.slice(1)}`);
+  if (actives.length) p.push(`Сильная сторона — ${join(names(actives).slice(0, 4))}. ${actives[0].ing.ru}: ${actives[0].ing.note.charAt(0).toLowerCase()}${actives[0].ing.note.slice(1)}`);
   else if (base.length) p.push(`Активов с доказанным действием немного — средство работает в основном за счёт базы: ${join(base.map(name))}.`);
   else p.push('Выраженных активов нет — это скорее базовый уход, чем средство с целевым эффектом.');
 
   const watch: string[] = [];
-  if (risky.length) watch.push(`${join(risky.map(name))} — спорные компоненты`);
-  if (allergens.length) watch.push(`${join(allergens.map(name))} — возможные аллергены`);
-  if (drying.length) watch.push(`${join(drying.map(name))} могут сушить`);
-  if (clog.length) watch.push(`${join(clog.map(name))} может забивать поры`);
+  const say = (xs: AnalyzedItem[], one: string, many: string) => {
+    const n = names(xs);
+    if (n.length) watch.push(`${join(n)} — ${n.length > 1 ? many : one}`);
+  };
+  say(risky, 'спорный компонент', 'спорные компоненты');
+  say(allergens, 'возможный аллерген', 'возможные аллергены');
+  say(drying, 'может сушить', 'могут сушить');
+  say(clog, 'может забивать поры', 'могут забивать поры');
   if (watch.length) p.push(`Обратите внимание: ${watch.join('; ')}.`);
 
   const suits: string[] = [];
-  if (!clog.length && !surf) suits.push('жирной и склонной к высыпаниям');
+  if (!clog.length && !surf) suits.push('жирной', 'проблемной');
   if (!drying.length && (emuls || fn('emollient').length > 2)) suits.push('сухой');
   if (!allergens.length && !risky.length) suits.push('чувствительной');
-  p.push(suits.length ? `Подойдёт ${join(suits)} коже${suits.length < 3 ? '; остальным — смотрите по ощущениям' : ''}.` : 'Лучше подойдёт нормальной, нечувствительной коже.');
+  p.push(suits.length ? `Подойдёт ${join(suits)} коже${suits.length < 4 ? '; остальным — смотрите по ощущениям' : ''}.` : 'Лучше подойдёт нормальной, нечувствительной коже.');
 
   const tips: string[] = [];
   if (has(/glycolic|lactic|mandelic|salicylic|gluconolactone|lactobionic/i)) tips.push('кислоты повышают чувствительность к солнцу — днём обязателен SPF');

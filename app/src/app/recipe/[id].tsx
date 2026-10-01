@@ -10,7 +10,7 @@ import { recipePhases } from '../../lib/phases';
 import { useCommunity } from '../../context/CommunityContext';
 import { plural } from '../../data/community';
 import { Button, IconButton, Press, T } from '../../components/ui';
-import { getRecipe, LEVELS } from '../../data/recipes';
+import { getRecipe } from '../../data/recipes';
 import { formatPercent, percentages } from '../../lib/formula';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 
@@ -72,7 +72,6 @@ export default function RecipeScreen() {
         <View style={styles.facts}>
           {[
             [`${recipe.minutes} мин`, 'Время'],
-            [LEVELS[recipe.level], 'Уровень'],
             [recipe.yield, 'Выход'],
             [recipe.shelfLife.replace(' с консервантом', '').replace(' в холодильнике', ''), 'Срок'],
           ].map(([v, k], i) => (
@@ -162,9 +161,9 @@ const styles = StyleSheet.create({
   dAllText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.sageDeep },
   title: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.onDark, marginTop: 6 },
   facts: { flexDirection: 'row', marginTop: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', borderRadius: 18, backgroundColor: colors.card, ...shadow },
-  fact: { flex: 1, paddingVertical: 11, paddingHorizontal: 9, gap: 3 },
+  fact: { flex: 1, paddingVertical: 12, paddingHorizontal: 6, gap: 3, alignItems: 'center', justifyContent: 'center' },
   factBorder: { borderLeftWidth: 1, borderColor: colors.line },
-  factValue: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, color: colors.ink },
+  factValue: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink, textAlign: 'center' },
   factKey: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.muted },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xl, marginBottom: 4 },
   link: { fontFamily: fonts.medium, fontSize: 13, color: colors.sageDeep },

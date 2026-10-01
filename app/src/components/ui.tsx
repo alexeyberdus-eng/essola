@@ -52,7 +52,7 @@ export function Press({
         onPress?.();
       }}
     >
-      <Animated.View style={[inner, { transform: [{ scale }] }, disabled && { opacity: 0.4 }]}>{children}</Animated.View>
+      <Animated.View style={[flex != null || width != null ? { flexGrow: 1 } : null, inner, { transform: [{ scale }] }, disabled && { opacity: 0.4 }]}>{children}</Animated.View>
     </Pressable>
   );
 }

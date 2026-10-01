@@ -63,7 +63,7 @@ export default function UserScreen() {
         {busy ? (
           <ActivityIndicator color={colors.violet} style={{ marginTop: 40 }} />
         ) : !user ? (
-          <Text style={styles.sub}>Профиль не найден.</Text>
+          <Text style={styles.sub}>{me === id ? 'Ваш публичный профиль появится, когда вы войдёте в аккаунт и сохраните первый рецепт в конструкторе.' : 'Профиль не найден.'}</Text>
         ) : (
           <>
             <View style={styles.card}>

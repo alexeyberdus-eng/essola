@@ -89,20 +89,20 @@ export default function FeedScreen() {
       <Hint id="home" title="Добро пожаловать в essola lab" text="Здесь рецепты домашней косметики. «Подбор» найдёт рецепты и средства под ваши цели, «Знания» — статьи и база ингредиентов." />
       <View style={styles.modes}>
         <View style={[styles.mode, styles.modeOn]}>
-          <Icon name="flask" size={15} color="#fff" />
-          <Text style={[styles.modeText, { color: '#fff' }]}>Рецепты · {RECIPES.length + myRecipes.length}</Text>
+          <Icon name="flask" size={18} color="#fff" />
+          <Text style={[styles.modeText, { color: '#fff' }]} numberOfLines={1}>Рецепты</Text>
         </View>
         <Press haptic={false} onPress={() => { tap(); router.push('/knowledge'); }} style={styles.mode}>
-          <Icon name="book" size={15} color={colors.ink2} />
-          <Text style={styles.modeText}>Знания</Text>
+          <Icon name="book" size={18} color={colors.ink2} />
+          <Text style={styles.modeText} numberOfLines={1}>Знания</Text>
         </Press>
         <Press haptic={false} onPress={() => { tap(); router.push('/match' as never); }} style={styles.mode}>
-          <Icon name="spark" size={15} color={colors.violet} />
-          <Text style={[styles.modeText, { color: colors.violet }]}>Подбор</Text>
+          <Icon name="spark" size={18} color={colors.violet} />
+          <Text style={[styles.modeText, { color: colors.violet }]} numberOfLines={1}>Подбор</Text>
         </Press>
         <Press haptic={false} onPress={() => { tap(); router.push('/community' as never); }} style={styles.mode}>
-          <Icon name="user" size={15} color={colors.ink2} />
-          <Text style={styles.modeText}>Сообщество</Text>
+          <Icon name="user" size={18} color={colors.ink2} />
+          <Text style={styles.modeText} numberOfLines={1}>Сообщество</Text>
         </Press>
       </View>
 
@@ -229,9 +229,9 @@ const styles = StyleSheet.create({
   hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   h1: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.ink },
   modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: colors.surf, marginTop: 14 },
-  mode: { flex: 1, height: 38, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  mode: { flex: 1, height: 56, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
   modeOn: { backgroundColor: colors.ink },
-  modeText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
+  modeText: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink2, textAlign: 'center' },
   kicker: { fontFamily: fonts.semibold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
   search: { height: 50, borderRadius: 16, backgroundColor: colors.surf, marginTop: 12 },
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 6 },
