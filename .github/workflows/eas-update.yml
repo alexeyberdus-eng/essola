@@ -49,8 +49,9 @@ jobs:
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
           export PATH="$HOME/yc/bin:$PATH"
-          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443 && yc config set folder-id "$YC_FOLDER_ID"
-          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id || true)
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
+          (yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443 && yc config set folder-id "$YC_FOLDER_ID") || true
+          ID=$(yc serverless function get --name essola-scan --format json 2>/dev/null | jq -r .id 2>/dev/null || true)
           # Known function id as a fallback, so a CLI hiccup never ships an app without the scan server.
           if [ -z "$ID" ] || [ "$ID" = "null" ]; then ID=d4eikcrvo6v275frt26v; fi
           if [ -n "$ID" ]; then
