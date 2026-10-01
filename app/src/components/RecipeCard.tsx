@@ -45,7 +45,7 @@ function actives(recipe: Recipe) {
 /** Recipe in the feed: type and time, title, short description, key actives, likes and comments. */
 export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: number }) {
   const { count } = useCommunity();
-  const author = recipe.own ? 'Вы' : recipeMeta(recipe).author.name;
+  const author = recipe.own ? 'Вы' : recipe.author ? `@${recipe.author.nick}` : recipeMeta(recipe).author.name;
   const top = actives(recipe);
   return (
     <Press haptic={false} onPress={() => router.push(`/recipe/${recipe.id}`)} style={{ marginBottom: 12 }}>
@@ -84,9 +84,17 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
               <Icon name="comment" size={16} color={colors.muted} />
               <Text style={styles.statText}>{count(recipe.id)}</Text>
             </Press>
-            <Text style={styles.author} numberOfLines={1}>
-              {author}
-            </Text>
+            {recipe.author ? (
+              <Press haptic={false} onPress={() => router.push(`/user/${recipe.author!.id}` as never)} style={{ marginLeft: 'auto' }} hitSlop={6}>
+                <Text style={[styles.author, styles.authorLink]} numberOfLines={1}>
+                  {author}
+                </Text>
+              </Press>
+            ) : (
+              <Text style={styles.author} numberOfLines={1}>
+                {author}
+              </Text>
+            )}
           </View>
         </View>
       </LinearGradient>
@@ -109,5 +117,6 @@ const styles = StyleSheet.create({
   foot: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderColor: 'rgba(21,23,43,0.06)' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   statText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
+  authorLink: { color: colors.violet, backgroundColor: '#F1EEFF' },
   author: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: 'rgba(21,23,43,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden', maxWidth: 140 },
 });

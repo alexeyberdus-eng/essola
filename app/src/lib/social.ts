@@ -1,0 +1,67 @@
+import type { Recipe } from '../data/recipes';
+import { readJSON, writeJSON } from './storage';
+
+// Community features live on our Yandex Cloud function next to the product base.
+const url = process.env.EXPO_PUBLIC_SCAN_URL;
+const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
+export const socialEnabled = !!url;
+
+async function call<T>(body: object): Promise<T> {
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`SOCIAL_${res.status}`);
+  return (await res.json()) as T;
+}
+
+let cachedId: string | null = null;
+/** Stable anonymous id of this device's profile. */
+export async function myId() {
+  if (cachedId) return cachedId;
+  let id = await readJSON<string | null>('essola.uid', null);
+  if (!id) {
+    id = `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    await writeJSON('essola.uid', id);
+  }
+  cachedId = id;
+  return id;
+}
+
+export type PublicUser = { id: string; nick: string; name?: string; bio?: string };
+export type CommunityItem = { user: PublicUser; recipe: Recipe; at: string };
+export type Social = { likes: number; liked: boolean; comments: { id: string; user: string; nick: string; text: string; at: string }[] };
+
+export async function saveMe(nick: string, name?: string | null) {
+  if (!socialEnabled) return;
+  await call({ mode: 'user.save', id: await myId(), nick, name: name ?? '' }).catch(() => {});
+}
+
+export async function publishRecipe(recipe: Recipe) {
+  if (!socialEnabled) return;
+  await call({ mode: 'recipe.publish', id: await myId(), recipe: { ...recipe, own: false, photo: undefined } }).catch(() => {});
+}
+
+export async function recentRecipes(): Promise<CommunityItem[]> {
+  if (!socialEnabled) return [];
+  return (await call<{ items: CommunityItem[] }>({ mode: 'community.recent' })).items ?? [];
+}
+
+export async function getUser(id: string) {
+  return call<{ user: PublicUser | null; recipes: Recipe[]; followers: number; following: boolean }>({ mode: 'user.get', id, viewer: await myId() });
+}
+
+export async function follow(target: string, on: boolean) {
+  const res = await call<{ followers: number; following: boolean }>({ mode: 'follow', id: await myId(), target, on });
+  const list = await readJSON<string[]>('essola.following', []);
+  await writeJSON('essola.following', on ? [...new Set([...list, target])] : list.filter((x) => x !== target));
+  return res;
+}
+
+export async function social(key: string): Promise<Social> {
+  return call<Social>({ mode: 'social.get', key, id: await myId() });
+}
+export async function like(key: string, on: boolean): Promise<Social> {
+  return call<Social>({ mode: 'social.like', key, on, id: await myId() });
+}
+export async function comment(key: string, nick: string, text: string): Promise<Social> {
+  return call<Social>({ mode: 'social.comment', key, nick, text, id: await myId() });
+}
+

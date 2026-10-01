@@ -100,6 +100,10 @@ export default function FeedScreen() {
           <Icon name="spark" size={15} color={colors.violet} />
           <Text style={[styles.modeText, { color: colors.violet }]}>Подбор</Text>
         </Press>
+        <Press haptic={false} onPress={() => { tap(); router.push('/community' as never); }} style={styles.mode}>
+          <Icon name="user" size={15} color={colors.ink2} />
+          <Text style={styles.modeText}>Сообщество</Text>
+        </Press>
       </View>
 
       <View style={styles.search}>

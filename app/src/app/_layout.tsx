@@ -58,6 +58,8 @@ function Root() {
         <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
         <Stack.Screen name="about-me" options={{ presentation: 'modal' }} />
         <Stack.Screen name="match" />
+        <Stack.Screen name="community" />
+        <Stack.Screen name="user/[id]" />
       </Stack>
       {intro && <Splash onDone={() => setIntro(false)} />}
     </>

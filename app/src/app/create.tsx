@@ -1,5 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+import { publishRecipe, saveMe } from '../lib/social';
+import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +19,7 @@ type Row = { name: string; amount: string };
 export default function CreateRecipe() {
   const insets = useSafeAreaInsets();
   const { addRecipe } = useUserContent();
+  const { user } = useAuth();
   const [draft] = useState(() => takeDraft());
   const [photo, setPhoto] = useState<string | undefined>();
   const [title, setTitle] = useState('');
@@ -62,6 +65,8 @@ export default function CreateRecipe() {
       createdAt: new Date().toISOString(),
     };
     addRecipe(recipe);
+    // Share it with the community under the user's nickname.
+    saveMe(user?.nick || 'essola_user', user?.name).then(() => publishRecipe(recipe));
     setDraft(null);
     router.replace(`/recipe/${recipe.id}`);
   };

@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { saveMe } from '../../lib/social';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
@@ -41,6 +42,10 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
+  // Keep the public profile (nickname) in sync for the community.
+  useEffect(() => {
+    if (user?.nick) saveMe(user.nick, user.name);
+  }, [user?.nick, user?.name]);
   const { liked, scans } = useLibrary();
   const { myRecipes, shelf } = useUserContent();
   const favourites = RECIPES.filter((r) => liked.has(r.id));

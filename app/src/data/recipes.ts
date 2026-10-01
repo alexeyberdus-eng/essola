@@ -21,6 +21,8 @@ export type Recipe = {
   /** Recipes created in the app by the user. */
   own?: boolean;
   photo?: string;
+  /** Author of a community recipe. */
+  author?: { id: string; nick: string };
   createdAt?: string;
 };
 
@@ -873,6 +875,9 @@ export function setUserRecipes(list: Recipe[]) {
   userRecipes = list;
 }
 
+/** Community recipes loaded this session, so the recipe screen can open them by id. */
+export const COMMUNITY_RECIPES = new Map<string, Recipe>();
+
 export function getRecipe(id: string) {
-  return RECIPES.find((r) => r.id === id) ?? userRecipes.find((r) => r.id === id);
+  return RECIPES.find((r) => r.id === id) ?? userRecipes.find((r) => r.id === id) ?? COMMUNITY_RECIPES.get(id);
 }
