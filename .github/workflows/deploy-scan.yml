@@ -50,6 +50,8 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
+          echo "Models visible to the key:"
+          curl -s -m 20 "https://llm.api.cloud.yandex.net/v1/models" -H "Authorization: Bearer $YC_API_KEY" -H "OpenAI-Project: $YC_FOLDER_ID" | head -c 3000; echo
           printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
           curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             --data-binary @/tmp/scan.json -w '\nHTTP %{http_code} in %{time_total}s\n'

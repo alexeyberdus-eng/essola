@@ -43,7 +43,21 @@ module.exports.handler = async (event) => {
     const image = String(req.image || '');
     if (!image || image.length > 12_000_000) return reply(400, { error: 'bad_image' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
-    const out = await chat(process.env.VLM_MODEL || 'gemma-3-27b-it/latest', [{ role: 'user', content: [{ type: 'text', text: SCAN }, { type: 'image_url', image_url: { url } }] }], 1200);
+    // Vision models differ per account; try the configured one first, then known multimodal ids.
+    const models = [process.env.VLM_MODEL, 'aliceai-vlm/latest', 'qwen3.6-35b-a3b/latest', 'qwen3.6-35b/latest', 'qwen2.5-vl-32b-instruct/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
+    const msg = [{ role: 'user', content: [{ type: 'text', text: SCAN }, { type: 'image_url', image_url: { url } }] }];
+    let out = null, last;
+    for (const m of models) {
+      try {
+        out = await chat(m, msg, 1200);
+        console.log('vision model ok:', m);
+        break;
+      } catch (e) {
+        last = e;
+        if (!/ (400|403|404):/.test(String(e.message))) throw e;
+      }
+    }
+    if (!out) throw last;
     const ingredients = Array.isArray(out.ingredients) ? out.ingredients.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
     return reply(200, { ingredients });
   } catch (e) {
