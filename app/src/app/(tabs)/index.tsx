@@ -94,6 +94,10 @@ export default function FeedScreen() {
           <Icon name="book" size={15} color={colors.ink2} />
           <Text style={styles.modeText}>Знания</Text>
         </Press>
+        <Press haptic={false} onPress={() => { tap(); router.push('/match' as never); }} style={styles.mode}>
+          <Icon name="spark" size={15} color={colors.violet} />
+          <Text style={[styles.modeText, { color: colors.violet }]}>Подбор</Text>
+        </Press>
       </View>
 
       <View style={styles.search}>

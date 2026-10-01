@@ -57,6 +57,7 @@ function Root() {
         <Stack.Screen name="cook/[id]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
         <Stack.Screen name="about-me" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="match" />
       </Stack>
       {intro && <Splash onDone={() => setIntro(false)} />}
     </>

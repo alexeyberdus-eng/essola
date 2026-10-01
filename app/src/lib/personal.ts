@@ -62,7 +62,8 @@ export function personalize(a: Analysis, p: Profile): Personal | null {
     const hurt = HURTS[c];
     if (hurt) {
       const bad = items.filter((it) => hurt(it));
-      if (bad.length && c !== 'pores') add('warn', `${CONCERN_LABEL[c]}: ${list(bad)} — ${hurt(bad[0])}`, -6);
+      const said = reasons.some((r) => bad.some((it) => r.text.includes(name(it))) && r.tone !== 'good');
+      if (bad.length && c !== 'pores' && !said) add('warn', `${CONCERN_LABEL[c]}: ${list(bad)} — ${hurt(bad[0])}`, -6);
     }
   }
 
