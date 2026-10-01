@@ -186,6 +186,63 @@ module.exports.handler = async (event, context) => {
       const product = await cacheGet(keyFor(req), iam);
       return reply(200, { product });
     }
+    // ---- Community: profiles, published recipes, follows, likes and comments (MVP: device id, no passwords) ----
+    const uid = (x) => String(x || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
+    const clean = (x, n) => String(x || '').replace(/[<>]/g, '').trim().slice(0, n);
+    const get = async (k, def) => (await cacheGet(k, iam)) ?? def;
+    const put = (k, v) => cachePut(k, iam, v, true);
+    if (req.mode === 'user.save') {
+      const id = uid(req.id);
+      if (!id) return reply(400, { error: 'bad_user' });
+      const prev = await get(`users/${id}.json`, {});
+      const user = { ...prev, id, nick: clean(req.nick, 24) || prev.nick || 'user', name: clean(req.name, 60) || prev.name || '', bio: clean(req.bio, 160) || prev.bio || '' };
+      await put(`users/${id}.json`, user);
+      return reply(200, { user });
+    }
+    if (req.mode === 'user.get') {
+      const id = uid(req.id);
+      const [user, recipes, followers] = await Promise.all([get(`users/${id}.json`, null), get(`users/${id}/recipes.json`, []), get(`users/${id}/followers.json`, [])]);
+      return reply(200, { user, recipes, followers: followers.length, following: followers.includes(uid(req.viewer)) });
+    }
+    if (req.mode === 'recipe.publish') {
+      const id = uid(req.id);
+      const r = req.recipe || {};
+      if (!id || !r.id || !r.title) return reply(400, { error: 'bad_recipe' });
+      const user = await get(`users/${id}.json`, { id, nick: 'user' });
+      const recipe = JSON.parse(JSON.stringify(r).slice(0, 20000));
+      const mine = (await get(`users/${id}/recipes.json`, [])).filter((x) => x.id !== recipe.id);
+      await put(`users/${id}/recipes.json`, [recipe, ...mine].slice(0, 100));
+      const feed = (await get('community/recent.json', [])).filter((x) => x.recipe?.id !== recipe.id);
+      await put('community/recent.json', [{ user: { id, nick: user.nick, name: user.name }, recipe, at: new Date().toISOString() }, ...feed].slice(0, 150));
+      return reply(200, { ok: true });
+    }
+    if (req.mode === 'community.recent') {
+      return reply(200, { items: await get('community/recent.json', []) });
+    }
+    if (req.mode === 'follow') {
+      const me = uid(req.id);
+      const target = uid(req.target);
+      if (!me || !target || me === target) return reply(400, { error: 'bad_follow' });
+      const list = (await get(`users/${target}/followers.json`, [])).filter((x) => x !== me);
+      if (req.on) list.push(me);
+      await put(`users/${target}/followers.json`, list);
+      return reply(200, { followers: list.length, following: !!req.on });
+    }
+    if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment') {
+      const key = `social/${crypto.createHash('sha1').update(String(req.key || '')).digest('hex')}.json`;
+      const me = uid(req.id);
+      const data = await get(key, { likes: [], comments: [] });
+      if (req.mode === 'social.like' && me) {
+        data.likes = data.likes.filter((x) => x !== me);
+        if (req.on) data.likes.push(me);
+        await put(key, data);
+      }
+      if (req.mode === 'social.comment' && me && clean(req.text, 500)) {
+        data.comments = [...data.comments, { id: Date.now().toString(36), user: me, nick: clean(req.nick, 24) || 'user', text: clean(req.text, 500), at: new Date().toISOString() }].slice(-200);
+        await put(key, data);
+      }
+      return reply(200, { likes: data.likes.length, liked: data.likes.includes(me), comments: data.comments.slice(-50) });
+    }
     if (req.mode === 'search') {
       return reply(200, { items: await search(req.q, iam) });
     }
