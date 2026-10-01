@@ -1,27 +1,33 @@
-// Diagnostic: where Letual keeps the composition in its product JSON.
+// Diagnostic: which request brings Letual's composition when the user opens the tab.
+import { chromium, devices } from 'playwright';
 const UA = { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' };
-const id = '3288';
-const walk = (o, path = '', out = []) => {
-  if (typeof o === 'string') {
-    if (/aqua|glycerin|dimethicone|состав|ingredient/i.test(o)) out.push(`${path} = ${JSON.stringify(o.slice(0, 300))}`);
-  } else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) {
-    if (/sostav|ingred|compos|состав/i.test(k)) out.push(`KEY ${path}.${k} = ${JSON.stringify(v).slice(0, 300)}`);
-    walk(v, `${path}.${k}`, out);
-  }
-  return out;
-};
-for (const u of [
-  `https://www.letu.ru/s/api/product/v3/product-detail/${id}?locale=ru-RU&pushSite=storeMobileRU`,
-  `https://www.letu.ru/s/api/product/v1/multi/${id}?pushSite=storeMobileRU`,
-  `https://www.letu.ru/storeru/product/x/${id}?pushSite=storeMobileRU&format=json&locale=ru-RU`,
-]) {
-  try {
-    const r = await fetch(u, { headers: UA });
-    const t = await r.text();
-    console.log('\n==', r.status, t.length, u);
-    let j;
-    try { j = JSON.parse(t); } catch { console.log(t.slice(0, 300)); continue; }
-    console.log('top keys:', Object.keys(j).slice(0, 40).join(','));
-    console.log(walk(j).slice(0, 15).join('\n'));
-  } catch (e) { console.log('err', u, String(e)); }
+const j = await (await fetch('https://www.letu.ru/s/api/product/v3/product-detail/3288?locale=ru-RU&pushSite=storeMobileRU', { headers: UA })).json();
+const sku = j.skuList?.[0] || {};
+console.log('sku keys:', Object.keys(sku).join(','));
+console.log('topSpecs:', JSON.stringify(j.topSpecs).slice(0, 400));
+
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
+const page = await ctx.newPage();
+const calls = [];
+page.on('response', async (r) => {
+  const u = r.url();
+  if (!/letu\.ru\/(s\/)?api/.test(u) || /collect|sentry|envelope/.test(u)) return;
+  let hit = '';
+  try { const t = await r.text(); const i = t.search(/aqua|glycerin|состав/i); if (i >= 0) hit = ' HIT ' + JSON.stringify(t.slice(Math.max(0, i - 60), i + 200)); } catch {}
+  calls.push(`${r.status()} ${u.slice(0, 180)}${hit}`);
+});
+await page.goto('https://www.letu.ru/product/l-oreal-paris-tonalnyi-krem-alliance-perfect-sovershennoe-sliyanie-vyravnivayushchii-i-uvlazhnyayushchii/3288', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await page.waitForTimeout(5000);
+for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 900); await page.waitForTimeout(700); }
+const labels = await page.$$eval('button, [role=tab], a, div, span, h2, h3', (els) => [...new Set(els.map((e) => (e.textContent || '').trim()).filter((t) => t.length < 30 && /состав|описан|о товаре|характер|подробн/i.test(t)))].slice(0, 20));
+console.log('labels:', JSON.stringify(labels));
+for (const l of labels) {
+  try { await page.getByText(l, { exact: true }).first().click({ timeout: 2000 }); await page.waitForTimeout(1500); } catch {}
 }
+await page.waitForTimeout(3000);
+const text = await page.evaluate(() => document.body.innerText);
+const i = text.search(/aqua|glycerin/i);
+console.log('text hit:', i >= 0 ? JSON.stringify(text.slice(Math.max(0, i - 200), i + 300)) : 'none', 'len', text.length);
+console.log('calls:\n' + calls.join('\n'));
+await browser.close();
