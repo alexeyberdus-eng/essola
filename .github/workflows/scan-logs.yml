@@ -2,6 +2,9 @@ name: AI scan function logs
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/workflows/scan-logs.yml']
 
 permissions:
   contents: read
