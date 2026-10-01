@@ -1,47 +1,59 @@
-// Diagnostic: opens one Gold Apple and one Letual product page like a phone would and reports where the composition is.
+// Diagnostic: opens shop pages like a phone would and reports where the composition lives.
 import { chromium, devices } from 'playwright';
 
-const FIND = (await import('fs')).readFileSync(new URL('./find.js', import.meta.url), 'utf8');
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'ru-RU' });
+const around = (s, re, n = 500) => {
+  const out = [];
+  let m;
+  const r = new RegExp(re, 'gi');
+  while ((m = r.exec(s)) && out.length < 4) out.push(JSON.stringify(s.slice(Math.max(0, m.index - 80), m.index + n)));
+  return out.join('\n   ') || 'none';
+};
 
-async function probe(name, start, linkRe) {
+async function letu() {
   const page = await ctx.newPage();
-  const apis = [];
-  page.on('response', (r) => {
-    const u = r.url();
-    if (/api|graphql|product/i.test(u) && !/\.(js|css|png|jpg|webp|svg|woff2?)(\?|$)/.test(u)) apis.push(`${r.status()} ${u.slice(0, 160)}`);
-  });
-  try {
-    await page.goto(start, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(6000);
-    console.log(`[${name}] start title:`, await page.title(), page.url());
-    const hrefs = await page.$$eval('a', (as) => as.map((a) => a.href));
-    const link = hrefs.find((h) => linkRe.test(h));
-    console.log(`[${name}] product link:`, link);
-    if (!link) {
-      console.log(`[${name}] body:`, (await page.evaluate(() => document.body.innerText)).slice(0, 600));
-      return;
-    }
-    apis.length = 0;
-    await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(5000);
-    await page.evaluate(FIND);
-    const found = await page.waitForFunction(() => window.__found, null, { timeout: 25000 }).then((h) => h.jsonValue()).catch(() => null);
-    console.log(`[${name}] title:`, await page.title());
-    console.log(`[${name}] FOUND:`, JSON.stringify(found)?.slice(0, 500));
-    const text = await page.evaluate(() => document.body.innerText);
-    const i = text.search(/состав/i);
-    console.log(`[${name}] text around "состав":`, i >= 0 ? JSON.stringify(text.slice(i, i + 400)) : 'none', 'len', text.length);
-    const html = await page.content();
-    const j = html.search(/состав/i);
-    console.log(`[${name}] html around "состав":`, j >= 0 ? JSON.stringify(html.slice(j - 100, j + 400)) : 'none');
-    console.log(`[${name}] api calls:\n` + apis.slice(0, 40).join('\n'));
-  } catch (e) {
-    console.log(`[${name}] error`, String(e).slice(0, 300));
+  await page.goto('https://www.letu.ru/browse/uhod-za-kozhei/uhod-za-litsom/kremy-dlya-litsa', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(6000);
+  const hrefs = await page.$$eval('a', (as) => as.map((a) => a.href));
+  const link = hrefs.find((h) => /letu\.ru\/product\/.*krem/.test(h)) || hrefs.find((h) => /letu\.ru\/product\//.test(h));
+  console.log('[letu] link', link);
+  const id = link.match(/\/product\/[^/]+\/(\d+)/)[1];
+  await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(4000);
+  for (const api of [`/s/api/product/v3/product-detail/${id}?locale=ru-RU&pushSite=storeMobileRU`, `/s/api/product/v1/key-features/${id}?pushSite=storeMobileRU`]) {
+    const body = await page.evaluate((u) => fetch(u).then((r) => r.text()), api);
+    console.log('[letu] api', api, 'len', body.length);
+    console.log('   ', around(body, 'состав|ingredient|composition|sostav'));
   }
+  // plain server-side fetch, no browser
+  const res = await fetch(`https://www.letu.ru/s/api/product/v3/product-detail/${id}?locale=ru-RU&pushSite=storeMobileRU`, { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } });
+  const t = await res.text();
+  console.log('[letu] node fetch', res.status, t.length, around(t, 'состав', 200));
 }
 
-await probe('goldapple', 'https://goldapple.ru/uhod/uhod-za-licom', /goldapple\.ru\/\d{6,}-/);
-await probe('letu', 'https://www.letu.ru/browse/uhod-za-kozhei/uhod-za-litsom', /letu\.ru\/product\//);
+async function goldapple() {
+  const page = await ctx.newPage();
+  const apis = [];
+  page.on('response', (r) => /front\/api/.test(r.url()) && apis.push(`${r.status()} ${r.url().slice(0, 200)}`));
+  await page.goto('https://goldapple.ru/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(5000);
+    console.log('[ga] t', (i + 1) * 5, await page.title());
+    if (!/checking/i.test(await page.title())) break;
+  }
+  const hrefs = await page.$$eval('a', (as) => as.map((a) => a.href));
+  const link = hrefs.find((h) => /goldapple\.ru\/\d{6,}-/.test(h));
+  console.log('[ga] link', link);
+  if (!link) return console.log('[ga] body', (await page.evaluate(() => document.body.innerText)).slice(0, 300));
+  await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(8000);
+  const html = await page.content();
+  console.log('[ga] title', await page.title());
+  console.log('[ga] html', around(html, 'состав'));
+  console.log('[ga] apis\n' + apis.join('\n'));
+}
+
+await letu().catch((e) => console.log('[letu] error', String(e).slice(0, 300)));
+await goldapple().catch((e) => console.log('[ga] error', String(e).slice(0, 300)));
 await browser.close();
