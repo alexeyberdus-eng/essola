@@ -167,6 +167,13 @@ module.exports.handler = async (event, context) => {
       const product = await cacheGet(keyFor(req), iam);
       return reply(200, { product });
     }
+    if (req.mode === 'save') {
+      // A composition the user's phone read from a shop page: keep it for everyone.
+      const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
+      if (!req.url || ingredients.length < 3) return reply(400, { error: 'bad_product' });
+      await cachePut(keyFor({ url: req.url }), iam, { title: String(req.title || '').slice(0, 200), url: req.url, ingredients, source: 'shop' });
+      return reply(200, { ok: true });
+    }
     if (req.mode === 'url') {
       let host = '';
       try {

@@ -111,3 +111,6 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
 }
 
 export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:goldapple\.ru|letu\.ru)\/\S+/i;
+
+/** Saves a composition read from a shop page into the shared base. */
+export const saveProduct = (url: string, title: string, ingredients: string[]) => call({ mode: 'save', url, title, ingredients }).catch(() => {});

@@ -15,7 +15,8 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiScan, productByBarcode, productByLink, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiScan, productByBarcode, productByLink, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { ShopPage } from '../../components/ShopPage';
 import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
 import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
 import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
@@ -133,6 +134,7 @@ export default function ScannerScreen() {
 
   // A Gold Apple / Letual link copied from the shop app: offer to check it right away.
   const [clip, setClip] = useState<string | null>(null);
+  const [shop, setShop] = useState<string | null>(null);
   useEffect(() => {
     if (!focused || !aiEnabled) return;
     Clipboard.hasUrlAsync?.()
@@ -146,13 +148,10 @@ export default function ScannerScreen() {
     setBusy(true);
     setNotice(null);
     try {
-      const { product, error } = await productByLink(url);
+      const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
-        setNotice(
-          error === 'no_composition'
-            ? 'На странице товара не нашли состав. Сфотографируйте его на упаковке — так даже точнее.'
-            : 'Магазин не отдал страницу товара. Попробуйте позже или сфотографируйте состав на упаковке.',
-        );
+        // Not in our base yet: open the page on the phone and read the list there.
+        setShop(url);
         return;
       }
       finish(`Состав: ${product.ingredients.join(', ')}`, product.title ?? undefined, { source: product.source }, true);
@@ -493,6 +492,17 @@ export default function ScannerScreen() {
           </View>
         </ScrollView>
       )}
+      <ShopPage
+        url={shop}
+        onClose={() => setShop(null)}
+        onFound={({ title, text }) => {
+          const url = shop!;
+          setShop(null);
+          const list = text.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
+          saveProduct(url, title, list);
+          finish(`Состав: ${text}`, title || undefined, { source: url.includes('letu') ? 'Летуаль' : 'Золотое Яблоко' }, true);
+        }}
+      />
       {busy && <Reading />}
     </View>
   );
