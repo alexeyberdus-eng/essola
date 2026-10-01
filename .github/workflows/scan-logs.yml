@@ -1,0 +1,22 @@
+name: AI scan function logs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - name: Print recent function logs
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
+          yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set folder-id "$YC_FOLDER_ID"
+          yc serverless function logs essola-scan --since 3h --limit 200 | cut -c1-600
