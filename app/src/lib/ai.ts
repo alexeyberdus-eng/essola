@@ -14,9 +14,9 @@ async function call<T>(body: object): Promise<T> {
 }
 
 /** Photo (data URL) → ingredient list read by the vision model. */
-export async function aiScan(dataUrl: string): Promise<string[]> {
-  const { ingredients } = await call<{ ingredients?: string[] }>({ mode: 'scan', image: dataUrl });
-  return ingredients ?? [];
+export async function aiScan(dataUrl: string): Promise<{ ingredients: string[]; notCosmetic?: string }> {
+  const { ingredients, notCosmetic } = await call<{ ingredients?: string[]; notCosmetic?: string }>({ mode: 'scan', image: dataUrl });
+  return { ingredients: ingredients ?? [], notCosmetic };
 }
 
 type AiText = { lead?: string; effects?: { title: string; text: string }[]; use?: string[] };

@@ -38,9 +38,10 @@ async function cloud(dataUrl: string) {
 }
 
 async function server(dataUrl: string) {
-  const list = await aiScan(dataUrl);
-  if (!list.length) throw new Error('SCAN_SERVER_EMPTY');
-  return `Состав: ${list.join(', ')}`;
+  const { ingredients, notCosmetic } = await aiScan(dataUrl);
+  if (notCosmetic) return `NOT_COSMETIC: ${notCosmetic}`;
+  if (!ingredients.length) throw new Error('SCAN_SERVER_EMPTY');
+  return `Состав: ${ingredients.join(', ')}`;
 }
 
 /** Reads text from a photo: native OCR in a dev build, otherwise our scan server / cloud OCR (if configured) or the WebView engine. */

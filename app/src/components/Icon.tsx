@@ -44,7 +44,8 @@ export type IconName =
   | 'trash'
   | 'shelf'
   | 'camera'
-  | 'bag';
+  | 'bag'
+  | 'sun';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -72,6 +73,13 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
           <>
             <Circle cx="12" cy="8.5" r="3.8" {...p} />
             <Path d="M4.5 20.5c1.2-3.6 4-5.3 7.5-5.3s6.3 1.7 7.5 5.3" {...p} />
+          </>
+        );
+      case 'sun':
+        return (
+          <>
+            <Circle cx="12" cy="12" r="4" {...p} />
+            <Path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" {...p} />
           </>
         );
       case 'heart':

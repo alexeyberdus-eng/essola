@@ -14,7 +14,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { Similar, similarRecipes, storeQuery, STORES } from '../../lib/similar';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
-import { FLAG_LABEL, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
+import { FLAG_LABEL, FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
 import { AnalyzedItem, analyze } from '../../lib/analyze';
 import { colors, fonts, radius, space } from '../../theme';
 
@@ -335,7 +335,14 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
   return (
     <View style={styles.rowWrap}>
       <Press haptic={false} onPress={onPress} style={styles.row}>
-        <Text style={styles.pos}>{String(item.position + 1).padStart(2, '0')}</Text>
+        {(() => {
+          const look = ing.fn[0] ? FN_ICON[ing.fn[0]] : null;
+          return (
+            <View style={[styles.fnIcon, { backgroundColor: look && known ? look.bg : colors.surf }]}>
+              {look && known ? <Icon name={look.icon} size={15} color={look.color} strokeWidth={1.9} /> : <Text style={styles.pos}>{item.position + 1}</Text>}
+            </View>
+          );
+        })()}
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.name} numberOfLines={open ? undefined : 1}>
             {ing.ru || item.raw}
@@ -344,7 +351,7 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
             {known && item.match !== 'guess' ? ing.inci : item.raw}
           </Text>
         </View>
-        <Text style={styles.fn}>{ing.fn[0] ? FN_LABEL[ing.fn[0]] : '—'}</Text>
+        <Text style={[styles.fn, ing.fn[0] && known && { color: FN_ICON[ing.fn[0]].color }]}>{ing.fn[0] ? FN_LABEL[ing.fn[0]] : '—'}</Text>
         <View style={[styles.dot, { backgroundColor: known ? risk.color : colors.line }]} />
       </Press>
       {open && (
@@ -414,4 +421,5 @@ const styles = StyleSheet.create({
   findText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
   detailLead: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 20, color: colors.ink },
   detailText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.ink2, marginTop: 6 },
+  fnIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 });

@@ -9,12 +9,13 @@ import { CompositionSummary } from '../../components/Summary';
 import { aiEnabled, aiReview, Review } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
-import { FN_LABEL, INGREDIENTS } from '../../data/ingredients';
+import { FN_ICON, FN_LABEL, INGREDIENTS } from '../../data/ingredients';
 import { normalize } from '../../lib/analyze';
 import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, setDraft, total } from '../../lib/builder';
 import { colors, fonts, PHASE_COLOR, shadow, space, TAB_SPACE } from '../../theme';
 
 const VOLUMES = [30, 50, 100, 200];
+const PHASE_ICON: Record<string, 'drop' | 'leaf' | 'swap' | 'bolt' | 'shield'> = { water: 'drop', oil: 'leaf', emulsifier: 'swap', active: 'bolt', preservative: 'shield' };
 const KIND_USE: Record<Kind, string> = {
   cream: 'Лицо и шея: утром и вечером на чистую кожу, горошина на всё лицо',
   toner: 'Лицо: после умывания, ватным диском или распылить, затем крем',
@@ -201,7 +202,9 @@ export default function BuilderScreen() {
             <FadeIn key={ph}>
               <Card style={styles.phase}>
                 <View style={styles.phHead}>
-                  <View style={[styles.phDot, { backgroundColor: PHASE_COLOR[ph] }]} />
+                  <View style={[styles.phIcon, { backgroundColor: PHASE_COLOR[ph] }]}>
+                    <Icon name={PHASE_ICON[ph]} size={13} color={colors.ink} strokeWidth={2} />
+                  </View>
                   <Text style={styles.phTitle}>{PHASE_LABEL[ph]}</Text>
                 </View>
                 {rows.map((i, n) => (
@@ -347,6 +350,9 @@ function Picker({ visible, onClose, onPick }: { visible: boolean; onClose: () =>
           }
           renderItem={({ item }) => (
             <Press haptic={false} onPress={() => onPick(item.inci)} style={styles.pRow}>
+              <View style={[styles.pIcon, { backgroundColor: item.fn[0] ? FN_ICON[item.fn[0]].bg : colors.surf }]}>
+                {item.fn[0] && <Icon name={FN_ICON[item.fn[0]].icon} size={16} color={FN_ICON[item.fn[0]].color} strokeWidth={1.9} />}
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.pName}>{item.ru}</Text>
                 <Text style={styles.pInci}>{item.inci}</Text>
@@ -385,6 +391,8 @@ const styles = StyleSheet.create({
   phase: { marginTop: 10, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 4 },
   phHead: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
   phDot: { width: 8, height: 8, borderRadius: 3 },
+  phIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  pIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   phTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   rowLine: { borderTopWidth: 1, borderColor: '#EFECF6' },

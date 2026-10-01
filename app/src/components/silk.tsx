@@ -9,10 +9,10 @@ const native = Platform.OS !== 'web';
 
 /** White page with a soft lavender glow in the top corner. */
 const AURORA: { c: string; o: number; x: `${number}%`; y: number; r: number; dx: number; dy: number; t: number }[] = [
-  { c: '#FFBEA0', o: 0.55, x: '62%', y: -90, r: 190, dx: -26, dy: 30, t: 21000 },
-  { c: '#A0C8FF', o: 0.45, x: '-28%', y: 150, r: 200, dx: 30, dy: -24, t: 26000 },
-  { c: '#CDB4FF', o: 0.42, x: '58%', y: 420, r: 200, dx: -34, dy: 26, t: 23000 },
-  { c: '#AAEBD7', o: 0.45, x: '-20%', y: 680, r: 180, dx: 28, dy: -30, t: 29000 },
+  { c: '#FFBEA0', o: 0.74, x: '62%', y: -90, r: 190, dx: -26, dy: 30, t: 21000 },
+  { c: '#A0C8FF', o: 0.61, x: '-28%', y: 150, r: 200, dx: 30, dy: -24, t: 26000 },
+  { c: '#CDB4FF', o: 0.57, x: '58%', y: 420, r: 200, dx: -34, dy: 26, t: 23000 },
+  { c: '#AAEBD7', o: 0.61, x: '-20%', y: 680, r: 180, dx: 28, dy: -30, t: 29000 },
 ];
 
 /** White page with a soft "aurora": four blurred colour washes drifting very slowly. */

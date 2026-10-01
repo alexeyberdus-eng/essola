@@ -227,7 +227,7 @@ export function Sheen({ radius = 20, strength = 0.5 }: { radius?: number; streng
 export function DarkBlock({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[s.dark, style]}>
-      <LinearGradient colors={[colors.olive2, colors.olive]} start={{ x: 1, y: 0 }} end={{ x: 0.2, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
+      <LinearGradient colors={['#7C6CF2', '#4A55D6', '#3340B8']} start={{ x: 1, y: 0 }} end={{ x: 0.2, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
       <Sheen radius={22} strength={0.08} />
       {children}
     </View>

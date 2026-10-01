@@ -15,6 +15,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import { aiEnabled, aiScan } from '../../lib/ai';
+import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
 import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
 import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
 
@@ -65,6 +66,18 @@ export default function ScannerScreen() {
   const close = () => router.navigate('/');
 
   const finish = (raw: string, title?: string, meta?: { barcode?: string; source?: string }, force = false) => {
+    // Household chemicals and food get a clear message instead of a cosmetics score.
+    const odd = raw.startsWith('NOT_COSMETIC:')
+      ? detectNotCosmetic(raw) ?? { kind: /еда|пищ|продукт пит|food/i.test(raw) ? ('food' as const) : ('household' as const), label: '' }
+      : detectNotCosmetic(raw) ?? (meta?.source === 'Open Food Facts' ? { kind: 'food' as const, label: '' } : null);
+    if (odd) {
+      tap('light');
+      setManual(false);
+      setLookup(null);
+      pendingCode.current = null;
+      setNotice(NOT_COSMETIC_TEXT[odd.kind]);
+      return;
+    }
     const result = analyze(raw);
     // A manual "Разобрать" goes through whenever anything was recognised; only photos get bounced back.
     if (!result.items.length || (result.unreadable && !force)) {
@@ -118,7 +131,8 @@ export default function ScannerScreen() {
       setBusy(true);
       setNotice(null);
       try {
-        const list = await aiScan(await toJpegBase64(uri));
+        const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri));
+        if (notCosmetic) return finish(`NOT_COSMETIC: ${notCosmetic}`);
         if (!list.length || !analyze(list.join(', ')).items.length) throw new Error('EMPTY');
         finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);
       } catch (e) {

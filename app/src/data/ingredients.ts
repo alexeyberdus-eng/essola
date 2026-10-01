@@ -320,3 +320,25 @@ export const INGREDIENTS: Ingredient[] = [
   ...[...EXTRA, ...EXTRA2, ...EXTRA3].filter((i) => !coreInci.has(i.inci.toLowerCase())),
 ];
 
+
+/** Icon and accent colour for each ingredient role — used in scan results and the builder. */
+export const FN_ICON: Record<Fn, { icon: 'drop' | 'leaf' | 'swap' | 'spark' | 'shield' | 'bolt' | 'heart' | 'sun' | 'flask' | 'image' | 'bookmark'; color: string; bg: string }> = {
+  base: { icon: 'drop', color: '#4A8BFF', bg: '#E6F0FF' },
+  humectant: { icon: 'drop', color: '#2FA9C9', bg: '#E2F6FB' },
+  emollient: { icon: 'leaf', color: '#E08A3C', bg: '#FFF0E1' },
+  emulsifier: { icon: 'swap', color: '#8C6CFF', bg: '#EFEAFF' },
+  surfactant: { icon: 'spark', color: '#3E9BE0', bg: '#E4F2FD' },
+  thickener: { icon: 'bookmark', color: '#7D8096', bg: '#F0F1F6' },
+  preservative: { icon: 'shield', color: '#6B7280', bg: '#EEF0F3' },
+  antioxidant: { icon: 'shield', color: '#E0A21B', bg: '#FFF5DB' },
+  active: { icon: 'bolt', color: '#7B5CFA', bg: '#EFEAFF' },
+  extract: { icon: 'leaf', color: '#2F9E6A', bg: '#E3F6EC' },
+  soothing: { icon: 'heart', color: '#E46C9B', bg: '#FDE8F1' },
+  exfoliant: { icon: 'spark', color: '#F0803C', bg: '#FFEDE1' },
+  film: { icon: 'shield', color: '#5B8DEF', bg: '#E7EEFD' },
+  uv: { icon: 'sun', color: '#F2A400', bg: '#FFF4D6' },
+  fragrance: { icon: 'spark', color: '#C46BD8', bg: '#F8E9FB' },
+  ph: { icon: 'flask', color: '#6B7280', bg: '#EEF0F3' },
+  chelator: { icon: 'flask', color: '#6B7280', bg: '#EEF0F3' },
+  colorant: { icon: 'image', color: '#E05A7A', bg: '#FDE6EC' },
+};

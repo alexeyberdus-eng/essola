@@ -10,6 +10,7 @@ import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
 import { LikeButton } from './RecipeRow';
 import { Press } from './ui';
+import { RecipeArt } from './RecipeArt';
 
 export function recipeNo(recipe: Recipe) {
   const i = RECIPES.indexOf(recipe);
@@ -18,9 +19,9 @@ export function recipeNo(recipe: Recipe) {
 
 // Hairline frames in the aurora hues, rotating through the feed.
 const FRAMES: [string, string][] = [
-  ['#FFC2A8', '#E9D2FF'],
-  ['#AFCBFF', '#BFEBDD'],
-  ['#D2BDFF', '#AFCBFF'],
+  ['#FF9F7A', '#C9A2FF'],
+  ['#7FB0FF', '#7FDDBE'],
+  ['#B794FF', '#FF9FBF'],
 ];
 
 const short = (n: string) => {
@@ -56,10 +57,15 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
             </Text>
             <Text style={styles.metaText}>{LEVELS[recipe.level]}</Text>
           </View>
-          <Text style={styles.title}>{recipe.title}</Text>
-          <Text style={styles.desc} numberOfLines={2}>
-            {recipe.subtitle}
-          </Text>
+          <View style={styles.head}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{recipe.title}</Text>
+              <Text style={styles.desc} numberOfLines={2}>
+                {recipe.subtitle}
+              </Text>
+            </View>
+            <RecipeArt recipe={recipe} size={76} />
+          </View>
           {top.length > 0 && (
             <View style={styles.acts}>
               {top.map((a) => (
@@ -92,13 +98,14 @@ const styles = StyleSheet.create({
   frame: { borderRadius: 24, padding: 1.5, shadowColor: '#15172B', shadowOpacity: 0.1, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
   card: { borderRadius: 22.5, backgroundColor: 'rgba(255,255,255,0.96)', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
   meta: { flexDirection: 'row', justifyContent: 'space-between' },
+  head: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   metaText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
   title: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.6, color: colors.ink, marginTop: 5 },
   desc: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2, marginTop: 3 },
   acts: { flexDirection: 'row', gap: 5, marginTop: 10, overflow: 'hidden' },
-  act: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(21,23,43,0.07)', backgroundColor: '#fff', flexShrink: 1 },
-  actName: { fontFamily: fonts.medium, fontSize: 11.5, color: '#3A3D5C', flexShrink: 1 },
-  actPct: { fontFamily: fonts.semibold, fontSize: 11, color: colors.muted },
+  act: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99, backgroundColor: '#F1EEFF', flexShrink: 1 },
+  actName: { fontFamily: fonts.semibold, fontSize: 11.5, color: '#4B3FC9', flexShrink: 1 },
+  actPct: { fontFamily: fonts.semibold, fontSize: 11, color: '#8A80E0' },
   foot: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 11, paddingTop: 10, borderTopWidth: 1, borderColor: 'rgba(21,23,43,0.06)' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   statText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
