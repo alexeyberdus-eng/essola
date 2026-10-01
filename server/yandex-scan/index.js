@@ -12,13 +12,17 @@ const DESCRIBE = `Ты косметолог-технолог. По списку 
 {"lead":"1–2 предложения: что это за средство и для какой кожи","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"use":["куда и как применять, до 12 слов"]}
 effects: 2–4 пункта, use: 1–3 пункта. Без медицинских обещаний, без выдуманных ингредиентов.`;
 
-const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма, консервант, эмульгатор, pH) уже сделаны — не повторяй их, кроме случаев из «Замечания». Дай точечные улучшения. Ответ строго строками, без пояснений и markdown:
+const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю. Дай 1–3 самых полезных улучшения сверх них: активы и их концентрации, текстура, стабильность, совместимость; замечания из списка «Замечания» учти кратко. Ответ строго строками, без markdown:
 В: вывод одним предложением
-+ ингредиент | доля | зачем (до 8 слов)
-- ингредиент | до какой доли | почему (до 8 слов)
-x ингредиент | почему (до 8 слов)
-! важное предупреждение (до 10 слов)
-Строк «+», «-», «x», «!» — по 0–2, только по делу. /no_think`;
++ название | доля | зачем
+- название | новая доля | почему
+x название | почему
+! предупреждение
+Пример:
+В: Рабочий увлажняющий крем, не хватает консерванта.
++ Phenoxyethanol | 0,8% | защита водной фазы от микробов
+- Squalane | 6% | при 10% крем будет жирным
+Каждое пояснение до 8 слов. /no_think`;
 const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
 {"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
 Максимум 5 товаров, по убыванию match. /no_think`;
@@ -55,11 +59,11 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
 
 let lastUsage;
-async function chat(model, messages, maxTokens, raw = false) {
+async function chat(model, messages, maxTokens, raw = false, extra = {}) {
   const res = await fetch(URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.YC_API_KEY}`, 'OpenAI-Project': process.env.YC_FOLDER_ID, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: `gpt://${process.env.YC_FOLDER_ID}/${model}`, messages, temperature: 0.1, max_tokens: maxTokens }),
+    body: JSON.stringify({ model: `gpt://${process.env.YC_FOLDER_ID}/${model}`, messages, temperature: 0.1, max_tokens: maxTokens, ...extra }),
   });
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
@@ -140,7 +144,9 @@ module.exports.handler = async (event, context) => {
     let out = null, last;
     for (const m of models) {
       try {
-        const t = await chat(m, msg, 2500, true);
+        // Qwen "thinks" before answering, which multiplies the cost; ask the server to skip it.
+        const noThink = { chat_template_kwargs: { enable_thinking: false } };
+        const t = await chat(m, msg, 2500, true, noThink).catch((e) => (/ 400:/.test(String(e.message)) ? chat(m, msg, 2500, true) : Promise.reject(e)));
         const json = t.includes('"ingredients"') && t.match(/\[[\s\S]*?\]/);
         const list = json ? [...json[0].matchAll(/"([^"\n]{2,89})"/g)].map((x) => x[1]) : t.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[^:\n]{0,20}:\s*/, '').split(/\s*[;\n]\s*/).map((x) => x.replace(/^(\d+[.)]\s+|[-*•]\s+)/, '').replace(/[.]$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
         out = { ingredients: list, raw: t.slice(0, 200) };
