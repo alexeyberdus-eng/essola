@@ -21,6 +21,8 @@ import { FLAG_LABEL, FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredie
 import { AnalyzedItem, analyze } from '../../lib/analyze';
 import { colors, fonts, radius, scoreColor, space } from '../../theme';
 import { personalize } from '../../lib/personal';
+import { opinion } from '../../lib/opinion';
+import { ingredientId } from '../../lib/wiki';
 import { useProfile } from '../../lib/profile';
 import { ShareCard } from '../../components/ShareCard';
 
@@ -64,6 +66,7 @@ export default function AnalysisScreen() {
   };
   const { profile } = useProfile();
   const me = useMemo(() => (result ? personalize(result, profile) : null), [result, profile]);
+  const op = useMemo(() => (result ? opinion(result) : { title: '', paragraphs: [] }), [result]);
   const card = useRef<View>(null);
   const share = async () => {
     try {
@@ -135,7 +138,7 @@ export default function AnalysisScreen() {
               <View style={styles.ringWrap}>
                 <Ring value={me?.score ?? scores.overall} size={112} stroke={11} color={scoreColor(me?.score ?? scores.overall)} track="rgba(255,255,255,0.7)">
                   <RollingNumber value={me?.score ?? scores.overall} style={styles.ringNum} />
-                  <Text style={styles.ringOf}>{me ? 'для вас' : 'из 100'}</Text>
+                  <Text style={styles.ringOf}>{me ? 'для вас' : 'общая'}</Text>
                 </Ring>
               </View>
               <View style={{ flex: 1, gap: 8 }}>
@@ -143,9 +146,23 @@ export default function AnalysisScreen() {
                   <Icon name={me ? (me.verdict === 'good' ? 'check' : 'alert') : 'spark'} size={14} color={colors.ink} strokeWidth={2.2} />
                   <Text style={styles.verdictPillText}>{me ? me.label : result.verdict.title}</Text>
                 </View>
-                <Text style={styles.heroText} numberOfLines={4}>
-                  {me ? `Общая оценка состава — ${scores.overall}. ${me.reasons.length ? 'Мы учли ваш профиль — подробности ниже.' : 'Под ваш профиль замечаний нет.'}` : result.verdict.text}
-                </Text>
+                {me ? (
+                  <View style={styles.generalRow}>
+                    <Ring value={scores.overall} size={46} stroke={4.5} color={scoreColor(scores.overall)} track="rgba(255,255,255,0.7)">
+                      <Text style={styles.generalNum}>{scores.overall}</Text>
+                    </Ring>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.generalLabel}>Общая оценка состава</Text>
+                      <Text style={styles.heroText} numberOfLines={2}>
+                        {me.score === scores.overall ? 'Под ваш профиль замечаний нет' : `Для вас ${me.score > scores.overall ? 'выше' : 'ниже'} — учли ваш профиль`}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.heroText} numberOfLines={4}>
+                    {result.verdict.text}
+                  </Text>
+                )}
               </View>
             </View>
           </LinearGradient>
@@ -196,6 +213,22 @@ export default function AnalysisScreen() {
         )}
 
         <FadeIn index={2}>
+          <View style={styles.opinion}>
+            <View style={styles.opHead}>
+              <View style={styles.opIcon}>
+                <Icon name="flask" size={16} color={colors.violet} strokeWidth={2} />
+              </View>
+              <Text style={styles.opTitle}>Мнение технолога · {op.title}</Text>
+            </View>
+            {op.paragraphs.map((t) => (
+              <Text key={t} style={styles.opText}>
+                {t}
+              </Text>
+            ))}
+          </View>
+        </FadeIn>
+
+        <FadeIn index={3}>
           <View style={styles.tubes}>
             {(
               [
@@ -423,7 +456,12 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
       {open && (
         <View style={styles.detail}>
           <Text style={styles.detailLead}>{ing.note}</Text>
-          {!!ing.about && <Text style={styles.detailText}>{ing.about}</Text>}
+          {known && (
+            <Press haptic={false} onPress={() => router.push(`/ingredient/${ingredientId(ing)}`)} style={styles.more}>
+              <Text style={styles.moreText}>Подробнее об ингредиенте</Text>
+              <Icon name="arrowRight" size={13} color={colors.violet} />
+            </Press>
+          )}
           <View style={styles.tags}>
             {ing.fn.map((f) => (
               <Tag key={f} label={FN_LABEL[f]} />
@@ -476,7 +514,7 @@ const styles = StyleSheet.create({
   personalTitle: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.sageDeep },
   rowWrap: { borderBottomWidth: 1, borderColor: '#EFECF6' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  pos: { width: 20, fontFamily: fonts.monoMedium, fontSize: 11, color: colors.muted },
+  pos: { fontFamily: fonts.monoMedium, fontSize: 11.5, color: colors.muted, textAlign: 'center' },
   name: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
   inci: { fontFamily: fonts.mono, fontSize: 11, color: colors.muted },
   fn: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, maxWidth: 100 },
@@ -511,4 +549,14 @@ const styles = StyleSheet.create({
   meTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
   meText: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 2 },
   offscreen: { position: 'absolute', left: -2000, top: 0 },
+  generalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 16, padding: 8 },
+  generalNum: { fontFamily: fonts.display, fontSize: 14, color: colors.ink },
+  generalLabel: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink },
+  opinion: { marginTop: 12, padding: 16, borderRadius: 22, backgroundColor: '#FBFAFF', borderWidth: 1, borderColor: '#E4DCFF', gap: 8 },
+  opHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  opIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#EFEAFF', alignItems: 'center', justifyContent: 'center' },
+  opTitle: { flex: 1, fontFamily: fonts.display, fontSize: 15.5, color: colors.ink },
+  opText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20.5, color: colors.ink2 },
+  more: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-start' },
+  moreText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
 });

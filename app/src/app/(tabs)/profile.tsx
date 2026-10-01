@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
 import { RecipeCard } from '../../components/RecipeCard';
+import { ScoreBadge } from '../../components/ScoreBadge';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountUp, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, LinkText, Press } from '../../components/ui';
@@ -173,9 +174,7 @@ function ScanHistory({ scans }: { scans: SavedScan[] }) {
           {g.list.map((sc, i) => (
             <FadeIn key={sc.id} index={i}>
               <Press haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.scanCard}>
-                <Ring value={sc.overall} size={54} stroke={4.5} color={scoreColor(sc.overall)} track={colors.line}>
-                  <Text style={styles.ringScore}>{sc.overall}</Text>
-                </Ring>
+                <ScoreBadge value={sc.overall} size={52} />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={styles.scanTitle} numberOfLines={2}>
                     {sc.title}

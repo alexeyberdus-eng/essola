@@ -17,6 +17,7 @@ import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
 import { aiEnabled, aiScan, productByBarcode, productByLink, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { ShopPage } from '../../components/ShopPage';
+import { ScoreBadge } from '../../components/ScoreBadge';
 import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
 import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
 import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
@@ -39,7 +40,7 @@ export default function ScannerScreen() {
   const [full, setFull] = useState(false);
   const { barcodes, rememberBarcode } = useUserContent();
 
-  const [mode, setMode] = useState<Mode>('barcode');
+  const [mode, setMode] = useState<Mode>('label');
   const [manual, setManual] = useState(false);
   const [torch, setTorch] = useState(false);
   const [ready, setReady] = useState(false);
@@ -95,7 +96,8 @@ export default function ScannerScreen() {
     tap('success');
     const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
     const code = meta?.barcode ?? pendingCode.current ?? undefined;
-    const name = title ?? pendingName.current ?? `Состав от ${date}`;
+    const next = Math.max(0, ...scans.map((x) => Number(x.title.match(/^Состав №(\d+)/)?.[1] ?? 0))) + 1;
+    const name = title ?? pendingName.current ?? `Состав №${next}`;
     if (code && !meta?.source) rememberBarcode(code, name, raw);
     const scan = saveScan({ title: name, text: raw, overall: result.scores.overall, barcode: code, source: meta?.source });
     pendingCode.current = null;
@@ -150,14 +152,14 @@ export default function ScannerScreen() {
     try {
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
-        // Not in our base yet: open the page on the phone and read the list there.
+        // Not in our base yet: read the page quietly on the phone while the loader is shown.
         setShop(url);
         return;
       }
+      setBusy(false);
       finish(`Состав: ${product.ingredients.join(', ')}`, product.title ?? undefined, { source: product.source }, true);
     } catch {
       setNotice('Не получилось открыть ссылку — проверьте интернет.');
-    } finally {
       setBusy(false);
     }
   };
@@ -476,9 +478,7 @@ export default function ScannerScreen() {
             {scans.length ? (
               scans.slice(0, 30).map((sc) => (
                 <Press key={sc.id} haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.hRow}>
-                  <View style={[styles.hScore, { backgroundColor: scoreColor(sc.overall) }]}>
-                    <Text style={styles.hScoreText}>{sc.overall}</Text>
-                  </View>
+                  <ScoreBadge value={sc.overall} size={44} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.hName} numberOfLines={1}>{sc.title}</Text>
                     <Text style={styles.hDate}>{new Date(sc.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</Text>
@@ -494,10 +494,15 @@ export default function ScannerScreen() {
       )}
       <ShopPage
         url={shop}
-        onClose={() => setShop(null)}
+        onClose={() => {
+          setShop(null);
+          setBusy(false);
+          setNotice('Не смогли прочитать состав со страницы магазина. Сфотографируйте блок «Состав» на упаковке — это займёт пару секунд.');
+        }}
         onFound={({ title, text }) => {
           const url = shop!;
           setShop(null);
+          setBusy(false);
           const list = text.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
           saveProduct(url, title, list);
           finish(`Состав: ${text}`, title || undefined, { source: url.includes('letu') ? 'Летуаль' : 'Золотое Яблоко' }, true);
@@ -605,7 +610,7 @@ const styles = StyleSheet.create({
   sheetInline: { paddingHorizontal: space.gutter, paddingTop: 16 },
   history: { paddingHorizontal: space.gutter, marginTop: 24, gap: 8 },
   historyTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.4, color: colors.ink, marginBottom: 2 },
-  hRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  hRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7', shadowColor: '#15172B', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   hScore: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   hScoreText: { fontFamily: fonts.monoMedium, fontSize: 13.5, color: '#fff' },
   hName: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
