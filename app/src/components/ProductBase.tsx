@@ -116,7 +116,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
         />
         {busy && <ActivityIndicator color={colors.violet} />}
       </View>
-      {items && !busy && <Text style={styles.count}>{items.length ? `Нашли ${items.length}` : 'Ничего не нашли — попробуйте название на латинице или отсканируйте средство'}</Text>}
+      {items && !busy && <Text style={styles.count}>{scored.length ? `Нашли ${scored.length}` : 'Ничего не нашли — попробуйте название на латинице или отсканируйте средство'}</Text>}
     </View>
   );
 
