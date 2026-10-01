@@ -554,7 +554,7 @@ function Step({ ok, text }: { ok?: boolean; text: string }) {
 
 const C = 30;
 const styles = StyleSheet.create({
-  reading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.94)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  reading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   readingBox: { width: 104, height: 104, alignItems: 'center', justifyContent: 'center' },
   readingRing: { position: 'absolute', width: 104, height: 104, borderRadius: 52, borderWidth: 3, borderColor: 'rgba(63,75,201,0.12)', borderTopColor: colors.violet, borderRightColor: '#C9B4FF' },
   bubble: { position: 'absolute', top: 44, width: 7, height: 7, borderRadius: 4, backgroundColor: '#A6C8FF' },

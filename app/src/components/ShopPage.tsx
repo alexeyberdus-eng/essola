@@ -39,8 +39,9 @@ true;
 `;
 
 /**
- * Reads a Gold Apple / Letual product page on the phone without showing it (the loader stays on screen):
- * opens the page like a normal visit, finds the ingredient list and hands it back. Gives up after 25 s.
+ * Reads a Gold Apple / Letual product page on the phone behind the loader: opens the page like a normal visit,
+ * finds the ingredient list and hands it back. The page sits on screen under the loader (an off-screen web view
+ * is throttled by the OS, so the shops' device check never finishes). Gives up after 35 s.
  */
 export function ShopPage({ url, onFound, onClose }: { url: string | null; onFound: (p: { title: string; text: string }) => void; onClose: () => void }) {
   const done = useRef(false);
@@ -49,7 +50,7 @@ export function ShopPage({ url, onFound, onClose }: { url: string | null; onFoun
     if (!url) return;
     const t = setTimeout(() => {
       if (!done.current) onClose();
-    }, 25000);
+    }, 35000);
     return () => clearTimeout(t);
     // onClose is stable enough for a one-shot timeout
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +61,11 @@ export function ShopPage({ url, onFound, onClose }: { url: string | null; onFoun
       <WebView
         source={{ uri: url }}
         injectedJavaScript={FIND}
+        // Look like mobile Safari / Chrome: some shops refuse unknown in-app browsers.
+        applicationNameForUserAgent="Version/17.0 Mobile/15E148 Safari/604.1"
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        domStorageEnabled
         onMessage={(e) => {
           if (done.current) return;
           try {
@@ -72,12 +78,12 @@ export function ShopPage({ url, onFound, onClose }: { url: string | null; onFoun
             // ignore malformed messages
           }
         }}
-        style={{ width: 390, height: 800 }}
+        style={{ flex: 1 }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hidden: { position: 'absolute', left: -1000, top: 0, width: 390, height: 800, opacity: 0 },
+  hidden: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
 });
