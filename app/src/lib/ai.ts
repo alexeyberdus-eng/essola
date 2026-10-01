@@ -14,8 +14,8 @@ async function call<T>(body: object): Promise<T> {
 }
 
 /** Photo (data URL) → ingredient list read by the vision model. */
-export async function aiScan(dataUrl: string): Promise<{ ingredients: string[]; notCosmetic?: string }> {
-  const { ingredients, notCosmetic } = await call<{ ingredients?: string[]; notCosmetic?: string }>({ mode: 'scan', image: dataUrl });
+export async function aiScan(dataUrl: string, barcode?: string | null): Promise<{ ingredients: string[]; notCosmetic?: string }> {
+  const { ingredients, notCosmetic } = await call<{ ingredients?: string[]; notCosmetic?: string }>({ mode: 'scan', image: dataUrl, barcode: barcode ?? undefined });
   return { ingredients: ingredients ?? [], notCosmetic };
 }
 
@@ -91,3 +91,23 @@ export type Analog = { title: string; url: string; match: number; common: string
 /** Gold Apple products with a similar composition, with an estimated match %. */
 export const aiAnalogs = async (ingredients: string[], keys: string[], kind: string) =>
   (await cached<{ items?: Analog[] }>('analogs', { mode: 'analogs', ingredients, keys, kind })).items ?? [];
+
+export type CachedProduct = { title?: string | null; ingredients: string[]; source?: string; image?: string | null; url?: string };
+
+/** Shared product base on our server: barcode → composition someone already scanned. */
+export async function productByBarcode(barcode: string): Promise<CachedProduct | null> {
+  if (!aiEnabled) return null;
+  try {
+    const { product } = await call<{ product: CachedProduct | null }>({ mode: 'product', barcode });
+    return product?.ingredients?.length ? product : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Gold Apple / Letual product link → composition read from that page (cached for everyone). */
+export async function productByLink(url: string): Promise<{ product: CachedProduct | null; error?: string }> {
+  return call<{ product: CachedProduct | null; error?: string }>({ mode: 'url', url });
+}
+
+export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:goldapple\.ru|letu\.ru)\/\S+/i;

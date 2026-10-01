@@ -14,7 +14,8 @@ import { useLibrary } from '../../context/LibraryContext';
 import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
-import { aiEnabled, aiScan } from '../../lib/ai';
+import * as Clipboard from 'expo-clipboard';
+import { aiEnabled, aiScan, productByBarcode, productByLink, SHOP_LINK } from '../../lib/ai';
 import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
 import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
 import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
@@ -113,7 +114,12 @@ export default function ScannerScreen() {
     setNotice(null);
     setLookup({ code: data, state: 'searching' });
     const known = barcodes[data];
-    const res = known ? { product: { title: known.title, text: known.text, source: 'база Essola' }, name: known.title } : await lookupBarcode(data);
+    const shared = known ? null : await productByBarcode(data);
+    const res = known
+      ? { product: { title: known.title, text: known.text, source: 'база Essola' }, name: known.title }
+      : shared
+        ? { product: { title: shared.title ?? 'Средство', text: `Ingredients: ${shared.ingredients.join(', ')}`, source: 'база Essola' }, name: shared.title ?? null }
+        : await lookupBarcode(data);
     const found = res.product;
     if (found) {
       finish(found.text, found.title, { barcode: data, source: found.source });
@@ -125,13 +131,52 @@ export default function ScannerScreen() {
     setTimeout(() => (scanning.current = false), 800);
   };
 
+  // A Gold Apple / Letual link copied from the shop app: offer to check it right away.
+  const [clip, setClip] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focused || !aiEnabled) return;
+    Clipboard.hasUrlAsync?.()
+      .then((has) => (has ? Clipboard.getUrlAsync() : Clipboard.getStringAsync()))
+      .then((t) => setClip(t?.match(SHOP_LINK)?.[0] ?? null))
+      .catch(() => {});
+  }, [focused]);
+
+  const checkLink = async (url: string) => {
+    setClip(null);
+    setBusy(true);
+    setNotice(null);
+    try {
+      const { product, error } = await productByLink(url);
+      if (!product?.ingredients?.length) {
+        setNotice(
+          error === 'no_composition'
+            ? 'На странице товара не нашли состав. Сфотографируйте его на упаковке — так даже точнее.'
+            : 'Магазин не отдал страницу товара. Попробуйте позже или сфотографируйте состав на упаковке.',
+        );
+        return;
+      }
+      finish(`Состав: ${product.ingredients.join(', ')}`, product.title ?? undefined, { source: product.source }, true);
+    } catch {
+      setNotice('Не получилось открыть ссылку — проверьте интернет.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pasteLink = async () => {
+    const t = (await Clipboard.getStringAsync().catch(() => '')) ?? '';
+    const url = t.match(SHOP_LINK)?.[0];
+    if (url) checkLink(url);
+    else setNotice('Скопируйте ссылку на товар в приложении или на сайте Золотого Яблока или Летуаль и нажмите «Ссылка» ещё раз.');
+  };
+
   const readImage = async (uri: string) => {
     if (aiEnabled) {
       // AI path: photo → clean list → straight to the result. No text editor step.
       setBusy(true);
       setNotice(null);
       try {
-        const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri));
+        const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri), pendingCode.current);
         if (notCosmetic) return finish(`NOT_COSMETIC: ${notCosmetic}`);
         if (!list.length || !analyze(list.join(', ')).items.length) throw new Error('EMPTY');
         finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);
@@ -300,6 +345,18 @@ export default function ScannerScreen() {
           </>
         )}
         {notice && <Text style={[styles.notice, { marginTop: 12 }]}>{notice}</Text>}
+        {clip && !lookup && (
+          <Press onPress={() => checkLink(clip)} style={styles.clip}>
+            <Icon name="external" size={16} color={colors.violet} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clipTitle}>Нашли ссылку на товар</Text>
+              <Text style={styles.clipText} numberOfLines={1}>
+                {clip.replace(/^https?:\/\/(www\.)?/, '')}
+              </Text>
+            </View>
+            <Text style={styles.clipGo}>Проверить</Text>
+          </Press>
+        )}
         {(!lookup || (lookup.state === 'missing' && mode === 'label')) && (
           <View style={styles.controls}>
             <Press onPress={pick} style={styles.square} accessibilityLabel="Фото из галереи">
@@ -318,6 +375,12 @@ export default function ScannerScreen() {
               <Icon name="text" size={21} />
             </Press>
           </View>
+        )}
+        {aiEnabled && !lookup && (
+          <Press onPress={pasteLink} style={styles.linkBtn}>
+            <Icon name="external" size={15} color={colors.violet} />
+            <Text style={styles.linkText}>Вставить ссылку на Золотое Яблоко или Летуаль</Text>
+          </Press>
         )}
       </View>
   );
@@ -520,6 +583,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 10,
   },
+  clip: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 16, backgroundColor: '#F1EEFF' },
+  clipTitle: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink },
+  clipText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+  clipGo: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
+  linkBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingVertical: 8 },
+  linkText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   camBox: { overflow: 'hidden', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, backgroundColor: colors.night },
   expand: { position: 'absolute', right: 14, bottom: 14, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.5)' },
   expandText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },

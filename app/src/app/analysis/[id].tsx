@@ -1,5 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 import { ActivityIndicator, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
@@ -16,7 +19,16 @@ import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { FLAG_LABEL, FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
 import { AnalyzedItem, analyze } from '../../lib/analyze';
-import { colors, fonts, radius, space } from '../../theme';
+import { colors, fonts, radius, scoreColor, space } from '../../theme';
+import { personalize } from '../../lib/personal';
+import { useProfile } from '../../lib/profile';
+import { ShareCard } from '../../components/ShareCard';
+
+const HERO: Record<'good' | 'caution' | 'avoid', [string, string, string]> = {
+  good: ['#BFF0D8', '#D9E8FF', '#EDE3FF'],
+  caution: ['#FFE3B8', '#FFD9E4', '#EDE3FF'],
+  avoid: ['#FFC9C9', '#FFD9E4', '#F3E3FF'],
+};
 
 type Filter = 'all' | 'active' | 'risk' | 'allergen';
 const RISK = [
@@ -33,7 +45,7 @@ export default function AnalysisScreen() {
   const { addToShelf, shelf } = useUserContent();
   const { user } = useAuth();
   const scan = getScan(id);
-  const result = useMemo(() => (scan ? analyze(scan.text, user?.skinType) : null), [scan, user?.skinType]);
+  const result = useMemo(() => (scan ? analyze(scan.text, null) : null), [scan]);
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
   const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
   const summary = useAiSummary(result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
@@ -48,6 +60,18 @@ export default function AnalysisScreen() {
       setShop({ list: await aiAnalogs(known.map((i) => i.ing.inci), keys, local.kind) });
     } catch {
       setShop({ error: true });
+    }
+  };
+  const { profile } = useProfile();
+  const me = useMemo(() => (result ? personalize(result, profile) : null), [result, profile]);
+  const card = useRef<View>(null);
+  const share = async () => {
+    try {
+      tap();
+      const uri = await captureRef(card, { format: 'png', quality: 1 });
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Поделиться разбором' });
+    } catch {
+      // sharing cancelled or unavailable
     }
   };
   const [filter, setFilter] = useState<Filter>('all');
@@ -100,29 +124,78 @@ export default function AnalysisScreen() {
         scrollEventThrottle={16}
       >
         <FadeIn>
-          <Text style={styles.kicker} numberOfLines={1}>
-            {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : 'Скан состава'}
-          </Text>
-          <DarkBlock style={styles.head}>
-            <Ring value={scores.overall} size={104} stroke={10} color={colors.lilac} track="rgba(255,255,255,0.14)">
-              <RollingNumber value={scores.overall} style={styles.ringNum} />
-              <Text style={styles.ringOf}>из 100</Text>
-            </Ring>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headSub}>{items.length} ингредиентов</Text>
-              <Text style={styles.title} numberOfLines={3}>
-                {scan.title}
-              </Text>
-            </View>
-          </DarkBlock>
-          <View style={[styles.verdict, { backgroundColor: verdictTone === colors.good ? colors.goodSoft : verdictTone === colors.warn ? colors.warnSoft : colors.badSoft }]}>
-            <Text style={styles.verdictText}>
-              <Text style={{ fontFamily: fonts.semibold, color: verdictTone }}>{result.verdict.title}</Text> · {result.verdict.text}
+          <LinearGradient colors={HERO[me?.verdict ?? (scores.overall >= 68 ? 'good' : scores.overall >= 50 ? 'caution' : 'avoid')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+            <Text style={styles.heroKicker} numberOfLines={1}>
+              {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : 'Скан состава'} · {items.length} ингредиентов
             </Text>
+            <Text style={styles.heroTitle} numberOfLines={3}>
+              {scan.title}
+            </Text>
+            <View style={styles.heroRow}>
+              <View style={styles.ringWrap}>
+                <Ring value={me?.score ?? scores.overall} size={112} stroke={11} color={scoreColor(me?.score ?? scores.overall)} track="rgba(255,255,255,0.7)">
+                  <RollingNumber value={me?.score ?? scores.overall} style={styles.ringNum} />
+                  <Text style={styles.ringOf}>{me ? 'для вас' : 'из 100'}</Text>
+                </Ring>
+              </View>
+              <View style={{ flex: 1, gap: 8 }}>
+                <View style={styles.verdictPill}>
+                  <Icon name={me ? (me.verdict === 'good' ? 'check' : 'alert') : 'spark'} size={14} color={colors.ink} strokeWidth={2.2} />
+                  <Text style={styles.verdictPillText}>{me ? me.label : result.verdict.title}</Text>
+                </View>
+                <Text style={styles.heroText} numberOfLines={4}>
+                  {me ? `Общая оценка состава — ${scores.overall}. ${me.reasons.length ? 'Мы учли ваш профиль — подробности ниже.' : 'Под ваш профиль замечаний нет.'}` : result.verdict.text}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.stats}>
+            {(
+              [
+                ['bolt', 'Активы', groups.active.length, '#7B5CFA', '#EFEAFF'],
+                ['alert', 'Спорные', groups.risk.length, '#E0962E', '#FFF2DE'],
+                ['spark', 'Аллергены', groups.allergen.length, '#E46C9B', '#FDE8F1'],
+              ] as const
+            ).map(([icon, label, n, c, bg]) => (
+              <View key={label} style={[styles.stat, { backgroundColor: bg }]}>
+                <Icon name={icon} size={16} color={c} strokeWidth={2} />
+                <Text style={[styles.statN, { color: c }]}>{n}</Text>
+                <Text style={styles.statL}>{label}</Text>
+              </View>
+            ))}
           </View>
         </FadeIn>
 
-        <FadeIn index={1}>
+        {me ? (
+          me.reasons.length > 0 && (
+            <FadeIn index={1}>
+              <View style={styles.why}>
+                <Text style={styles.whyTitle}>Почему такая оценка для вас</Text>
+                {me.reasons.map((r) => (
+                  <View key={r.text} style={styles.whyRow}>
+                    <View style={[styles.whyDot, { backgroundColor: r.tone === 'bad' ? colors.bad : r.tone === 'warn' ? colors.warn : colors.good }]} />
+                    <Text style={styles.whyText}>{r.text}</Text>
+                    <Text style={[styles.whyDelta, { color: r.delta < 0 ? colors.bad : colors.good }]}>{r.delta > 0 ? `+${r.delta}` : r.delta}</Text>
+                  </View>
+                ))}
+              </View>
+            </FadeIn>
+          )
+        ) : (
+          <Press onPress={() => router.push('/about-me' as never)} style={styles.meCta}>
+            <View style={styles.meIcon}>
+              <Icon name="user" size={18} color={colors.violet} strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.meTitle}>Получить персональную оценку</Text>
+              <Text style={styles.meText}>Расскажите о коже, волосах, беременности и аллергиях — оценка станет вашей</Text>
+            </View>
+            <Icon name="arrowRight" size={16} color={colors.violet} />
+          </Press>
+        )}
+
+        <FadeIn index={2}>
           <View style={styles.tubes}>
             {(
               [
@@ -133,7 +206,7 @@ export default function AnalysisScreen() {
               ] as const
             ).map(([l, v], i) => (
               <View key={l} style={styles.tubeCol}>
-                <Ring value={v} size={48} stroke={5} color={colors.violet} track="rgba(123,92,250,0.14)" delay={200 + i * 120}>
+                <Ring value={v} size={50} stroke={5} color={scoreColor(v)} track="rgba(123,92,250,0.12)" delay={200 + i * 120}>
                   <Text style={styles.tubeNum}>{v}</Text>
                 </Ring>
                 <Text style={styles.tubeLabel}>{l}</Text>
@@ -152,30 +225,23 @@ export default function AnalysisScreen() {
         )}
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          <Button label={onShelf ? 'На полке' : 'На мою полку'} icon={onShelf ? 'check' : 'shelf'} onPress={toShelf} style={{ flex: 1 }} variant={onShelf ? 'outline' : 'honey'} />
+          <Button label={onShelf ? 'На полке' : 'На полку'} icon={onShelf ? 'check' : 'shelf'} onPress={toShelf} style={{ flex: 1 }} variant={onShelf ? 'outline' : 'honey'} />
+          <Button label="Поделиться" icon="send" onPress={share} style={{ flex: 1 }} variant="outline" />
         </View>
 
-        {result.personal.length > 0 ? (
-          <View style={styles.personal}>
-            <View style={styles.personalHead}>
-              <Icon name="user" size={15} color={colors.sageDeep} />
-              <Text style={styles.personalTitle}>Для вашей кожи</Text>
-            </View>
-            {result.personal.map((p) => (
-              <T key={p} style={{ fontSize: 14, lineHeight: 20 }}>
-                {p}
-              </T>
-            ))}
+        <View style={styles.offscreen} pointerEvents="none">
+          <View ref={card} collapsable={false}>
+            <ShareCard
+              title={scan.title}
+              score={me?.score ?? scores.overall}
+              personal={!!me}
+              label={me ? me.label : result.verdict.title}
+              scores={scores}
+              good={groups.active.slice(0, 3).map((i) => i.ing.ru)}
+              bad={groups.risk.slice(0, 3).map((i) => i.ing.ru)}
+            />
           </View>
-        ) : (
-          <Press onPress={() => router.push(user ? '/profile' : '/auth')} style={[styles.personal, styles.personalGhost]}>
-            <View style={styles.personalHead}>
-              <Icon name="user" size={15} color={colors.sageDeep} />
-              <Text style={styles.personalTitle}>Персональный разбор</Text>
-            </View>
-            <T style={{ fontSize: 14, lineHeight: 20 }}>Укажите тип кожи в кабинете — и Essola подсветит, что подходит именно вам.</T>
-          </Press>
-        )}
+        </View>
 
         <Text style={styles.section}>Состав</Text>
         <View style={{ marginBottom: 6 }}>
@@ -385,8 +451,8 @@ const styles = StyleSheet.create({
   headSub: { fontFamily: fonts.medium, fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   title: { fontFamily: fonts.display, fontSize: 19, lineHeight: 23, letterSpacing: -0.7, color: '#fff', marginTop: 4 },
   sub: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 5 },
-  ringNum: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1, color: '#fff' },
-  ringOf: { fontFamily: fonts.medium, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: -2 },
+  ringNum: { fontFamily: fonts.display, fontSize: 32, lineHeight: 36, letterSpacing: -1, color: colors.ink },
+  ringOf: { fontFamily: fonts.medium, fontSize: 11, color: 'rgba(21,23,43,0.6)', marginTop: -2 },
   verdict: { marginTop: 12, padding: 12, borderRadius: 16 },
   verdictText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18.5, color: colors.ink2 },
   tubes: { flexDirection: 'row', gap: 8, marginTop: 12 },
@@ -422,4 +488,27 @@ const styles = StyleSheet.create({
   detailLead: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 20, color: colors.ink },
   detailText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.ink2, marginTop: 6 },
   fnIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  hero: { borderRadius: 28, padding: 18, overflow: 'hidden' },
+  heroKicker: { fontFamily: fonts.medium, fontSize: 12, color: 'rgba(21,23,43,0.6)' },
+  heroTitle: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, letterSpacing: -0.6, color: colors.ink, marginTop: 4 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 14 },
+  ringWrap: { borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.55)', padding: 6 },
+  heroText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: 'rgba(21,23,43,0.78)' },
+  verdictPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: 12, height: 32, borderRadius: 99 },
+  verdictPillText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink },
+  stats: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  stat: { flex: 1, borderRadius: 18, paddingVertical: 12, alignItems: 'center', gap: 2 },
+  statN: { fontFamily: fonts.display, fontSize: 22 },
+  statL: { fontFamily: fonts.medium, fontSize: 12, color: colors.ink2 },
+  why: { marginTop: 12, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, gap: 10 },
+  whyTitle: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },
+  whyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  whyDot: { width: 9, height: 9, borderRadius: 5, marginTop: 6 },
+  whyText: { flex: 1, fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink },
+  whyDelta: { fontFamily: fonts.semibold, fontSize: 13 },
+  meCta: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 22, backgroundColor: '#F4F0FF', borderWidth: 1, borderColor: '#E4DCFF' },
+  meIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  meTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
+  meText: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 2 },
+  offscreen: { position: 'absolute', left: -2000, top: 0 },
 });
