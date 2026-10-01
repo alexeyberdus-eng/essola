@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Animated, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
 import { CompositionSummary } from '../../components/Summary';
-import { useAiSummary } from '../../lib/ai';
+import { aiAnalogs, aiEnabled, Analog, useAiSummary } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { recipeNo } from '../../components/RecipeCard';
 import { Card, FadeIn, Glow } from '../../components/silk';
@@ -37,6 +37,19 @@ export default function AnalysisScreen() {
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
   const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
   const summary = useAiSummary(result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
+  const [shop, setShop] = useState<{ busy?: boolean; list?: Analog[]; error?: boolean }>({});
+  const findAnalogs = async () => {
+    if (!result) return;
+    tap('medium');
+    setShop({ busy: true });
+    try {
+      const known = result.items.filter((i) => i.match === 'exact' || i.match === 'fuzzy');
+      const keys = [...known].sort((a, b) => b.ing.act - a.ing.act).filter((i) => i.ing.act >= 1).slice(0, 3).map((i) => i.ing.ru.toLowerCase());
+      setShop({ list: await aiAnalogs(known.map((i) => i.ing.inci), keys, local.kind) });
+    } catch {
+      setShop({ error: true });
+    }
+  };
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState<number | null>(null);
   const y = useRef(new Animated.Value(0)).current;
@@ -197,7 +210,7 @@ export default function AnalysisScreen() {
         )}
 
         <View style={styles.anHead}>
-          <Text style={styles.section}>Аналоги по составу</Text>
+          <Text style={styles.section}>Сварить похожее дома</Text>
           <Text style={styles.kicker}>{analogs.length ? `${analogs.length} рецепта` : ''}</Text>
         </View>
         {analogs.map((a, i) => (
@@ -215,6 +228,42 @@ export default function AnalysisScreen() {
             </Press>
           </FadeIn>
         ))}
+        {aiEnabled && (
+          <View style={{ marginTop: 22, gap: 10 }}>
+            <View style={styles.anHead}>
+              <Text style={styles.section}>Аналоги по составу</Text>
+              <Text style={styles.kicker}>Золотое Яблоко</Text>
+            </View>
+            {shop.list?.length ? (
+              shop.list.map((a, i) => (
+                <FadeIn key={a.url} index={i}>
+                  <Press haptic={false} onPress={() => Linking.openURL(a.url).catch(() => {})}>
+                    <Card style={styles.an}>
+                      <Ring value={a.match} size={52} stroke={4} color={a.match >= 70 ? colors.good : a.match >= 45 ? colors.violet : colors.warn} track={colors.line}>
+                        <Text style={styles.matchText}>{a.match}%</Text>
+                      </Ring>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.anTitle} numberOfLines={2}>{a.title}</Text>
+                        {!!a.common.length && <Text style={styles.anSub} numberOfLines={1}>Общее: {a.common.join(', ')}</Text>}
+                        {!!a.note && <Text style={styles.anSub} numberOfLines={2}>{a.note}</Text>}
+                      </View>
+                      <Icon name="external" size={14} color={colors.muted} />
+                    </Card>
+                  </Press>
+                </FadeIn>
+              ))
+            ) : (
+              <Press onPress={findAnalogs} disabled={shop.busy} style={styles.findBtn}>
+                {shop.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="search" size={17} color={colors.onDark} />}
+                <Text style={styles.findText}>{shop.busy ? 'Ищем аналоги…' : 'Найти аналоги по составу'}</Text>
+              </Press>
+            )}
+            {shop.list && !shop.list.length && <T v="small">Похожих товаров не нашлось — попробуйте поиск в магазинах ниже.</T>}
+            {shop.error && <T v="small" style={{ color: colors.bad }}>Не получилось выполнить поиск. Проверьте интернет и попробуйте ещё раз.</T>}
+            {!!shop.list?.length && <T v="small" style={{ color: colors.faint }}>Процент — оценка совпадения ключевых компонентов, а не точное сравнение полного состава.</T>}
+          </View>
+        )}
+
         <Card style={[styles.an, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
           <View>
             <Text style={styles.mono}>Похожие товары в магазинах</Text>
@@ -359,4 +408,7 @@ const styles = StyleSheet.create({
   fn: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, maxWidth: 100 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   detail: { paddingLeft: 32, paddingBottom: 14 },
+  matchText: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink },
+  findBtn: { height: 52, borderRadius: 18, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  findText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
 });

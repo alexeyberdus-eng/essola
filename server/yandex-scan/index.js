@@ -16,8 +16,8 @@ effects: 2–4 пункта, use: 1–3 пункта. Без медицинск�
 
 const REVIEW = `Ты косметолог-технолог. Тебе дают черновик формулы (ингредиент и доля в %). Оцени её и подскажи, как улучшить. Верни ТОЛЬКО JSON:
 {"verdict":"1–2 предложения: насколько формула рабочая и безопасная","add":[{"name":"ингредиент","pct":"0.5–1%","why":"до 12 слов"}],"reduce":[{"name":"ингредиент","to":"доля","why":"до 12 слов"}],"remove":[{"name":"ингредиент","why":"до 12 слов"}],"warn":["важное предупреждение, до 14 слов"]}
-Учитывай тип средства, сумму 100%, консервант для водных формул, эмульгатор для эмульсий, рабочие концентрации активов. Каждый список 0–3 пункта, пустой если нечего сказать. Без медицинских обещаний. /no_think`;
-const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. Если состава товара не видно, оценивай по активам и типу средства из названия и фрагмента и ставь не выше 70. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
+Внимательно определи роль каждого ингредиента (торговые названия вроде Olivem 1000 — это эмульгаторы, не советуй добавить то, что уже есть). Учитывай тип средства, сумму 100%, консервант для водных формул, эмульгатор для эмульсий, рабочие концентрации активов. Каждый список 0–3 пункта, пустой если нечего сказать. Без медицинских обещаний. /no_think`;
+const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
 {"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
 Максимум 5 товаров, по убыванию match. /no_think`;
 const SEARCH_URL = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
@@ -83,7 +83,7 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
-      const out = await chat(process.env.REVIEW_MODEL || textModel, [{ role: 'system', content: REVIEW }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 900);
+      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'system', content: REVIEW }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 900);
       return reply(200, out);
     }
     if (req.mode === 'analogs') {
@@ -95,10 +95,13 @@ module.exports.handler = async (event, context) => {
         .slice(0, 8);
       console.log('analogs docs:', docs.length);
       if (!docs.length) return reply(200, { items: [] });
+      // Without the product's own ingredient list in the snippet a match can only be partial.
+      const lower = (req.ingredients || []).map((i) => String(i).toLowerCase());
+      const seen = (d) => !!d && lower.filter((i) => `${d.title} ${d.text}`.toLowerCase().includes(i)).length >= Math.min(5, lower.length);
       const found = docs.map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n');
-      const out = await chat(textModel, [{ role: 'system', content: ANALOGS }, { role: 'user', content: `Состав пользователя: ${list}\nТовары:\n${found}` }], 700);
+      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'system', content: ANALOGS }, { role: 'user', content: `Состав пользователя: ${list}\nТовары:\n${found}` }], 700);
       const items = (Array.isArray(out.items) ? out.items : [])
-        .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(100, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
+        .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(seen(docs[(x.n | 0) - 1]) ? 100 : 75, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
         .filter((x) => x.url && x.match >= 20)
         .sort((a, b) => b.match - a.match)
         .slice(0, 5)

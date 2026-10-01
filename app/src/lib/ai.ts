@@ -66,3 +66,28 @@ function hash(s: string) {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
 }
+
+/** Calls the server once per input and keeps the answer on the device. */
+async function cached<T>(tag: string, body: object): Promise<T> {
+  const k = `ai:${tag}:${hash(JSON.stringify(body))}`;
+  const hit = await readJSON<T | null>(k, null);
+  if (hit) return hit;
+  const data = await call<T>(body);
+  writeJSON(k, data);
+  return data;
+}
+
+export type Review = {
+  verdict?: string;
+  add?: { name: string; pct?: string; why?: string }[];
+  reduce?: { name: string; to?: string; why?: string }[];
+  remove?: { name: string; why?: string }[];
+  warn?: string[];
+};
+/** Technologist's advice on a builder formula ("Aqua 70%", …). */
+export const aiReview = (items: string[], kind: string) => cached<Review>('review', { mode: 'review', items, kind });
+
+export type Analog = { title: string; url: string; match: number; common: string[]; note: string };
+/** Gold Apple products with a similar composition, with an estimated match %. */
+export const aiAnalogs = async (ingredients: string[], keys: string[], kind: string) =>
+  (await cached<{ items?: Analog[] }>('analogs', { mode: 'analogs', ingredients, keys, kind })).items ?? [];

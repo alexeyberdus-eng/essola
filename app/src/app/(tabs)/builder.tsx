@@ -1,17 +1,17 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, LayoutAnimation, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, LayoutAnimation, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { CompositionSummary } from '../../components/Summary';
-import { useAiSummary } from '../../lib/ai';
+import { aiEnabled, aiReview, Review } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_LABEL, INGREDIENTS } from '../../data/ingredients';
 import { normalize } from '../../lib/analyze';
-import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, preset, setDraft, total } from '../../lib/builder';
+import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, setDraft, total } from '../../lib/builder';
 import { colors, fonts, PHASE_COLOR, shadow, space, TAB_SPACE } from '../../theme';
 
 const VOLUMES = [30, 50, 100, 200];
@@ -26,7 +26,8 @@ const KIND_USE: Record<Kind, string> = {
 export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<Kind>('cream');
-  const [items, setItems] = useState<Item[]>(() => preset('cream'));
+  const [items, setItems] = useState<Item[]>([]);
+  const [review, setReview] = useState<{ sig: string; data?: Review; busy?: boolean; error?: boolean } | null>(null);
   const [volume, setVolume] = useState(50);
   const [picker, setPicker] = useState(false);
   const [drop, setDrop] = useState(0);
@@ -41,8 +42,20 @@ export default function BuilderScreen() {
     const s = summarize(prediction.items.map((i) => i.ing), k.label);
     return { ...s, use: [KIND_USE[kind], ...s.use.slice(1)] };
   }, [prediction, kind]);
-  // AI text after the user pauses editing, so sliders don't fire a request per step.
-  const summary = useAiSummary(items.map((i) => `${i.inci || i.name} ${i.pct}%`), local.kind, local, 1200);
+  const summary = local;
+  const formula = items.map((i) => `${i.inci || i.name} ${i.pct}%`);
+  const sig = `${kind}|${formula.join(',')}`;
+  const shown = review?.sig === sig ? review : null;
+  const askReview = async () => {
+    tap('medium');
+    setReview({ sig, busy: true });
+    try {
+      const data = await aiReview(formula, local.kind);
+      setReview({ sig, data });
+    } catch {
+      setReview({ sig, error: true });
+    }
+  };
   const layers = phaseSums(items);
 
   const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'));
@@ -50,7 +63,6 @@ export default function BuilderScreen() {
     tap();
     animate();
     setKind(k);
-    setItems(preset(k));
   };
   const change = (key: string, delta: number) => {
     tap();
@@ -96,7 +108,7 @@ export default function BuilderScreen() {
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 70 }} keyboardShouldPersistTaps="handled">
         <View style={styles.top}>
           <Text style={styles.h1}>Конструктор</Text>
-          <IconButton icon="history" label="Сбросить" onPress={() => choose(kind)} />
+          {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
         </View>
         <Text style={styles.kicker}>Новая формула · {KINDS.find((k) => k.key === kind)?.label}</Text>
 
@@ -108,6 +120,17 @@ export default function BuilderScreen() {
           ))}
         </ScrollView>
 
+        {!items.length && (
+          <FadeIn>
+            <Card style={styles.empty}>
+              <Text style={styles.emptyTitle}>Соберите свою формулу</Text>
+              <Text style={styles.emptyText}>Найдите ингредиенты через поиск и задайте доли. Мы сразу опишем, что даст средство, а технолог подскажет, что добавить или убавить.</Text>
+              <Button label="Найти ингредиент" icon="search" onPress={() => setPicker(true)} />
+            </Card>
+          </FadeIn>
+        )}
+
+        {items.length > 0 && (
         <DarkBlock style={styles.lab}>
           <View style={styles.labRow}>
             <Flask layers={layers} size={118} dropKey={drop} dropColor={dropColor} />
@@ -149,8 +172,23 @@ export default function BuilderScreen() {
             ))}
           </View>
         </DarkBlock>
+        )}
 
-        <CompositionSummary s={summary} title="Что даст эта формула" />
+        {items.length > 0 && <CompositionSummary s={summary} title="Что даст эта формула" />}
+
+        {items.length > 1 && aiEnabled && (
+          <View style={{ marginTop: 12 }}>
+            {shown?.data ? (
+              <ReviewCard r={shown.data} />
+            ) : (
+              <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
+                {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
+                <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : 'Получить оценку технолога'}</Text>
+              </Press>
+            )}
+            {shown?.error && <Text style={styles.reviewErr}>Не получилось связаться. Проверьте интернет и нажмите ещё раз.</Text>}
+          </View>
+        )}
 
         {PHASE_ORDER.map((ph) => {
           const rows = items.filter((i) => i.phase === ph);
@@ -185,18 +223,63 @@ export default function BuilderScreen() {
           );
         })}
 
+        {items.length > 0 && (
         <Press onPress={() => setPicker(true)} style={styles.addBtn}>
           <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
           <Text style={styles.addText}>Добавить ингредиент</Text>
         </Press>
+        )}
       </ScrollView>
 
-      <View style={[styles.saveBar, { bottom: TAB_SPACE - 36 }]}>
-        <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ flex: 1 }} />
-      </View>
+      {items.length > 0 && (
+        <View style={[styles.saveBar, { bottom: TAB_SPACE - 36 }]}>
+          <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ flex: 1 }} />
+        </View>
+      )}
 
       <Picker visible={picker} onClose={() => setPicker(false)} onPick={add} />
     </View>
+  );
+}
+
+/** The technologist's verdict and what to add, reduce or remove. */
+function ReviewCard({ r }: { r: Review }) {
+  const groups: [string, string, { name: string; note: string }[]][] = [
+    ['plus', 'Добавить', (r.add ?? []).map((x) => ({ name: `${x.name}${x.pct ? ` · ${x.pct}` : ''}`, note: x.why ?? '' }))],
+    ['minus', 'Убавить', (r.reduce ?? []).map((x) => ({ name: `${x.name}${x.to ? ` → ${x.to}` : ''}`, note: x.why ?? '' }))],
+    ['close', 'Убрать', (r.remove ?? []).map((x) => ({ name: x.name, note: x.why ?? '' }))],
+  ];
+  return (
+    <FadeIn>
+      <Card style={styles.review}>
+        <Text style={styles.reviewKicker}>Оценка технолога</Text>
+        {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
+        {groups.map(([icon, title, list]) =>
+          list.length ? (
+            <View key={title} style={{ gap: 8 }}>
+              <Text style={styles.reviewGroup}>{title}</Text>
+              {list.map((x) => (
+                <View key={x.name} style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Icon name={icon as 'plus'} size={13} color={colors.violet} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reviewName}>{x.name}</Text>
+                    {!!x.note && <Text style={styles.reviewNote}>{x.note}</Text>}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null,
+        )}
+        {(r.warn ?? []).map((w) => (
+          <View key={w} style={styles.reviewWarn}>
+            <Icon name="alert" size={14} color={colors.warn} />
+            <Text style={styles.reviewWarnText}>{w}</Text>
+          </View>
+        ))}
+      </Card>
+    </FadeIn>
   );
 }
 
@@ -307,6 +390,22 @@ const styles = StyleSheet.create({
   g: { width: 58, textAlign: 'right', fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink2 },
   addBtn: { marginTop: 10, height: 46, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D9D2EC', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   addText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink2 },
+  empty: { marginTop: 14, padding: 18, gap: 10 },
+  emptyTitle: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.5, color: colors.ink },
+  emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginBottom: 4 },
+  reviewBtn: { height: 52, borderRadius: 18, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  reviewBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
+  reviewErr: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.bad, marginTop: 8, textAlign: 'center' },
+  review: { padding: 16, gap: 12 },
+  reviewKicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.violet },
+  reviewLead: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, color: colors.ink },
+  reviewGroup: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
+  reviewRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  reviewIcon: { width: 24, height: 24, borderRadius: 8, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  reviewName: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  reviewNote: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 1 },
+  reviewWarn: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: 12, backgroundColor: colors.warnSoft },
+  reviewWarnText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: colors.warn },
   saveBar: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row' },
   pHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter },
   pTitle: { fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.8, color: colors.ink },

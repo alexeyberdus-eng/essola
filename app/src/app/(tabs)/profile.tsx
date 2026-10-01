@@ -1,19 +1,19 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '../../components/Icon';
-import { RecipeRow } from '../../components/RecipeRow';
+import { Icon, IconName } from '../../components/Icon';
+import { RecipeCard } from '../../components/RecipeCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountUp, FadeIn, Glow } from '../../components/silk';
-import { Button, LinkText, Press, SectionHead, T, Tag } from '../../components/ui';
-import { useCommunity } from '../../context/CommunityContext';
+import { Button, IconButton, LinkText, Press } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { daysLeft, ShelfItem, useUserContent } from '../../context/UserContentContext';
 import { DarkBlock, Ring } from '../../components/lab';
 import { RECIPES } from '../../data/recipes';
 import type { SkinType } from '../../lib/analyze';
-import { colors, fonts, radius, scoreColor, shadow, space, TAB_SPACE } from '../../theme';
+import { colors, fonts, GRADIENT, scoreColor, shadow, space, TAB_SPACE } from '../../theme';
 
 const SKIN: { id: SkinType; label: string }[] = [
   { id: 'normal', label: 'Нормальная' },
@@ -23,137 +23,131 @@ const SKIN: { id: SkinType; label: string }[] = [
   { id: 'sensitive', label: 'Чувствительная' },
 ];
 
+type TabKey = 'fav' | 'history' | 'shelf' | 'mine';
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, updateProfile, signOut } = useAuth();
   const { liked, scans } = useLibrary();
-  const { myRecipes } = useUserContent();
+  const { myRecipes, shelf } = useUserContent();
   const favourites = RECIPES.filter((r) => liked.has(r.id));
-  const since = user ? new Date(user.since).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) : '—';
+  const [tab, setTab] = useState<TabKey>('fav');
   const initial = (user?.name || user?.email || 'E').slice(0, 1).toUpperCase();
+  const tabs: { key: TabKey; label: string; n: number }[] = [
+    { key: 'fav', label: 'Избранное', n: favourites.length },
+    { key: 'history', label: 'История', n: scans.length },
+    { key: 'shelf', label: 'Полка', n: shelf.length },
+    { key: 'mine', label: 'Мои рецепты', n: myRecipes.length },
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-    <Glow />
-    <ScrollView
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE, gap: space.xxl }}
-    >
-      <View style={{ gap: 14 }}>
-        <T v="title">Кабинет</T>
-        {user ? (
+      <Glow />
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE }}>
+        <View style={styles.top}>
+          <Text style={styles.h1}>Кабинет</Text>
+          {user && <IconButton icon="logout" label="Выйти" onPress={signOut} />}
+        </View>
+
+        <LinearGradient colors={['#FFC2A8', '#E9D2FF', '#AFCBFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.frame}>
           <View style={styles.card}>
-            <View style={styles.idRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initial}</Text>
-              </View>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {user.name || user.email?.split('@')[0] || 'Моя лаборатория'}
-                </Text>
-                <T v="small" numberOfLines={1}>
-                  {user.email ?? 'Почта скрыта через Apple'}
-                </T>
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                  <Tag label={user.provider === 'apple' ? 'Apple ID' : 'Почта'} tone="honey" />
-                  {user.local && <Tag label="На этом устройстве" />}
+            {user ? (
+              <View style={styles.idRow}>
+                <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initial}</Text>
+                </LinearGradient>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {user.name || user.email?.split('@')[0] || 'Моя лаборатория'}
+                  </Text>
+                  <Text style={styles.mail} numberOfLines={1}>
+                    {user.email ?? 'Почта скрыта через Apple'}
+                  </Text>
                 </View>
               </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                <Text style={styles.name}>Сохраните свою лабораторию</Text>
+                <Text style={styles.mail}>Войдите — избранное, история сканов и тип кожи будут с вами на любом устройстве.</Text>
+                <Button label="Войти или создать аккаунт" onPress={() => router.push('/auth')} />
+              </View>
+            )}
+            <View style={styles.stats}>
+              {([[liked.size, 'избранное'], [scans.length, 'проверок'], [myRecipes.length, 'рецептов']] as const).map(([v, k], i) => (
+                <View key={k} style={[styles.stat, i > 0 && styles.statLine]}>
+                  <CountUp value={v} style={styles.statValue} />
+                  <Text style={styles.statLabel}>{k}</Text>
+                </View>
+              ))}
             </View>
-            <Stats liked={liked.size} scans={scans.length} since={since} />
           </View>
-        ) : (
-          <View style={[styles.card, { gap: 14 }]}>
-            <T v="heading">Сохраните свою лабораторию</T>
-            <T style={{ fontSize: 14, lineHeight: 20 }}>Войдите через Apple ID или почту — избранное, история сканов и тип кожи будут с вами.</T>
-            <Button label="Войти или создать аккаунт" onPress={() => router.push('/auth')} />
-            <Stats liked={liked.size} scans={scans.length} />
+        </LinearGradient>
+
+        {user && (
+          <View style={styles.skin}>
+            <Text style={styles.label}>Тип кожи · для персональных подсказок</Text>
+            <View style={styles.chips}>
+              {SKIN.map((sk) => {
+                const on = user.skinType === sk.id;
+                return (
+                  <Press key={sk.id} onPress={() => updateProfile({ skinType: on ? null : sk.id })} style={[styles.chip, on && styles.chipOn]}>
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{sk.label}</Text>
+                  </Press>
+                );
+              })}
+            </View>
           </View>
         )}
-      </View>
 
-      {user && (
-        <FadeIn index={1} style={styles.skin}>
-          <LinearGradient colors={['#E7E9DC', '#F7F4EC', '#E9E0CC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />
-          <SectionHead kicker="Профиль кожи · для персональных подсказок" title="Тип кожи" />
-          <View style={styles.chips}>
-            {SKIN.map((s) => {
-              const on = user.skinType === s.id;
-              return (
-                <Press key={s.id} onPress={() => updateProfile({ skinType: on ? null : s.id })} style={[styles.chip, on && styles.chipOn]}>
-                  <Text style={[styles.chipText, on && { color: colors.onDark, fontFamily: fonts.semibold }]}>{s.label}</Text>
-                </Press>
-              );
-            })}
-          </View>
-        </FadeIn>
-      )}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 22 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
+          {tabs.map((t) => {
+            const on = tab === t.key;
+            return (
+              <Press key={t.key} onPress={() => setTab(t.key)} style={[styles.tab, on && styles.chipOn]}>
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{t.label}</Text>
+                {t.n > 0 && <Text style={[styles.tabN, on && { color: colors.onDarkMuted }]}>{t.n}</Text>}
+              </Press>
+            );
+          })}
+        </ScrollView>
 
-      <Shelf />
-
-      {myRecipes.length > 0 && (
-        <View>
-          <SectionHead kicker="Мои формулы" title="Мои рецепты" right={<T v="label">{myRecipes.length}</T>} />
-          {myRecipes.map((r, i) => (
-            <RecipeRow key={r.id} recipe={r} last={i === myRecipes.length - 1} />
-          ))}
+        <View style={{ marginTop: 14 }}>
+          {tab === 'fav' &&
+            (favourites.length ? (
+              favourites.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)
+            ) : (
+              <Empty icon="heart" text="Отмечайте рецепты сердцем — они соберутся здесь." cta="К рецептам" onPress={() => router.navigate('/')} />
+            ))}
+          {tab === 'history' &&
+            (scans.length ? (
+              scans.map((sc, i) => (
+                <FadeIn key={sc.id} index={i}>
+                  <Press haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.scan}>
+                    <View style={[styles.score, { backgroundColor: scoreColor(sc.overall) }]}>
+                      <Text style={styles.scoreText}>{sc.overall}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.scanTitle} numberOfLines={1}>
+                        {sc.title}
+                      </Text>
+                      <Text style={styles.mail}>{new Date(sc.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</Text>
+                    </View>
+                    <Icon name="arrowRight" size={16} color={colors.muted} />
+                  </Press>
+                </FadeIn>
+              ))
+            ) : (
+              <Empty icon="scan" text="Сфотографируйте состав любого средства — здесь появится история проверок." cta="Открыть сканер" onPress={() => router.navigate('/scanner')} />
+            ))}
+          {tab === 'shelf' && <Shelf />}
+          {tab === 'mine' &&
+            (myRecipes.length ? (
+              myRecipes.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)
+            ) : (
+              <Empty icon="flask" text="Соберите формулу в конструкторе и сохраните — она появится здесь." cta="В конструктор" onPress={() => router.navigate('/builder')} />
+            ))}
         </View>
-      )}
-
-      <View>
-        <SectionHead kicker="Коллекция" title="Избранные формулы" right={<T v="label">{favourites.length}</T>} />
-        {favourites.length ? (
-          favourites.map((r, i) => <RecipeRow key={r.id} recipe={r} last={i === favourites.length - 1} />)
-        ) : (
-          <Empty text="Отмечайте формулы сердцем — они соберутся здесь." cta="К формулам" onPress={() => router.navigate('/')} />
-        )}
-      </View>
-
-      <View>
-        <SectionHead kicker="Сканер" title="История проверок" right={<T v="label">{scans.length}</T>} />
-        {scans.length ? (
-          scans.map((s) => (
-            <Press key={s.id} haptic={false} onPress={() => router.push(`/analysis/${s.id}`)} style={styles.scan}>
-              <View style={[styles.score, { backgroundColor: scoreColor(s.overall) }]}>
-                <Text style={styles.scoreText}>{s.overall}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.scanTitle} numberOfLines={1}>
-                  {s.title}
-                </Text>
-                <T v="small">{new Date(s.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</T>
-              </View>
-              <Icon name="arrowRight" size={16} color={colors.muted} />
-            </Press>
-          ))
-        ) : (
-          <Empty text="Сфотографируйте состав любого средства — здесь появится история." cta="Открыть сканер" onPress={() => router.navigate('/scanner')} />
-        )}
-      </View>
-
-      {user && <Button label="Выйти" icon="logout" variant="outline" onPress={signOut} />}
-    </ScrollView>
-    </View>
-  );
-}
-
-function Stats({ liked, scans }: { liked: number; scans: number; since?: string }) {
-  const { mineCount } = useCommunity();
-  const { myRecipes } = useUserContent();
-  const cells: [number, string][] = [
-    [liked, 'Избранное'],
-    [scans, 'Проверок'],
-    [myRecipes.length || mineCount, myRecipes.length ? 'Мои рецепты' : 'Комментариев'],
-  ];
-  return (
-    <View style={styles.stats}>
-      {cells.map(([v, k], i) => (
-        <View key={k} style={[styles.stat, i > 0 && { borderLeftWidth: 1, borderColor: colors.line }]}>
-          <CountUp value={v} style={styles.statValue} />
-          <T v="label" style={{ fontSize: 9.5 }}>
-            {k}
-          </T>
-        </View>
-      ))}
+      </ScrollView>
     </View>
   );
 }
@@ -162,7 +156,10 @@ function Shelf() {
   const { shelf, conflicts, removeFromShelf } = useUserContent();
   return (
     <View>
-      <SectionHead kicker="Сроки и совместимость" title="Моя полка" right={<LinkText label="Добавить" onPress={() => router.push('/shelf-add')} />} />
+      <View style={styles.shelfHead}>
+        <Text style={styles.label}>Сроки годности и совместимость</Text>
+        <LinkText label="Добавить" onPress={() => router.push('/shelf-add')} />
+      </View>
       {conflicts.map((c) => (
         <DarkBlock key={c.a.id + c.b.id} style={styles.conflict}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -185,7 +182,7 @@ function Shelf() {
           ))}
         </View>
       ) : (
-        <Empty text="Добавьте свои средства: Essola напомнит о сроке годности и предупредит, что нельзя смешивать." cta="Сканер" onPress={() => router.navigate("/scanner")} />
+        <Empty icon="shelf" text="Добавьте свои средства — напомним о сроке годности и предупредим, что нельзя наносить вместе." cta="Добавить" onPress={() => router.push('/shelf-add')} />
       )}
     </View>
   );
@@ -214,31 +211,54 @@ function ShelfCard({ item, onRemove }: { item: ShelfItem; onRemove: () => void }
   );
 }
 
-function Empty({ text, cta, onPress }: { text: string; cta: string; onPress: () => void }) {
+function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta: string; onPress: () => void }) {
   return (
     <View style={styles.empty}>
-      <T v="small" style={{ flex: 1 }}>
-        {text}
-      </T>
-      <LinkText label={cta} onPress={onPress} />
+      <View style={styles.emptyIcon}>
+        <Icon name={icon} size={22} color={colors.violet} />
+      </View>
+      <Text style={styles.emptyText}>{text}</Text>
+      <Press onPress={onPress} style={styles.emptyBtn}>
+        <Text style={styles.emptyBtnText}>{cta}</Text>
+      </Press>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', padding: 18, gap: 16, ...shadow },
-  skin: { gap: 12, padding: 18, borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', overflow: 'hidden' },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
+  h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
+  frame: { marginTop: 10, borderRadius: 26, padding: 1.5 },
+  card: { borderRadius: 24.5, backgroundColor: 'rgba(255,255,255,0.96)', padding: 18, gap: 16 },
   idRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: { width: 62, height: 62, borderRadius: 22, backgroundColor: colors.olive, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: fonts.display, fontSize: 26, color: colors.brassLight },
-  name: { fontFamily: fonts.semibold, fontSize: 19, letterSpacing: -0.5, color: colors.ink },
+  avatar: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: fonts.display, fontSize: 24, color: colors.ink },
+  name: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.5, color: colors.ink },
+  mail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
   stats: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.line, paddingTop: 14 },
-  stat: { flex: 1, alignItems: 'center', gap: 3 },
-  statValue: { fontFamily: fonts.semibold, fontSize: 22, lineHeight: 26, letterSpacing: -0.6, color: colors.ink },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statLine: { borderLeftWidth: 1, borderColor: colors.line },
+  statValue: { fontFamily: fonts.display, fontSize: 22, lineHeight: 26, letterSpacing: -0.6, color: colors.ink },
+  statLabel: { fontFamily: fonts.medium, fontSize: 11.5, color: colors.muted },
+  skin: { marginTop: 18, gap: 10 },
+  label: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.olive },
+  chip: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.ink },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
+  chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
+  tab: { height: 38, paddingHorizontal: 15, borderRadius: 99, backgroundColor: colors.surf, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tabN: { fontFamily: fonts.monoMedium, fontSize: 11.5, color: colors.muted },
+  shelfHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  scan: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 8, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, ...shadow },
+  score: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  scoreText: { fontFamily: fonts.monoMedium, fontSize: 14, color: '#fff' },
+  scanTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  empty: { alignItems: 'center', gap: 10, paddingVertical: 28, paddingHorizontal: 24, borderRadius: 24, backgroundColor: colors.surf },
+  emptyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, textAlign: 'center' },
+  emptyBtn: { marginTop: 4, height: 40, paddingHorizontal: 18, borderRadius: 99, backgroundColor: colors.ink, justifyContent: 'center' },
+  emptyBtnText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.onDark },
   conflict: { padding: 14, marginTop: 10 },
   conflictTitle: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 18, color: colors.onDark },
   conflictText: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: 'rgba(239,235,224,0.72)', marginTop: 3 },
@@ -250,9 +270,4 @@ const styles = StyleSheet.create({
   shelfKind: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted, marginTop: 8 },
   shelfName: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 17, color: colors.ink, marginTop: 2 },
   shelfLeft: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 3 },
-  scan: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderColor: colors.line },
-  score: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  scoreText: { fontFamily: fonts.monoMedium, fontSize: 14, color: '#fff' },
-  scanTitle: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
-  empty: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.line },
 });
