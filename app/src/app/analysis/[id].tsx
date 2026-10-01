@@ -349,7 +349,8 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
       </Press>
       {open && (
         <View style={styles.detail}>
-          <T style={{ fontSize: 14, lineHeight: 20 }}>{ing.note}</T>
+          <Text style={styles.detailLead}>{ing.note}</Text>
+          {!!ing.about && <Text style={styles.detailText}>{ing.about}</Text>}
           <View style={styles.tags}>
             {ing.fn.map((f) => (
               <Tag key={f} label={FN_LABEL[f]} />
@@ -411,4 +412,6 @@ const styles = StyleSheet.create({
   matchText: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink },
   findBtn: { height: 52, borderRadius: 18, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   findText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
+  detailLead: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 20, color: colors.ink },
+  detailText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.ink2, marginTop: 6 },
 });

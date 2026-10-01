@@ -7,8 +7,8 @@ import { RecipeCard } from '../../components/RecipeCard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountUp, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, LinkText, Press } from '../../components/ui';
-import { useAuth } from '../../context/AuthContext';
-import { useLibrary } from '../../context/LibraryContext';
+import { HairType, useAuth } from '../../context/AuthContext';
+import { SavedScan, useLibrary } from '../../context/LibraryContext';
 import { daysLeft, ShelfItem, useUserContent } from '../../context/UserContentContext';
 import { DarkBlock, Ring } from '../../components/lab';
 import { RECIPES } from '../../data/recipes';
@@ -23,7 +23,17 @@ const SKIN: { id: SkinType; label: string }[] = [
   { id: 'sensitive', label: 'Чувствительная' },
 ];
 
-type TabKey = 'fav' | 'history' | 'shelf' | 'mine';
+const HAIR: { id: HairType; label: string }[] = [
+  { id: 'normal', label: 'Нормальные' },
+  { id: 'dry', label: 'Сухие' },
+  { id: 'oily', label: 'Жирные у корней' },
+  { id: 'colored', label: 'Окрашенные' },
+  { id: 'damaged', label: 'Повреждённые' },
+  { id: 'thin', label: 'Тонкие' },
+  { id: 'curly', label: 'Кудрявые' },
+];
+
+type TabKey = 'recipes' | 'scans' | 'shelf';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -31,13 +41,12 @@ export default function ProfileScreen() {
   const { liked, scans } = useLibrary();
   const { myRecipes, shelf } = useUserContent();
   const favourites = RECIPES.filter((r) => liked.has(r.id));
-  const [tab, setTab] = useState<TabKey>('fav');
+  const [tab, setTab] = useState<TabKey>('recipes');
   const initial = (user?.name || user?.email || 'E').slice(0, 1).toUpperCase();
   const tabs: { key: TabKey; label: string; n: number }[] = [
-    { key: 'fav', label: 'Избранное', n: favourites.length },
-    { key: 'history', label: 'История', n: scans.length },
+    { key: 'recipes', label: 'Мои рецепты', n: favourites.length + myRecipes.length },
+    { key: 'scans', label: 'Мои сканы', n: scans.length },
     { key: 'shelf', label: 'Полка', n: shelf.length },
-    { key: 'mine', label: 'Мои рецепты', n: myRecipes.length },
   ];
 
   return (
@@ -73,7 +82,7 @@ export default function ProfileScreen() {
               </View>
             )}
             <View style={styles.stats}>
-              {([[liked.size, 'избранное'], [scans.length, 'проверок'], [myRecipes.length, 'рецептов']] as const).map(([v, k], i) => (
+              {([[liked.size + myRecipes.length, 'рецептов'], [scans.length, 'сканов'], [shelf.length, 'на полке']] as const).map(([v, k], i) => (
                 <View key={k} style={[styles.stat, i > 0 && styles.statLine]}>
                   <CountUp value={v} style={styles.statValue} />
                   <Text style={styles.statLabel}>{k}</Text>
@@ -96,6 +105,17 @@ export default function ProfileScreen() {
                 );
               })}
             </View>
+            <Text style={[styles.label, { marginTop: 8 }]}>Тип волос · можно выбрать несколько</Text>
+            <View style={styles.chips}>
+              {HAIR.map((h) => {
+                const on = user.hair.includes(h.id);
+                return (
+                  <Press key={h.id} onPress={() => updateProfile({ hair: on ? user.hair.filter((x) => x !== h.id) : [...user.hair, h.id] })} style={[styles.chip, on && styles.chipOn]}>
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{h.label}</Text>
+                  </Press>
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -112,42 +132,79 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <View style={{ marginTop: 14 }}>
-          {tab === 'fav' &&
-            (favourites.length ? (
-              favourites.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)
+          {tab === 'recipes' &&
+            (favourites.length || myRecipes.length ? (
+              <>
+                {myRecipes.length > 0 && <Text style={styles.group}>Мои формулы</Text>}
+                {myRecipes.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)}
+                {favourites.length > 0 && <Text style={styles.group}>Сохранённые</Text>}
+                {favourites.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i + 1} />)}
+              </>
             ) : (
-              <Empty icon="heart" text="Отмечайте рецепты сердцем — они соберутся здесь." cta="К рецептам" onPress={() => router.navigate('/')} />
+              <Empty icon="heart" text="Отмечайте рецепты сердцем или соберите свою формулу в конструкторе — всё будет здесь." cta="К рецептам" onPress={() => router.navigate('/')} />
             ))}
-          {tab === 'history' &&
+          {tab === 'scans' &&
             (scans.length ? (
-              scans.map((sc, i) => (
-                <FadeIn key={sc.id} index={i}>
-                  <Press haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.scan}>
-                    <View style={[styles.score, { backgroundColor: scoreColor(sc.overall) }]}>
-                      <Text style={styles.scoreText}>{sc.overall}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.scanTitle} numberOfLines={1}>
-                        {sc.title}
-                      </Text>
-                      <Text style={styles.mail}>{new Date(sc.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</Text>
-                    </View>
-                    <Icon name="arrowRight" size={16} color={colors.muted} />
-                  </Press>
-                </FadeIn>
-              ))
+              <ScanHistory scans={scans} />
             ) : (
-              <Empty icon="scan" text="Сфотографируйте состав любого средства — здесь появится история проверок." cta="Открыть сканер" onPress={() => router.navigate('/scanner')} />
+              <Empty icon="scan" text="Сфотографируйте состав любого средства — здесь появятся ваши сканы." cta="Открыть сканер" onPress={() => router.navigate('/scanner')} />
             ))}
           {tab === 'shelf' && <Shelf />}
-          {tab === 'mine' &&
-            (myRecipes.length ? (
-              myRecipes.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)
-            ) : (
-              <Empty icon="flask" text="Соберите формулу в конструкторе и сохраните — она появится здесь." cta="В конструктор" onPress={() => router.navigate('/builder')} />
-            ))}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+const VERDICT = (v: number) => (v >= 80 ? 'Отличный состав' : v >= 60 ? 'Хороший состав' : v >= 40 ? 'Есть вопросы' : 'Много спорного');
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const diff = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
+  if (diff === 0) return 'Сегодня';
+  if (diff === 1) return 'Вчера';
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+}
+
+/** Scans grouped by day: score ring, name, verdict and how it was scanned. */
+function ScanHistory({ scans }: { scans: SavedScan[] }) {
+  const groups: { day: string; list: SavedScan[] }[] = [];
+  for (const sc of scans) {
+    const day = dayLabel(sc.createdAt);
+    const g = groups[groups.length - 1];
+    if (g?.day === day) g.list.push(sc);
+    else groups.push({ day, list: [sc] });
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      {groups.map((g) => (
+        <View key={g.day} style={{ gap: 8 }}>
+          <Text style={styles.group}>{g.day}</Text>
+          {g.list.map((sc, i) => (
+            <FadeIn key={sc.id} index={i}>
+              <Press haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.scanCard}>
+                <Ring value={sc.overall} size={54} stroke={4.5} color={scoreColor(sc.overall)} track={colors.line}>
+                  <Text style={styles.ringScore}>{sc.overall}</Text>
+                </Ring>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={styles.scanTitle} numberOfLines={2}>
+                    {sc.title}
+                  </Text>
+                  <Text style={[styles.verdict, { color: scoreColor(sc.overall) }]}>{VERDICT(sc.overall)}</Text>
+                  <View style={styles.scanMeta}>
+                    <Icon name={sc.barcode ? 'barcode' : 'camera'} size={12} color={colors.muted} />
+                    <Text style={styles.mail}>
+                      {sc.barcode ? 'По штрихкоду' : 'По фото состава'} · {new Date(sc.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+                <Icon name="arrowRight" size={16} color={colors.faint} />
+              </Press>
+            </FadeIn>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -226,6 +283,11 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  group: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 10, marginBottom: 4 },
+  scanCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, ...shadow },
+  ringScore: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },
+  verdict: { fontFamily: fonts.semibold, fontSize: 12.5 },
+  scanMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
   frame: { marginTop: 10, borderRadius: 26, padding: 1.5 },

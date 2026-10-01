@@ -1,3 +1,7 @@
+import { ABOUT } from './ingredients-about';
+import { EXTRA } from './ingredients-more';
+import { EXTRA2 } from './ingredients-more2';
+import { EXTRA3 } from './ingredients-more3';
 export type Origin = 'natural' | 'mineral' | 'identical' | 'synthetic';
 
 export type Fn =
@@ -45,6 +49,8 @@ export type Ingredient = {
   com: number;
   flags: Flag[];
   note: string;
+  /** Longer plain-language explanation shown when an ingredient is expanded. */
+  about?: string;
   aliases: string[];
 };
 
@@ -95,7 +101,7 @@ function d(inci: string, ru: string, fn: Fn[], origin: Origin, risk: Ingredient[
   return { inci, ru, fn, origin, risk, note, act: extra.act ?? 0, com: extra.com ?? 0, flags: extra.flags ?? [], aliases: extra.aliases ?? [] };
 }
 
-export const INGREDIENTS: Ingredient[] = [
+const CORE: Ingredient[] = [
   // Основы и растворители
   d('Aqua', 'Вода', ['base'], 'natural', 0, 'Основа большинства кремов и тоников, растворяет водорастворимые компоненты.', { aliases: ['water', 'eau', 'вода', 'aqua/water', 'purified water'] }),
   d('Aloe Barbadensis Leaf Juice', 'Сок алоэ вера', ['base', 'soothing', 'humectant'], 'natural', 0, 'Успокаивает, увлажняет и охлаждает кожу.', { act: 1, aliases: ['aloe vera', 'aloe barbadensis leaf extract', 'aloe barbadensis gel', 'алоэ'] }),
@@ -306,3 +312,11 @@ export const INGREDIENTS: Ingredient[] = [
   d('Mica', 'Слюда', ['colorant'], 'mineral', 0, 'Минерал для сияния.', { aliases: ['ci 77019'] }),
   d('Iron Oxides', 'Оксиды железа', ['colorant'], 'mineral', 0, 'Минеральные пигменты.', { aliases: ['ci 77491', 'ci 77492', 'ci 77499'] }),
 ];
+
+const coreInci = new Set(CORE.map((i) => i.inci.toLowerCase()));
+/** One shared base for the scanner, builder, glossary and ingredient pages. */
+export const INGREDIENTS: Ingredient[] = [
+  ...CORE.map((i) => ({ ...i, about: i.about ?? ABOUT[i.inci] })),
+  ...[...EXTRA, ...EXTRA2, ...EXTRA3].filter((i) => !coreInci.has(i.inci.toLowerCase())),
+];
+

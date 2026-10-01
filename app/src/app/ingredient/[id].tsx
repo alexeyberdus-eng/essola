@@ -30,6 +30,7 @@ export default function IngredientScreen() {
           <Text style={styles.title}>{ing.ru}</Text>
           <Text style={styles.inci}>{ing.inci}</Text>
           <Text style={styles.note}>{ing.note}</Text>
+          {!!ing.about && <Text style={styles.about}>{ing.about}</Text>}
         </FadeIn>
 
         <FadeIn index={1}>
@@ -83,7 +84,8 @@ const styles = StyleSheet.create({
   nav: { paddingHorizontal: space.gutter, paddingBottom: 10 },
   title: { fontFamily: fonts.semibold, fontSize: 32, lineHeight: 36, letterSpacing: -1.2, color: colors.ink, marginTop: 8 },
   inci: { fontFamily: fonts.mono, fontSize: 13, color: colors.muted, marginTop: 4 },
-  note: { fontFamily: fonts.regular, fontSize: 15.5, lineHeight: 23, color: colors.ink2, marginTop: 14 },
+  note: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 23, color: colors.ink, marginTop: 14 },
+  about: { fontFamily: fonts.regular, fontSize: 15.5, lineHeight: 24, color: colors.ink2, marginTop: 10 },
   card: { padding: 18, marginTop: 20 },
   cardLabel: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted },
   cardValue: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 6 },

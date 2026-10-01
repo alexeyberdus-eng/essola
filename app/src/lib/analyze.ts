@@ -48,10 +48,13 @@ export function normalize(s: string) {
 }
 
 const INDEX = new Map<string, Ingredient>();
-for (const ing of INGREDIENTS) {
-  for (const key of [ing.inci, ing.ru, ...ing.aliases]) {
-    const k = normalize(key);
-    if (k && !INDEX.has(k)) INDEX.set(k, ing);
+// An exact INCI name always wins over another ingredient's synonym, then Russian names, then aliases.
+for (const pick of [(i: Ingredient) => [i.inci], (i: Ingredient) => [i.ru], (i: Ingredient) => i.aliases]) {
+  for (const ing of INGREDIENTS) {
+    for (const key of pick(ing)) {
+      const k = normalize(key);
+      if (k && !INDEX.has(k)) INDEX.set(k, ing);
+    }
   }
 }
 const KEYS = [...INDEX.keys()];

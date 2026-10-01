@@ -13,6 +13,8 @@ export type User = {
   provider: 'apple' | 'email';
   since: string;
   skinType: SkinType | null;
+  /** Hair condition, several can apply at once (e.g. dry + coloured). */
+  hair: HairType[];
   /** true when the account lives only on this device (backend not configured) */
   local: boolean;
 };
@@ -24,9 +26,11 @@ type AuthValue = {
   signInWithApple: () => Promise<void>;
   requestEmailCode: (email: string) => Promise<{ demo: boolean }>;
   verifyEmailCode: (email: string, code: string) => Promise<void>;
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'skinType'>>) => Promise<void>;
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => Promise<void>;
   signOut: () => Promise<void>;
 };
+
+export type HairType = 'normal' | 'dry' | 'oily' | 'colored' | 'damaged' | 'thin' | 'curly';
 
 const LOCAL_KEY = 'essola.localUser';
 const AuthContext = createContext<AuthValue | null>(null);
@@ -43,6 +47,7 @@ function fromSupabase(u: SupabaseUser): User {
     provider,
     since: u.created_at,
     skinType: (meta.skin_type as SkinType) ?? null,
+    hair: (meta.hair_type as HairType[]) ?? [],
     local: false,
   };
 }
@@ -57,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!supabase) {
       readJSON<User | null>(LOCAL_KEY, null).then((u) => {
-        setUser(u);
+        setUser(u ? { ...u, hair: u.hair ?? [] } : null);
         setReady(true);
       });
       return;
@@ -103,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider: 'apple',
       since: prev?.since ?? new Date().toISOString(),
       skinType: prev?.skinType ?? null,
+      hair: prev?.hair ?? [],
       local: true,
     });
   }, [saveLocal]);
@@ -129,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: 'email',
         since: new Date().toISOString(),
         skinType: null,
+        hair: [],
         local: true,
       });
     },
@@ -136,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: Partial<Pick<User, 'name' | 'skinType'>>) => {
+    async (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => {
       if (!user) return;
       const next = { ...user, ...patch };
       setUser(next);
@@ -144,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data: Record<string, unknown> = {};
         if ('name' in patch) data.full_name = patch.name;
         if ('skinType' in patch) data.skin_type = patch.skinType;
+        if ('hair' in patch) data.hair_type = patch.hair;
         await supabase.auth.updateUser({ data });
       } else {
         await writeJSON(LOCAL_KEY, next);
