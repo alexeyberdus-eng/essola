@@ -60,6 +60,7 @@ jobs:
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
           for B in '{"mode":"review","kind":"Крем","items":["Aqua 75% (основа)","Glycerin 5% (увлажнитель)","Olivem 1000 6% (эмульгатор)","Squalane 10% (смягчающее)","Niacinamide 4% (актив)"],"notes":["В формуле есть вода — нужен консервант (0,5–1%)"]}' \
                    '{"mode":"url","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
+                   '{"mode":"url","url":"https://www.letu.ru/product/l-oreal-paris-tonalnyi-krem-alliance-perfect-sovershennoe-sliyanie-vyravnivayushchii-i-uvlazhnyayushchii/3288"}' \
                    '{"mode":"save","url":"https://goldapple.ru/zz-smoke-test","title":"zz-smoke тест","ingredients":["Aqua","Glycerin","Niacinamide"]}' \
                    '{"mode":"search","q":"zz-smoke"}' \
                    '{"mode":"user.save","id":"zzsmoke","nick":"smoke_test","name":"Smoke"}' \

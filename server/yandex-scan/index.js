@@ -123,7 +123,31 @@ const decode = (x) =>
     .replace(/\\n|\\r|\\t/g, ' ');
 
 /** Reads one product page and pulls out the title and the ingredient list. */
+// Letual serves product tabs (with the composition) as JSON, so a link resolves without opening the page.
+async function fromLetu(url) {
+  const id = (String(url).match(/letu\.ru\/product\/[^/]+\/(\d+)/) || [])[1];
+  if (!id) return null;
+  const h = { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', Accept: 'application/json' };
+  const get = (u) => fetch(u, { headers: h, signal: AbortSignal.timeout(10000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [tabs, detail] = await Promise.all([
+    get(`https://www.letu.ru/s/api/product/v2/product-detail/${id}/tabs?locale=ru-RU&pushSite=storeMobileRU`),
+    get(`https://www.letu.ru/s/api/product/v3/product-detail/${id}?locale=ru-RU&pushSite=storeMobileRU`),
+  ]);
+  const found = (JSON.stringify(tabs || {}).match(/"composition"\s*:\s*"((?:[^"\\]|\\.){20,4000})"/) || [])[1];
+  console.log('letu api', id, !!tabs, !!detail, found ? found.length : 0);
+  if (!found) return null;
+  const composition = JSON.parse(`"${found}"`).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const brand = detail?.brand?.name || detail?.brand?.displayName || '';
+  const name = detail?.displayName || '';
+  const img = JSON.stringify(detail?.media || []).match(/"(?:url|src)"\s*:\s*"([^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
+  return { title: [brand, name].filter(Boolean).join(' · ').slice(0, 200), image: img ? (img[1].startsWith('http') ? img[1] : `https://www.letu.ru${img[1]}`) : null, composition };
+}
+
 async function fromShopPage(url) {
+  if (/letu\.ru/i.test(url)) {
+    const l = await fromLetu(url);
+    if (l) return l;
+  }
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 12000);
   try {
