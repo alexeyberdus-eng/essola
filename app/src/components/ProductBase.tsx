@@ -14,7 +14,7 @@ import { ScoreBadge } from './ScoreBadge';
 import { Brand, Glow } from './silk';
 import { Press, tap } from './ui';
 
-type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string };
+export type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string };
 type Sort = 'popular' | 'best' | 'worst';
 
 const OBF = 'https://world.openbeautyfacts.org/cgi/search.pl';
@@ -47,7 +47,7 @@ type OBFProduct = {
 };
 
 /** One page of Open Beauty Facts: by text, by category, or the most scanned products when both are empty. */
-async function pageOBF(q: string, tag: string | undefined, page: number): Promise<Found[]> {
+export async function pageOBF(q: string, tag: string | undefined, page: number): Promise<Found[]> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
   const params = [
