@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { Glass, LightWave } from '../../components/lab';
@@ -16,7 +16,7 @@ import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import { aiEnabled, aiScan } from '../../lib/ai';
 import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
-import { colors, fonts, radius, shadow, space } from '../../theme';
+import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
 
 // Without the native module (Expo Go) photos are read by Tesseract inside a hidden WebView.
 const webOcr = !nativeOcr && Platform.OS !== 'web';
@@ -30,7 +30,10 @@ export default function ScannerScreen() {
   const focused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
-  const { saveScan } = useLibrary();
+  const { saveScan, scans } = useLibrary();
+  const { height: winH } = useWindowDimensions();
+  // The camera opens on the top half with the scan history below; it can be expanded to full screen.
+  const [full, setFull] = useState(false);
   const { barcodes, rememberBarcode } = useUserContent();
 
   const [mode, setMode] = useState<Mode>('barcode');
@@ -229,80 +232,13 @@ export default function ScannerScreen() {
   }
 
   const barcode = mode === 'barcode';
-  const frameTop = insets.top + (barcode ? 190 : 100);
-  const frameH = barcode ? 150 : undefined;
+  const frameTop = insets.top + (full ? (barcode ? 190 : 100) : barcode ? 96 : 66);
+  const frameH = barcode ? (full ? 150 : 120) : undefined;
+  const camH = full ? winH : Math.round(winH * 0.52);
 
-  return (
-    <View style={styles.screen}>
-      <StatusBar style="light" />
-      {engine}
-      {permission?.granted ? (
-        focused && (
-          <CameraView
-            ref={camera}
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            enableTorch={torch}
-            onCameraReady={() => setReady(true)}
-            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
-            onBarcodeScanned={barcode && !lookup ? onBarcode : undefined}
-          />
-        )
-      ) : (
-        <View style={[StyleSheet.absoluteFill, styles.permission]}>
-          <Icon name="barcode" size={40} color={colors.brassLight} />
-          <Text style={styles.permTitle}>Нужен доступ к камере</Text>
-          <Text style={styles.permText}>Отсканируйте штрихкод или сфотографируйте состав — Essola разберёт каждый компонент и подберёт аналоги.</Text>
-          <Button label="Разрешить камеру" onPress={requestPermission} style={{ alignSelf: 'stretch', marginTop: 8 }} />
-        </View>
-      )}
-
-      {permission?.granted && (
-        <View pointerEvents="none" style={[styles.frame, { top: frameTop }, frameH ? { height: frameH } : { bottom: 330 }]}>
-          <Breathe amount={0.025} style={StyleSheet.absoluteFill}>
-            {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
-              <View key={c} style={[styles.corner, styles[c], lookup && { borderColor: '#B9C9A6' }]} />
-            ))}
-          </Breathe>
-          {barcode && !lookup && (
-            <Animated.View style={[styles.laser, { transform: [{ translateY: laser.interpolate({ inputRange: [0, 1], outputRange: [16, (frameH ?? 150) - 18] }) }] }]} />
-          )}
-          <LightWave trigger={wave} />
-        </View>
-      )}
-
-      <View style={[styles.camTop, { top: insets.top + 10 }]}>
-        <Press onPress={close} style={styles.camBtn} accessibilityLabel="Закрыть">
-          <Icon name="arrowLeft" size={18} color="#fff" />
-        </Press>
-        <Glass style={styles.modes} tint="rgba(20,20,15,0.35)" intensity={30}>
-          <View style={{ flexDirection: 'row', padding: 4 }}>
-            {(
-              [
-                ['barcode', 'Штрихкод'],
-                ['label', 'Состав'],
-              ] as const
-            ).map(([k, l]) => (
-              <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>
-                <Text style={[styles.modeText, mode === k && { color: colors.olive }]}>{l}</Text>
-              </Press>
-            ))}
-          </View>
-        </Glass>
-        <Press onPress={() => setTorch((t) => !t)} style={[styles.camBtn, torch && { backgroundColor: colors.brassLight }]} accessibilityLabel="Фонарик">
-          <Icon name="torch" size={18} color={torch ? colors.olive : '#fff'} />
-        </Press>
-      </View>
-
-      {lookup && barcode && (
-        <View style={[styles.code, { top: frameTop + (frameH ?? 0) + 14 }]}>
-          <View style={styles.codeDot} />
-          <Text style={styles.codeText}>{lookup.code.replace(/(\d)(\d{6})(\d{6})/, '$1 $2 $3')}</Text>
-        </View>
-      )}
-
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-        <View style={styles.grab} />
+  const sheet = (
+      <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
+        {full && <View style={styles.grab} />}
         {lookup ? (
           <View>
             <View style={styles.live}>
@@ -370,6 +306,116 @@ export default function ScannerScreen() {
           </View>
         )}
       </View>
+  );
+
+  return (
+    <View style={[styles.screen, !full && { backgroundColor: colors.bg }]}>
+      <StatusBar style="light" />
+      {engine}
+      <View style={[styles.camBox, full ? StyleSheet.absoluteFill : { height: camH }]}>
+      {permission?.granted ? (
+        focused && (
+          <CameraView
+            ref={camera}
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            enableTorch={torch}
+            onCameraReady={() => setReady(true)}
+            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+            onBarcodeScanned={barcode && !lookup ? onBarcode : undefined}
+          />
+        )
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.permission]}>
+          <Icon name="barcode" size={40} color={colors.brassLight} />
+          <Text style={styles.permTitle}>Нужен доступ к камере</Text>
+          <Text style={styles.permText}>Отсканируйте штрихкод или сфотографируйте состав — Essola разберёт каждый компонент и подберёт аналоги.</Text>
+          <Button label="Разрешить камеру" onPress={requestPermission} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+        </View>
+      )}
+
+      {permission?.granted && (
+        <View pointerEvents="none" style={[styles.frame, { top: frameTop }, frameH ? { height: frameH } : { bottom: full ? 330 : 64 }]}>
+          <Breathe amount={0.025} style={StyleSheet.absoluteFill}>
+            {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
+              <View key={c} style={[styles.corner, styles[c], lookup && { borderColor: '#B9C9A6' }]} />
+            ))}
+          </Breathe>
+          {barcode && !lookup && (
+            <Animated.View style={[styles.laser, { transform: [{ translateY: laser.interpolate({ inputRange: [0, 1], outputRange: [16, (frameH ?? 150) - 18] }) }] }]} />
+          )}
+          <LightWave trigger={wave} />
+        </View>
+      )}
+
+      <View style={[styles.camTop, { top: insets.top + 10 }]}>
+        <Press onPress={close} style={styles.camBtn} accessibilityLabel="Закрыть">
+          <Icon name="arrowLeft" size={18} color="#fff" />
+        </Press>
+        <Glass style={styles.modes} tint="rgba(20,20,15,0.35)" intensity={30}>
+          <View style={{ flexDirection: 'row', padding: 4 }}>
+            {(
+              [
+                ['barcode', 'Штрихкод'],
+                ['label', 'Состав'],
+              ] as const
+            ).map(([k, l]) => (
+              <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>
+                <Text style={[styles.modeText, mode === k && { color: colors.olive }]}>{l}</Text>
+              </Press>
+            ))}
+          </View>
+        </Glass>
+        <Press onPress={() => setTorch((t) => !t)} style={[styles.camBtn, torch && { backgroundColor: colors.brassLight }]} accessibilityLabel="Фонарик">
+          <Icon name="torch" size={18} color={torch ? colors.olive : '#fff'} />
+        </Press>
+      </View>
+
+      {lookup && barcode && (
+        <View style={[styles.code, { top: frameTop + (frameH ?? 0) + 14 }]}>
+          <View style={styles.codeDot} />
+          <Text style={styles.codeText}>{lookup.code.replace(/(\d)(\d{6})(\d{6})/, '$1 $2 $3')}</Text>
+        </View>
+      )}
+
+      {!full && permission?.granted && (
+        <Press onPress={() => { tap(); setFull(true); }} style={styles.expand} accessibilityLabel="Развернуть камеру">
+          <Icon name="chevronDown" size={15} color="#fff" />
+          <Text style={styles.expandText}>Развернуть</Text>
+        </Press>
+      )}
+      {full && (
+        <Press onPress={() => { tap(); setFull(false); }} style={[styles.expand, { top: insets.top + 62, bottom: undefined }]} accessibilityLabel="Свернуть камеру">
+          <Text style={styles.expandText}>Свернуть</Text>
+        </Press>
+      )}
+      </View>
+      {full ? (
+        sheet
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+          {sheet}
+          <View style={styles.history}>
+            <Text style={styles.historyTitle}>История сканирований</Text>
+            {scans.length ? (
+              scans.slice(0, 30).map((sc) => (
+                <Press key={sc.id} haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.hRow}>
+                  <View style={[styles.hScore, { backgroundColor: scoreColor(sc.overall) }]}>
+                    <Text style={styles.hScoreText}>{sc.overall}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.hName} numberOfLines={1}>{sc.title}</Text>
+                    <Text style={styles.hDate}>{new Date(sc.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</Text>
+                  </View>
+                  <Icon name="arrowRight" size={15} color={colors.muted} />
+                </Press>
+              ))
+            ) : (
+              <Text style={styles.sheetText}>Здесь появятся проверенные средства.</Text>
+            )}
+          </View>
+        </ScrollView>
+      )}
       {busy && <Reading />}
     </View>
   );
@@ -460,6 +506,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 10,
   },
+  camBox: { overflow: 'hidden', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, backgroundColor: colors.night },
+  expand: { position: 'absolute', right: 14, bottom: 14, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.5)' },
+  expandText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
+  sheetInline: { paddingHorizontal: space.gutter, paddingTop: 16 },
+  history: { paddingHorizontal: space.gutter, marginTop: 24, gap: 8 },
+  historyTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.4, color: colors.ink, marginBottom: 2 },
+  hRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  hScore: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  hScoreText: { fontFamily: fonts.monoMedium, fontSize: 13.5, color: '#fff' },
+  hName: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
+  hDate: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 1 },
   grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#E2DCF0', alignSelf: 'center', marginBottom: 14 },
   sheetTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.4, color: colors.ink },
   sheetText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.muted, marginTop: 4 },
