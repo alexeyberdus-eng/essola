@@ -36,7 +36,9 @@ jobs:
           yc serverless function allow-unauthenticated-invoke essola-scan || echo "::warning::Make the function public in the console (needs admin role)"
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           (cd server/yandex-scan && zip -q ../../scan.zip index.js)
-          ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY"
+          BUCKET="essola-products-$YC_FOLDER_ID"
+          yc storage bucket get --name "$BUCKET" >/dev/null 2>&1 || yc storage bucket create --name "$BUCKET" || echo "::warning::Could not create bucket $BUCKET"
+          ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
           V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 256m --execution-timeout 60s --source-path scan.zip"
@@ -54,6 +56,8 @@ jobs:
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
           for B in '{"mode":"review","kind":"Крем","items":["Aqua 75% (основа)","Glycerin 5% (увлажнитель)","Olivem 1000 6% (эмульгатор)","Squalane 10% (смягчающее)","Niacinamide 4% (актив)"],"notes":["В формуле есть вода — нужен консервант (0,5–1%)"]}' \
+                   '{"mode":"url","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
+                   '{"mode":"product","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done

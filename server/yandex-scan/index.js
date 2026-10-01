@@ -2,6 +2,8 @@
 //  mode "scan":     label photo -> clean INCI list (vision model, Alice AI VLM by default)
 //  mode "describe": ingredient list -> short "what this composition does" (text model)
 //  mode "review":   builder formula -> technologist's advice: what to add / reduce / remove (text model)
+//  mode "product":  shared product cache (Object Storage) by barcode or shop link
+//  mode "url":      Gold Apple / Letual product link -> composition from that one page, cached for everyone
 //  mode "analogs":  composition -> Gold Apple products found via Yandex Search API, ranked by the text model
 // Scores are NOT produced here: the app computes them from its own ingredient base.
 // Env: YC_API_KEY, YC_FOLDER_ID, APP_KEY, VLM_MODEL (model id from AI Studio), TEXT_MODEL (default yandexgpt-lite).
@@ -55,6 +57,76 @@ async function search(queryText, iam) {
   }));
 }
 
+// Shared product cache in Object Storage: one JSON per product, keyed by barcode or shop link.
+const BUCKET = process.env.BUCKET;
+const crypto = require('crypto');
+const keyFor = ({ barcode, url }) => (barcode ? `bc/${String(barcode).replace(/\D/g, '')}.json` : url ? `url/${crypto.createHash('sha1').update(normUrl(url)).digest('hex')}.json` : null);
+function normUrl(u) {
+  try {
+    const x = new URL(u);
+    return `${x.hostname.replace(/^www\./, '')}${x.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return String(u);
+  }
+}
+async function cacheGet(key, iam) {
+  if (!BUCKET || !key || !iam) return null;
+  try {
+    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { headers: { 'X-YaCloud-SubjectToken': iam } });
+    return res.ok ? await res.json() : null;
+  } catch (e) {
+    console.log('cache get failed', String(e));
+    return null;
+  }
+}
+async function cachePut(key, iam, data) {
+  if (!BUCKET || !key || !iam) return;
+  try {
+    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, {
+      method: 'PUT',
+      headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, at: new Date().toISOString() }),
+    });
+    if (!res.ok) console.log('cache put', res.status, (await res.text()).slice(0, 200));
+  } catch (e) {
+    console.log('cache put failed', String(e));
+  }
+}
+
+const SHOPS = /(^|\.)(goldapple\.ru|letu\.ru)$/i;
+const decode = (x) =>
+  x
+    .replace(/\\u([0-9a-f]{4})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+    .replace(/\\n|\\r|\\t/g, ' ');
+
+/** Reads one product page and pulls out the title and the ingredient list. */
+async function fromShopPage(url) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', 'Accept-Language': 'ru-RU,ru;q=0.9' } });
+    const html = await res.text();
+    console.log('shop page', res.status, html.length);
+    if (!res.ok) return { error: `page_${res.status}` };
+    const text = decode(html);
+    const title = decode((text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) || text.match(/<title>([^<]+)/i) || [])[1] || '').trim();
+    const image = (text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)/i) || [])[1] || null;
+    const plain = text.replace(/<script[\s\S]*?<\/script>/gi, (m) => (/состав|ingredients/i.test(m) ? m : ' ')).replace(/<[^>]+>/g, '\n');
+    const m =
+      plain.match(/(?:состав|ingredients|inci)["'\s:\n]{1,40}((?:aqua|water|вода|[a-zа-яё][^\n"<]{2,40}),[^\n"<]{20,3000})/i);
+    const composition = m ? m[1].replace(/\s+/g, ' ').trim() : null;
+    return { title, image, composition };
+  } catch (e) {
+    return { error: String(e).slice(0, 80) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json' };
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
 
@@ -90,6 +162,33 @@ module.exports.handler = async (event, context) => {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
     const req = JSON.parse(raw);
     const textModel = process.env.TEXT_MODEL || 'yandexgpt-lite/latest';
+    const iam = context?.token?.access_token;
+    if (req.mode === 'product') {
+      const product = await cacheGet(keyFor(req), iam);
+      return reply(200, { product });
+    }
+    if (req.mode === 'url') {
+      let host = '';
+      try {
+        host = new URL(req.url).hostname;
+      } catch {}
+      if (!SHOPS.test(host)) return reply(400, { error: 'unsupported_shop' });
+      const key = keyFor({ url: req.url });
+      const cached = await cacheGet(key, iam);
+      if (cached?.ingredients?.length) return reply(200, { product: cached, cached: true });
+      const page = await fromShopPage(req.url);
+      if (page.error || !page.composition) return reply(200, { product: null, error: page.error || 'no_composition', title: page.title || null });
+      let ingredients = page.composition.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
+      // Russian-only lists are translated to INCI once, then cached for everyone.
+      if ((page.composition.match(/[а-яё]/gi) || []).length > page.composition.length * 0.3) {
+        const t = await chat(textModel, [{ role: 'user', content: `Переведи состав косметики в INCI, по порядку, через «; », без пояснений:\n${page.composition.slice(0, 1500)}` }], 600, true);
+        const list = t.split(/\s*[;\n]\s*/).map((x) => x.trim()).filter((x) => x.length > 1 && x.length < 90);
+        if (list.length >= 3) ingredients = list;
+      }
+      const product = { title: page.title, image: page.image, url: req.url, ingredients, source: host.replace(/^www\./, '') };
+      await cachePut(key, iam, product);
+      return reply(200, { product });
+    }
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
@@ -162,6 +261,7 @@ module.exports.handler = async (event, context) => {
     if (!out) throw last;
     const ingredients = Array.isArray(out.ingredients) ? out.ingredients.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
     console.log('scan ingredients:', ingredients.length);
+    if (req.barcode && ingredients.length >= 3) await cachePut(keyFor({ barcode: req.barcode }), iam, { title: req.title || null, ingredients, source: 'scan' });
     return reply(200, ingredients.length ? { ingredients, _usage: lastUsage } : { ingredients, why: out.raw ?? '', _usage: lastUsage });
   } catch (e) {
     console.error(e);
