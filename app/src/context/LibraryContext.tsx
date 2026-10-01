@@ -4,7 +4,7 @@ import { readJSON, writeJSON } from '../lib/storage';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
-export type SavedScan = { id: string; title: string; text: string; overall: number; createdAt: string; barcode?: string; source?: string };
+export type SavedScan = { id: string; title: string; text: string; overall: number; createdAt: string; barcode?: string; source?: string; image?: string | null };
 
 type LibraryValue = {
   liked: Set<string>;

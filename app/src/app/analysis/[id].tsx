@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
+import { Image } from 'expo-image';
 import { captureRef } from 'react-native-view-shot';
 import { ActivityIndicator, Animated, Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -131,9 +132,12 @@ export default function AnalysisScreen() {
             <Text style={styles.heroKicker} numberOfLines={1}>
               {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : 'Скан состава'} · {items.length} ингредиентов
             </Text>
-            <Text style={styles.heroTitle} numberOfLines={3}>
-              {scan.title}
-            </Text>
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+              <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>
+                {scan.title}
+              </Text>
+              {!!scan.image && <Image source={{ uri: scan.image.replace('.100.', '.400.') }} style={styles.heroImg} contentFit="cover" cachePolicy="memory-disk" />}
+            </View>
             <View style={styles.heroRow}>
               <View style={styles.ringWrap}>
                 <Ring value={me?.score ?? scores.overall} size={112} stroke={11} color={scoreColor(me?.score ?? scores.overall)} track="rgba(255,255,255,0.7)">
@@ -559,4 +563,5 @@ const styles = StyleSheet.create({
   opText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20.5, color: colors.ink2 },
   more: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-start' },
   moreText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
+  heroImg: { width: 76, height: 76, borderRadius: 18, backgroundColor: '#fff' },
 });
