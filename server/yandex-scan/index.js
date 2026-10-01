@@ -60,7 +60,8 @@ async function chat(model, messages, maxTokens) {
   });
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
-  const text = (json?.choices?.[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, '');
+  const msg = json?.choices?.[0]?.message ?? {};
+  const text = (msg.content || msg.reasoning_content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
   console.log('model reply', json?.choices?.[0]?.finish_reason, JSON.stringify(json?.usage), text.slice(0, 300));
   const m = text.match(/\{[\s\S]*\}/);
   try {
@@ -83,7 +84,7 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
-      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'system', content: REVIEW }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 900);
+      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 2500);
       return reply(200, out);
     }
     if (req.mode === 'analogs') {
@@ -99,7 +100,7 @@ module.exports.handler = async (event, context) => {
       const lower = (req.ingredients || []).map((i) => String(i).toLowerCase());
       const seen = (d) => !!d && lower.filter((i) => `${d.title} ${d.text}`.toLowerCase().includes(i)).length >= Math.min(5, lower.length);
       const found = docs.map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n');
-      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'system', content: ANALOGS }, { role: 'user', content: `Состав пользователя: ${list}\nТовары:\n${found}` }], 700);
+      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'user', content: `${ANALOGS}\n\nСостав пользователя: ${list}\nТовары:\n${found}` }], 2500);
       const items = (Array.isArray(out.items) ? out.items : [])
         .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(seen(docs[(x.n | 0) - 1]) ? 100 : 75, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
         .filter((x) => x.url && x.match >= 20)
