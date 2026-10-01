@@ -14,7 +14,8 @@ import { useLibrary } from '../../context/LibraryContext';
 import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
-import { nativeOcr, recognizeText } from '../../lib/ocr';
+import { aiEnabled, aiScan } from '../../lib/ai';
+import { nativeOcr, recognizeText, toJpegBase64 } from '../../lib/ocr';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 
 // Without the native module (Expo Go) photos are read by Tesseract inside a hidden WebView.
@@ -109,6 +110,25 @@ export default function ScannerScreen() {
   };
 
   const readImage = async (uri: string) => {
+    if (aiEnabled) {
+      // AI path: photo → clean list → straight to the result. No text editor step.
+      setBusy(true);
+      setNotice(null);
+      try {
+        const list = await aiScan(await toJpegBase64(uri));
+        if (!list.length || !analyze(list.join(', ')).items.length) throw new Error('EMPTY');
+        finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);
+      } catch (e) {
+        setNotice(
+          String(e).includes('EMPTY')
+            ? 'Не нашли на фото список ингредиентов. Снимите блок «Состав» крупнее и ровнее.'
+            : `Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз. (${String(e).slice(0, 60)})`,
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!nativeOcr && !webOcr) {
       setManual(true);
       setNotice('В браузере распознавание фото недоступно — вставьте состав текстом.');
@@ -377,8 +397,8 @@ function Reading() {
           <Animated.View key={d} style={[styles.bubble, { left: 46 + i * 10 }, rise(d)]} />
         ))}
       </View>
-      <Text style={styles.readingTitle}>ИИ читает состав</Text>
-      <Text style={styles.readingText}>Распознаю ингредиенты и считаю баллы…</Text>
+      <Text style={styles.readingTitle}>Читаем состав</Text>
+      <Text style={styles.readingText}>Распознаём ингредиенты и считаем баллы…</Text>
     </View>
   );
 }

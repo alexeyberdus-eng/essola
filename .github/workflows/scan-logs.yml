@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [claude/awesome-mccarthy-dlbgor]
-    paths: ['.github/workflows/scan-logs.yml']
+    paths: ['.github/workflows/scan-logs.yml', 'server/yandex-scan/logs.trigger']
 
 permissions:
   contents: read
@@ -22,4 +22,5 @@ jobs:
           export PATH="$HOME/yc/bin:$PATH"
           printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
           yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set folder-id "$YC_FOLDER_ID"
-          yc serverless function logs essola-scan --since 3h --limit 200 | cut -c1-600
+          yc logging read --group-name default --since 3h --limit 200 --format text 2>&1 | cut -c1-700 || true
+          echo ---; yc serverless function logs essola-scan --since 3h --limit 100 2>&1 | cut -c1-700 || true

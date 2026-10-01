@@ -41,6 +41,7 @@ module.exports.handler = async (event) => {
       return reply(200, out);
     }
     const image = String(req.image || '');
+    console.log('scan request, image chars:', image.length);
     if (!image || image.length > 12_000_000) return reply(400, { error: 'bad_image' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
     // Vision models differ per account; try the configured one first, then known multimodal ids.
@@ -59,6 +60,7 @@ module.exports.handler = async (event) => {
     }
     if (!out) throw last;
     const ingredients = Array.isArray(out.ingredients) ? out.ingredients.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
+    console.log('scan ingredients:', ingredients.length);
     return reply(200, { ingredients });
   } catch (e) {
     console.error(e);

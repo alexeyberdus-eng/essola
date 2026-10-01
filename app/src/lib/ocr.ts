@@ -17,7 +17,7 @@ export function registerWebOcr(engine: WebEngine | null) {
   webEngine = engine;
 }
 
-async function toJpegBase64(uri: string) {
+export async function toJpegBase64(uri: string) {
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width: aiEnabled ? 1600 : 2200 }); // small print needs pixels; the AI copes with less and uploads faster
   const image = await ctx.renderAsync();
