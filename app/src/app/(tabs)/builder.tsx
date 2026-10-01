@@ -10,7 +10,7 @@ import { aiEnabled, aiReview, Review } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_ICON, FN_LABEL, INGREDIENTS } from '../../data/ingredients';
-import { normalize } from '../../lib/analyze';
+import { identify, normalize } from '../../lib/analyze';
 import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, setDraft, total } from '../../lib/builder';
 import { colors, fonts, PHASE_COLOR, shadow, space, TAB_SPACE } from '../../theme';
 
@@ -91,6 +91,18 @@ export default function BuilderScreen() {
     setDrop((d) => d + 1);
     setPicker(false);
   };
+  // "+" next to a technologist suggestion: add it straight into the formula at the suggested share.
+  const addSuggested = (name: string, pct?: string) => {
+    const hit = identify(name.replace(/\(.*?\)/g, '').split(/[,/]| или /)[0].trim());
+    const item = newItem(hit.match === 'exact' || hit.match === 'fuzzy' ? hit.ing.inci : name);
+    const v = parseFloat((pct ?? '').replace(',', '.').match(/[\d.]+/)?.[0] ?? '');
+    if (v > 0 && v < 100) item.pct = v;
+    tap('medium');
+    animate();
+    setItems((prev) => [...prev, item]);
+    setDropColor(PHASE_COLOR[item.phase]);
+    setDrop((d) => d + 1);
+  };
   const fillWater = () => {
     tap('success');
     setItems((prev) => {
@@ -110,12 +122,12 @@ export default function BuilderScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow flask={false} />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 70 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 110 }} keyboardShouldPersistTaps="handled">
         <View style={styles.top}>
           <Text style={styles.h1}>Конструктор</Text>
           {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
         </View>
-        <Text style={styles.kicker}>Новая формула · {KINDS.find((k) => k.key === kind)?.label}</Text>
+        <Text style={styles.ask}>Что делаем?</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {KINDS.map((k) => (
@@ -138,7 +150,7 @@ export default function BuilderScreen() {
         {items.length > 0 && (
         <DarkBlock style={styles.lab}>
           <View style={styles.labRow}>
-            <Flask layers={layers} size={118} dropKey={drop} dropColor={dropColor} />
+            <Flask layers={layers} size={78} dropKey={drop} dropColor={dropColor} />
             <View style={{ flex: 1, gap: 10 }}>
               <View>
                 <Text style={styles.darkKicker}>Сумма</Text>
@@ -156,8 +168,19 @@ export default function BuilderScreen() {
                     <Text style={[styles.volText, volume === v && { color: colors.olive }]}>{v}</Text>
                   </Press>
                 ))}
+                <TextInput
+                  value={VOLUMES.includes(volume) ? '' : String(volume)}
+                  onChangeText={(t) => {
+                    const v = parseInt(t.replace(/\D/g, ''), 10);
+                    if (v > 0 && v <= 5000) setVolume(v);
+                  }}
+                  placeholder="своё"
+                  placeholderTextColor="rgba(255,255,255,0.55)"
+                  keyboardType="number-pad"
+                  style={[styles.volInput, !VOLUMES.includes(volume) && styles.volOn, !VOLUMES.includes(volume) && { color: colors.olive }]}
+                />
               </View>
-              <Text style={styles.darkMuted}>мл в партии · ↔ крутите колбу</Text>
+              <Text style={styles.darkMuted}>мл в партии</Text>
             </View>
           </View>
           <View style={{ marginTop: 14 }}>
@@ -181,10 +204,12 @@ export default function BuilderScreen() {
 
         {items.length > 0 && <CompositionSummary s={summary} title="Что даст эта формула" />}
 
+        {items.length === 1 && aiEnabled && <Text style={styles.minHint}>Добавьте минимум 2 ингредиента — и технолог сможет оценить формулу.</Text>}
+
         {items.length > 1 && aiEnabled && (
           <View style={{ marginTop: 12 }}>
             {shown?.data ? (
-              <ReviewCard r={shown.data} />
+              <ReviewCard r={shown.data} onAdd={addSuggested} added={items.flatMap((i) => [i.name, i.inci ?? ""]).map((x) => x.toLowerCase())} />
             ) : (
               <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
                 {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
@@ -195,7 +220,7 @@ export default function BuilderScreen() {
           </View>
         )}
 
-        {PHASE_ORDER.map((ph) => {
+        {(['active', ...PHASE_ORDER.filter((x) => x !== 'active')] as typeof PHASE_ORDER).map((ph) => {
           const rows = items.filter((i) => i.phase === ph);
           if (!rows.length) return null;
           return (
@@ -218,7 +243,10 @@ export default function BuilderScreen() {
                     <Press haptic={false} onPress={() => change(i.key, i.pct > 2 ? -1 : -0.1)} style={styles.step} hitSlop={4}>
                       <Icon name="minus" size={13} color={colors.ink2} />
                     </Press>
-                    <PctInput value={i.pct} onCommit={(t) => setPct(i.key, t)} />
+                    <View style={styles.pctBox}>
+                      <PctInput value={i.pct} onCommit={(t) => setPct(i.key, t)} />
+                      <Text style={styles.pctSign}>%</Text>
+                    </View>
                     <Press haptic={false} onPress={() => change(i.key, i.pct >= 2 ? 1 : 0.1)} style={styles.step} hitSlop={4}>
                       <Icon name="plus" size={13} color={colors.ink2} />
                     </Press>
@@ -239,7 +267,7 @@ export default function BuilderScreen() {
       </ScrollView>
 
       {items.length > 0 && (
-        <View style={[styles.saveBar, { bottom: TAB_SPACE - 36 }]}>
+        <View style={[styles.saveBar, { bottom: TAB_SPACE - 4 }]}>
           <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ flex: 1 }} />
         </View>
       )}
@@ -250,9 +278,9 @@ export default function BuilderScreen() {
 }
 
 /** The technologist's verdict and what to add, reduce or remove. */
-function ReviewCard({ r }: { r: Review }) {
-  const groups: [string, string, { name: string; note: string }[]][] = [
-    ['plus', 'Добавить', (r.add ?? []).map((x) => ({ name: `${x.name}${x.pct ? ` · ${x.pct}` : ''}`, note: x.why ?? '' }))],
+function ReviewCard({ r, onAdd, added }: { r: Review; onAdd: (name: string, pct?: string) => void; added: string[] }) {
+  const groups: [string, string, { name: string; note: string; raw?: string; pct?: string }[]][] = [
+    ['plus', 'Добавить', (r.add ?? []).map((x) => ({ name: `${x.name}${x.pct ? ` · ${x.pct}` : ''}`, note: x.why ?? '', raw: x.name, pct: x.pct }))],
     ['minus', 'Убавить', (r.reduce ?? []).map((x) => ({ name: `${x.name}${x.to ? ` → ${x.to}` : ''}`, note: x.why ?? '' }))],
     ['close', 'Убрать', (r.remove ?? []).map((x) => ({ name: x.name, note: x.why ?? '' }))],
   ];
@@ -274,6 +302,11 @@ function ReviewCard({ r }: { r: Review }) {
                     <Text style={styles.reviewName}>{x.name}</Text>
                     {!!x.note && <Text style={styles.reviewNote}>{x.note}</Text>}
                   </View>
+                  {'raw' in x && x.raw && !added.includes(String(x.raw).toLowerCase()) && (
+                    <Press onPress={() => onAdd(String(x.raw), (x as { pct?: string }).pct)} style={styles.addSug} accessibilityLabel="Добавить в формулу">
+                      <Icon name="plus" size={15} color="#fff" strokeWidth={2.4} />
+                    </Press>
+                  )}
                 </View>
               ))}
             </View>
@@ -418,6 +451,12 @@ const styles = StyleSheet.create({
   reviewNote: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 1 },
   reviewWarn: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: 12, backgroundColor: colors.warnSoft },
   reviewWarnText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: colors.warn },
+  ask: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginTop: 4, marginBottom: 10 },
+  volInput: { minWidth: 46, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9, fontFamily: fonts.monoMedium, fontSize: 12, color: colors.onDark, textAlign: 'center' },
+  minHint: { marginTop: 12, fontFamily: fonts.medium, fontSize: 13.5, color: colors.warn, textAlign: 'center' },
+  addSug: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  pctBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F1F8', borderRadius: 9, paddingRight: 6 },
+  pctSign: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.muted },
   saveBar: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row' },
   pHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter },
   pTitle: { fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.8, color: colors.ink },
