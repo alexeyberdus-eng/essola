@@ -84,7 +84,7 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
-      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 2500);
+      const out = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}. ` : ''}Формула: ${list}` }], 1000);
       return reply(200, out);
     }
     if (req.mode === 'analogs') {
@@ -100,7 +100,7 @@ module.exports.handler = async (event, context) => {
       const lower = (req.ingredients || []).map((i) => String(i).toLowerCase());
       const seen = (d) => !!d && lower.filter((i) => `${d.title} ${d.text}`.toLowerCase().includes(i)).length >= Math.min(5, lower.length);
       const found = docs.map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n');
-      const out = await chat(process.env.REVIEW_MODEL || 'qwen3.6-35b-a3b/latest', [{ role: 'user', content: `${ANALOGS}\n\nСостав пользователя: ${list}\nТовары:\n${found}` }], 2500);
+      const out = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${ANALOGS}\n\nСостав пользователя: ${list}\nТовары:\n${found}` }], 1000);
       const items = (Array.isArray(out.items) ? out.items : [])
         .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(seen(docs[(x.n | 0) - 1]) ? 100 : 75, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
         .filter((x) => x.url && x.match >= 20)
