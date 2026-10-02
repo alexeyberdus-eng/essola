@@ -1,3 +1,5 @@
+import { LONG_ARTICLES } from './articles-long';
+
 export type ArticleCat = 'Основы' | 'Активы' | 'Кислоты' | 'Масла' | 'Безопасность';
 export type Article = {
   id: string;
@@ -12,7 +14,7 @@ export type Article = {
 
 export const ARTICLE_CATS: ArticleCat[] = ['Основы', 'Активы', 'Кислоты', 'Масла', 'Безопасность'];
 
-export const ARTICLES: Article[] = [
+const SHORT: Article[] = [
   {
     id: 'niacinamide',
     cat: 'Активы',
@@ -20,7 +22,6 @@ export const ARTICLES: Article[] = [
     lead: 'Какие концентрации работают, с чем сочетать и почему «покраснение от ниацинамида» — не приговор.',
     minutes: 12,
     icon: 'spark',
-    featured: true,
     sections: [
       { h: 'Что это', p: 'Ниацинамид — форма витамина B3. Он водорастворим, стабилен на свету и в широком диапазоне pH, поэтому его легко вводить в домашние эмульсии, тоники и сыворотки.' },
       { h: 'Что делает', p: 'Укрепляет барьер кожи (стимулирует синтез церамидов), уменьшает выработку себума, выравнивает тон и следы постакне, снижает видимость пор. Эффект накопительный: первые изменения заметны через 4–8 недель.' },
@@ -128,6 +129,9 @@ export const ARTICLES: Article[] = [
     ],
   },
 ];
+
+/** Long reads first, so the featured one leads the list. */
+export const ARTICLES: Article[] = [...LONG_ARTICLES, ...SHORT];
 
 export type Term = { term: string; def: string };
 
