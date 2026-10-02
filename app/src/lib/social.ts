@@ -84,3 +84,12 @@ export async function forumCreate(nick: string, title: string, text: string, cat
 export async function forumReply(tid: string, nick: string, text: string) {
   return (await call<{ topic: Topic }>({ mode: 'forum.reply', tid, id: await myId(), nick, text })).topic;
 }
+
+/** Recipes the admin published from a table. */
+export async function editorialList(): Promise<Recipe[]> {
+  if (!socialEnabled) return [];
+  return (await call<{ items: Recipe[] }>({ mode: 'editorial.list' })).items ?? [];
+}
+export async function editorialAdd(email: string, recipes: Recipe[]) {
+  return call<{ count: number }>({ mode: 'editorial.add', email, recipes });
+}

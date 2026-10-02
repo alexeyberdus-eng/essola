@@ -12,6 +12,7 @@ import { useCommunity } from '../../context/CommunityContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { useUserContent } from '../../context/UserContentContext';
 import { recipeMeta } from '../../data/community';
+import { useExtraRecipes } from '../../lib/editorial';
 import { setDraft } from '../../lib/builder';
 import { CATEGORIES, Category, LEVELS, Recipe, RECIPES } from '../../data/recipes';
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
@@ -31,6 +32,7 @@ export default function FeedScreen() {
   const { liked, likeCount } = useLibrary();
   const { count } = useCommunity();
   const { myRecipes } = useUserContent();
+  const extra = useExtraRecipes();
   const [sort, setSort] = useState<Sort>('for-you');
   const [cat, setCat] = useState<'all' | 'mine' | Category>('all');
   const [query, setQuery] = useState('');
@@ -43,7 +45,7 @@ export default function FeedScreen() {
   const q = query.trim().toLowerCase();
   const filters = (skin ? 1 : 0) + (level ? 1 : 0) + (time ? 1 : 0);
   const list = useMemo(() => {
-    const all: Recipe[] = cat === 'mine' ? myRecipes : [...myRecipes, ...RECIPES];
+    const all: Recipe[] = cat === 'mine' ? myRecipes : [...myRecipes, ...extra, ...RECIPES];
     let l = all.filter((r) => {
       if (sort === 'saved' && !liked.has(r.id)) return false;
       if (cat !== 'all' && cat !== 'mine' && r.category !== cat) return false;
@@ -58,7 +60,7 @@ export default function FeedScreen() {
     if (sort === 'easy') l = [...l].sort((a, b) => a.level - b.level || a.minutes - b.minutes);
     if (sort === 'for-you') l = [...l].sort((a, b) => likeCount(b.id) - likeCount(a.id));
     return l;
-  }, [sort, cat, q, liked, likeCount, count, myRecipes, skin, level, time]);
+  }, [sort, cat, q, liked, likeCount, count, myRecipes, extra, skin, level, time]);
 
   const togglePanel = () => {
     tap();

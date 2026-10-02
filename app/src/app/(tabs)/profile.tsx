@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { useIsAdmin } from '../../lib/admin';
 import { myId, saveMe } from '../../lib/social';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +42,7 @@ type TabKey = 'recipes' | 'scans' | 'shelf';
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const admin = useIsAdmin();
   const { profile } = useProfile();
   // Keep the public profile (nickname) in sync for the community.
   useEffect(() => {
@@ -141,10 +143,10 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <View style={{ marginTop: 14 }}>
-          {tab === 'recipes' && (
+          {tab === 'recipes' && admin && (
             <Press haptic={false} onPress={() => router.push('/import-recipes' as never)} style={styles.importRow}>
               <Icon name="plus" size={16} color={colors.violet} />
-              <Text style={styles.importText}>Загрузить рецепты из таблицы (CSV)</Text>
+              <Text style={styles.importText}>Админ: загрузить рецепты из CSV</Text>
             </Press>
           )}
           {tab === 'recipes' &&

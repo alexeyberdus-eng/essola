@@ -890,6 +890,9 @@ export function setUserRecipes(list: Recipe[]) {
 /** Community recipes loaded this session, so the recipe screen can open them by id. */
 export const COMMUNITY_RECIPES = new Map<string, Recipe>();
 
+/** Editorial recipes published by the admin, loaded from the server at start. */
+export const EXTRA_RECIPES: Recipe[] = [];
+
 export function getRecipe(id: string) {
-  return RECIPES.find((r) => r.id === id) ?? userRecipes.find((r) => r.id === id) ?? COMMUNITY_RECIPES.get(id);
+  return RECIPES.find((r) => r.id === id) ?? EXTRA_RECIPES.find((r) => r.id === id) ?? userRecipes.find((r) => r.id === id) ?? COMMUNITY_RECIPES.get(id);
 }

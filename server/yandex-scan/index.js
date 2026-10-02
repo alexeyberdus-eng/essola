@@ -271,6 +271,21 @@ module.exports.handler = async (event, context) => {
       await put(`users/${target}/followers.json`, list);
       return reply(200, { followers: list.length, following: !!req.on });
     }
+    // Recipes the admin imported from a table, shown to everyone next to the built-in editorial ones.
+    if (req.mode === 'editorial.list') {
+      return reply(200, { items: await get('editorial.json', []) });
+    }
+    if (req.mode === 'editorial.add') {
+      const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32c'];
+      const who = crypto.createHash('sha256').update(String(req.email || '').trim().toLowerCase()).digest('hex');
+      if (!ADMINS.includes(who)) return reply(403, { error: 'not_admin' });
+      const incoming = (Array.isArray(req.recipes) ? req.recipes : []).filter((r) => r && r.id && r.title && Array.isArray(r.ingredients)).slice(0, 500);
+      const list = await get('editorial.json', []);
+      const ids = new Set(incoming.map((r) => r.id));
+      const next = [...incoming.map((r) => ({ ...r, own: false, editorial: true, photo: undefined })), ...list.filter((r) => !ids.has(r.id))].slice(0, 3000);
+      await put('editorial.json', next);
+      return reply(200, { count: next.length });
+    }
     // Forum: an index of topics (newest activity first) plus one file per topic with its replies.
     if (req.mode === 'forum.list') {
       const idx = await get('forum/index.json', []);
