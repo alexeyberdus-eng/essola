@@ -17,6 +17,7 @@ import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
 import { aiEnabled, aiScan, productByBarcode, productByLink, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
 import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
@@ -153,7 +154,8 @@ export default function ScannerScreen() {
     try {
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
-        // Not in our base yet: read the page quietly on the phone while the loader is shown.
+        // Not in our base yet: open the page in the app and read it there.
+        setBusy(false);
         setShop(url);
         return;
       }
@@ -385,6 +387,7 @@ export default function ScannerScreen() {
             <Text style={styles.linkText}>Вставить ссылку на Золотое Яблоко или Летуаль</Text>
           </Press>
         )}
+        {aiEnabled && !lookup && <LinkHelp />}
       </View>
   );
 
@@ -499,7 +502,11 @@ export default function ScannerScreen() {
         onClose={() => {
           setShop(null);
           setBusy(false);
-          setNotice('Не смогли прочитать состав со страницы магазина. Сфотографируйте блок «Состав» на упаковке — это займёт пару секунд.');
+        }}
+        onScreenshot={() => {
+          setShop(null);
+          setBusy(false);
+          pick();
         }}
         onFound={({ title, text }) => {
           const url = shop!;

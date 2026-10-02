@@ -1,5 +1,9 @@
-import { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, fonts } from '../theme';
+import { Icon } from './Icon';
+import { Press, tap } from './ui';
 import { WebView } from 'react-native-webview';
 
 // Runs inside the shop page: opens a collapsed "Состав" tab and posts the ingredient list once it appears.
@@ -39,26 +43,40 @@ true;
 `;
 
 /**
- * Reads a Gold Apple / Letual product page on the phone behind the loader: opens the page like a normal visit,
- * finds the ingredient list and hands it back. The page sits on screen under the loader (an off-screen web view
- * is throttled by the OS, so the shops' device check never finishes). Gives up after 35 s.
+ * Opens a Gold Apple / Letual product page inside the app, on screen: the shop's device check passes like for
+ * any visitor, and the ingredient list is read automatically as soon as it appears (the script also opens the
+ * «Состав» tab). The user can scroll, open the tab by hand, or fall back to a screenshot of it.
  */
-export function ShopPage({ url, onFound, onClose }: { url: string | null; onFound: (p: { title: string; text: string }) => void; onClose: () => void }) {
+export function ShopPage({ url, onFound, onClose, onScreenshot }: { url: string | null; onFound: (p: { title: string; text: string }) => void; onClose: () => void; onScreenshot: () => void }) {
+  const insets = useSafeAreaInsets();
   const done = useRef(false);
+  const web = useRef<WebView>(null);
+  const [slow, setSlow] = useState(false);
   useEffect(() => {
     done.current = false;
+    setSlow(false);
     if (!url) return;
-    const t = setTimeout(() => {
-      if (!done.current) onClose();
-    }, 35000);
+    const t = setTimeout(() => setSlow(true), 12000);
     return () => clearTimeout(t);
-    // onClose is stable enough for a one-shot timeout
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
   if (!url) return null;
+  const shop = /letu/i.test(url) ? 'Летуаль' : 'Золотое Яблоко';
   return (
-    <View style={styles.hidden} pointerEvents="none">
+    <View style={[styles.sheet, { paddingTop: insets.top + 6 }]}>
+      <View style={styles.head}>
+        <Press onPress={onClose} style={styles.close} accessibilityLabel="Закрыть">
+          <Icon name="close" size={18} color={colors.ink} />
+        </Press>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Читаем состав · {shop}</Text>
+          <Text style={styles.hint} numberOfLines={2}>
+            {slow ? 'Откройте на странице вкладку «Состав» — прочитаем сами' : 'Страница загружается, состав найдём автоматически…'}
+          </Text>
+        </View>
+        <ActivityIndicator color={colors.violet} />
+      </View>
       <WebView
+        ref={web}
         source={{ uri: url }}
         injectedJavaScript={FIND}
         // Look like mobile Safari / Chrome: some shops refuse unknown in-app browsers.
@@ -66,12 +84,14 @@ export function ShopPage({ url, onFound, onClose }: { url: string | null; onFoun
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         domStorageEnabled
+        onLoadEnd={() => web.current?.injectJavaScript(FIND)}
         onMessage={(e) => {
           if (done.current) return;
           try {
             const data = JSON.parse(e.nativeEvent.data) as { title: string; text: string };
             if (data.text) {
               done.current = true;
+              tap('success');
               onFound({ title: data.title.replace(/\s*[—|-]\s*(Золотое Яблоко|Gold Apple|Л'Этуаль|ЛЭТУАЛЬ|letu).*$/i, '').trim(), text: data.text.replace(/\\n/g, ' ') });
             }
           } catch {
@@ -80,10 +100,28 @@ export function ShopPage({ url, onFound, onClose }: { url: string | null; onFoun
         }}
         style={{ flex: 1 }}
       />
+      {slow && (
+        <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
+          <Press onPress={() => web.current?.injectJavaScript(FIND)} style={[styles.btn, styles.btnDark]}>
+            <Text style={[styles.btnText, { color: '#fff' }]}>Прочитать состав</Text>
+          </Press>
+          <Press onPress={onScreenshot} style={styles.btn}>
+            <Text style={styles.btnText}>Загрузить скриншот</Text>
+          </Press>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hidden: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  sheet: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#fff', zIndex: 30 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: colors.line },
+  close: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surf, alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  hint: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 1 },
+  bar: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingTop: 10, borderTopWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
+  btn: { flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surf },
+  btnDark: { backgroundColor: colors.ink },
+  btnText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
 });
