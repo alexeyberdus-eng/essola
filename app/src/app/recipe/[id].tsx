@@ -13,6 +13,7 @@ import { plural } from '../../data/community';
 import { Button, IconButton, Press, T } from '../../components/ui';
 import { getRecipe } from '../../data/recipes';
 import { formatPercent, percentages } from '../../lib/formula';
+import { recipeStory } from '../../lib/recipeStory';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 
 export default function RecipeScreen() {
@@ -33,6 +34,7 @@ export default function RecipeScreen() {
   }
 
   const pct = percentages(recipe);
+  const story = recipeStory(recipe);
   const phases = recipePhases(recipe);
   const sum = phases.reduce((a, [, v]) => a + v, 0) || 1;
   const flaskLayers = phases.map(([k, v]) => [k, (v / sum) * 88] as [PhaseKey, number]);
@@ -98,12 +100,10 @@ export default function RecipeScreen() {
           ))}
         </View>
 
-        {!!recipe.about && (
-          <View style={styles.about}>
-            <Text style={styles.aboutTitle}>О рецепте</Text>
-            <T style={{ fontSize: 14.5, lineHeight: 21 }}>{recipe.about}</T>
-          </View>
-        )}
+        <View style={styles.about}>
+          <Text style={styles.aboutTitle}>О рецепте</Text>
+          <T style={{ fontSize: 15, lineHeight: 22 }}>{story.lead}</T>
+        </View>
         {!!recipe.benefits?.length && (
           <View style={styles.benefits}>
             <Text style={styles.aboutTitle}>Что даёт</Text>
@@ -117,6 +117,51 @@ export default function RecipeScreen() {
             ))}
           </View>
         )}
+
+        <Text style={styles.storyH}>Как работает формула</Text>
+        {story.parts.map((p) => (
+          <View key={p.name} style={styles.part}>
+            <View style={styles.partHead}>
+              <Text style={styles.partName}>{p.name}</Text>
+              {!!p.share && <Text style={styles.partShare}>{p.share}</Text>}
+            </View>
+            <Text style={styles.partRole}>{p.role}</Text>
+            <T style={{ fontSize: 14, lineHeight: 20 }}>{p.why}</T>
+          </View>
+        ))}
+
+        {story.pairs.length > 0 && (
+          <>
+            <Text style={styles.storyH}>Связки, которые здесь работают</Text>
+            {story.pairs.map((p) => (
+              <View key={p.title} style={styles.pair}>
+                <Text style={styles.pairTitle}>{p.title}</Text>
+                <T style={{ fontSize: 14, lineHeight: 20 }}>{p.text}</T>
+              </View>
+            ))}
+          </>
+        )}
+
+        {story.balance.length > 0 && (
+          <View style={styles.about}>
+            <Text style={styles.aboutTitle}>Почему такие пропорции</Text>
+            {story.balance.map((b) => (
+              <T key={b} style={{ fontSize: 14, lineHeight: 20 }}>
+                {b}
+              </T>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.about}>
+          <Text style={styles.aboutTitle}>Понадобится</Text>
+          {story.equipment.map((e) => (
+            <View key={e} style={styles.benefit}>
+              <Icon name="flask" size={14} color={colors.violet} />
+              <T style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>{e}</T>
+            </View>
+          ))}
+        </View>
 
         <View style={styles.sectionHead}>
           <T v="label">Формула{pct ? ' · 100%' : ''}</T>
@@ -146,6 +191,16 @@ export default function RecipeScreen() {
           </View>
         ))}
 
+        <View style={[styles.about, { backgroundColor: '#F7F4FF' }]}>
+          <Text style={styles.aboutTitle}>Технология: на что обратить внимание</Text>
+          {story.technology.map((t, i) => (
+            <View key={i} style={styles.benefit}>
+              <Text style={styles.techN}>{i + 1}</Text>
+              <T style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>{t}</T>
+            </View>
+          ))}
+        </View>
+
         {!!recipe.usage && (
           <View style={[styles.note, { backgroundColor: '#F1EDFF' }]}>
             <View style={styles.noteHead}>
@@ -171,6 +226,15 @@ export default function RecipeScreen() {
             <T style={{ fontSize: 14, lineHeight: 20 }}>{recipe.caution}</T>
           </View>
         )}
+        <View style={styles.about}>
+          <Text style={styles.aboutTitle}>Хранение и безопасность</Text>
+          {story.storage.map((t) => (
+            <View key={t} style={styles.benefit}>
+              <Icon name="shield" size={14} color={colors.sageDeep} />
+              <T style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>{t}</T>
+            </View>
+          ))}
+        </View>
         <Discussion recipeId={recipe.id} />
         <T v="small" style={{ marginTop: 16 }}>
           Хранение: {recipe.shelfLife}. Перед первым применением сделайте тест на сгибе локтя.
@@ -185,6 +249,15 @@ export default function RecipeScreen() {
 }
 
 const styles = StyleSheet.create({
+  storyH: { fontFamily: fonts.display, fontSize: 19, color: colors.ink, marginTop: 24, marginBottom: 4 },
+  part: { paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.line, gap: 3 },
+  partHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
+  partName: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  partShare: { fontFamily: fonts.monoMedium, fontSize: 13, color: colors.violet },
+  partRole: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  pair: { marginTop: 10, padding: 14, borderRadius: 18, backgroundColor: '#EEF8F3', gap: 4 },
+  pairTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.sageDeep },
+  techN: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.violet, color: '#fff', textAlign: 'center', lineHeight: 22, fontFamily: fonts.semibold, fontSize: 12, overflow: 'hidden' },
   about: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7', gap: 6 },
   aboutTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginBottom: 2 },
   benefits: { marginTop: 10, padding: 16, borderRadius: 20, backgroundColor: '#F7F4FF', gap: 8 },

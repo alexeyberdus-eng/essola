@@ -8,6 +8,7 @@ import { identify } from '../lib/analyze';
 import { formatPercent, percentages } from '../lib/formula';
 import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
+import { recipeTeaser } from '../lib/recipeStory';
 import { LikeButton } from './RecipeRow';
 import { Press } from './ui';
 import { RecipeArt } from './RecipeArt';
@@ -66,11 +67,9 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
             </View>
             <RecipeArt recipe={recipe} size={76} />
           </View>
-          {!!recipe.about && (
-            <Text style={styles.about} numberOfLines={3}>
-              {recipe.about}
-            </Text>
-          )}
+          <Text style={styles.about} numberOfLines={3}>
+            {recipeTeaser(recipe)}
+          </Text>
           {!!recipe.benefits?.length && (
             <View style={styles.benefits}>
               {recipe.benefits.slice(0, 3).map((b) => (
