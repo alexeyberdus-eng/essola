@@ -2,6 +2,7 @@ import { ABOUT } from './ingredients-about';
 import { EXTRA } from './ingredients-more';
 import { EXTRA2 } from './ingredients-more2';
 import { EXTRA3 } from './ingredients-more3';
+import { EXTRA4 } from './ingredients-more4';
 export type Origin = 'natural' | 'mineral' | 'identical' | 'synthetic';
 
 export type Fn =
@@ -313,11 +314,11 @@ const CORE: Ingredient[] = [
   d('Iron Oxides', 'Оксиды железа', ['colorant'], 'mineral', 0, 'Минеральные пигменты.', { aliases: ['ci 77491', 'ci 77492', 'ci 77499'] }),
 ];
 
-const coreInci = new Set(CORE.map((i) => i.inci.toLowerCase()));
+const seenInci = new Set(CORE.map((i) => i.inci.toLowerCase()));
 /** One shared base for the scanner, builder, glossary and ingredient pages. */
 export const INGREDIENTS: Ingredient[] = [
   ...CORE.map((i) => ({ ...i, about: i.about ?? ABOUT[i.inci] })),
-  ...[...EXTRA, ...EXTRA2, ...EXTRA3].filter((i) => !coreInci.has(i.inci.toLowerCase())),
+  ...[...EXTRA, ...EXTRA2, ...EXTRA3, ...EXTRA4].filter((i) => !seenInci.has(i.inci.toLowerCase()) && !!seenInci.add(i.inci.toLowerCase())),
 ];
 
 
