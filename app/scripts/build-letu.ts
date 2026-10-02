@@ -76,6 +76,11 @@ index.sort((a, b) => b.p - a.p);
 mkdirSync(`${outDir}/x`, { recursive: true });
 writeFileSync(`${outDir}/letu-index.json`, JSON.stringify(index));
 for (const [h, m] of Object.entries(shards)) writeFileSync(`${outDir}/x/${h}.json`, JSON.stringify(m));
+// The same base as a table for the owner (Excel opens it: UTF-8 with BOM, ";" between columns).
+const cell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+const allText: Record<string, string> = Object.assign({}, ...Object.values(shards));
+const rows = index.map((x) => [x.t, x.b, x.c, x.s, x.n, x.p, x.u, x.i, allText[x.k] ?? ''].map(cell).join(';'));
+writeFileSync(`${outDir}/letu.csv`, '\uFEFF' + ['Название;Бренд;Категория;Оценка;Ингредиентов;Отзывов;Ссылка;Фото;Состав', ...rows].join('\r\n'));
 const by: Record<string, number> = {};
 for (const x of index) by[x.c] = (by[x.c] || 0) + 1;
 console.log('letual items', index.length, 'shards', Object.keys(shards).length, JSON.stringify(by));

@@ -146,4 +146,6 @@ jobs:
           cd out/build
           # Compositions first, then the index, so the app never sees cards without their shard.
           ls x | xargs -P 24 -I{} sh -c 'curl -s -f -o /dev/null -X PUT "$B/letu/x/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @x/{} || echo "fail {}"'
+          gzip -k -9 letu.csv
+          curl -sS -f -X PUT "$B/exports/letu.csv.gz" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/gzip' --data-binary @letu.csv.gz -w 'table HTTP %{http_code}\n'
           curl -sS -f -X PUT "$B/letu/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @letu-index.json -w 'index HTTP %{http_code}\n'
