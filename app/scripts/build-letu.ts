@@ -59,13 +59,20 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
   const have = new Set(index.map((x) => x.k));
   const prev = JSON.parse(readFileSync(`${prevDir}/letu-index.json`, 'utf8')) as typeof index;
   let kept = 0;
+  let lost = 0;
   for (const x of prev) {
     if (have.has(x.k)) continue;
+    const h = shardOf(x.k);
+    // A card whose composition file is missing is dropped, so the next run fetches it again.
+    if (!existsSync(`${prevDir}/x/${h}.json`)) {
+      lost++;
+      continue;
+    }
     index.push(x);
     kept++;
-    const h = shardOf(x.k);
-    if (!shards[h] && existsSync(`${prevDir}/x/${h}.json`)) shards[h] = {};
+    if (!shards[h]) shards[h] = {};
   }
+  if (lost) console.log('dropped (composition file missing), will be fetched again', lost);
   for (const h of Object.keys(shards)) {
     const f = `${prevDir}/x/${h}.json`;
     if (existsSync(f)) shards[h] = { ...(JSON.parse(readFileSync(f, 'utf8')) as Record<string, string>), ...shards[h] };
