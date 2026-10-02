@@ -125,7 +125,7 @@ export async function searchProducts(q: string): Promise<CachedProduct[]> {
   }
 }
 
-export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number };
+export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string };
 /** A page of our pre-scored catalog (built weekly from Open Beauty Facts); null when the server can't be reached. */
 export async function catalogPage(q: string, cat: string | undefined, sort: string, page: number): Promise<{ items: CatalogItem[]; total: number } | null> {
   if (!aiEnabled) return null;

@@ -216,6 +216,29 @@ async function loadCatalog(iam) {
   return catalog || [];
 }
 
+// Letual catalog (collected weekly by CI with Letual's permission): compact cards in memory,
+// compositions in sharded files loaded only for the cards being shown.
+let letu = null, letuAt = 0;
+async function loadLetu(iam) {
+  if (letu && Date.now() - letuAt < 6 * 3600e3) return letu;
+  const data = await cacheGet('letu/index.json', iam);
+  if (Array.isArray(data)) [letu, letuAt] = [data, Date.now()];
+  return letu || [];
+}
+const shards = new Map();
+async function letuShard(h, iam) {
+  if (shards.has(h)) return shards.get(h);
+  const data = (await cacheGet(`letu/x/${h}.json`, iam)) || {};
+  if (shards.size > 300) shards.delete(shards.keys().next().value);
+  shards.set(h, data);
+  return data;
+}
+async function withCompositions(items, iam) {
+  const need = [...new Set(items.filter((x) => !x.x && x.k.startsWith('letu:')).map((x) => crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)))];
+  const loaded = Object.fromEntries(await Promise.all(need.map(async (h) => [h, await letuShard(h, iam)])));
+  return items.map((x) => (x.x ? x : { ...x, x: loaded[crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)]?.[x.k] || '' }));
+}
+
 module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   const h = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
@@ -342,16 +365,18 @@ module.exports.handler = async (event, context) => {
     }
     if (req.mode === 'catalog') {
       // Ready-made catalog built weekly by CI (scripts/build-catalog.ts), kept warm between calls.
-      const all = await loadCatalog(iam);
+      const [obf, letuList] = await Promise.all([loadCatalog(iam), loadLetu(iam)]);
+      // Letual first: Russian shelf products the users actually buy; then Open Beauty Facts.
+      const all = [...letuList, ...obf];
       const words = String(req.q || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
       let list = all;
       if (req.cat) list = list.filter((x) => x.c === req.cat);
       if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
       if (req.sort === 'best') list = [...list].sort((a, b) => b.s - a.s);
       else if (req.sort === 'worst') list = [...list].sort((a, b) => a.s - b.s);
-      const size = Math.min(Number(req.size) || 40, 100);
+      const size = Math.min(Number(req.size) || 40, 40);
       const page = Math.max(Number(req.page) || 1, 1);
-      return reply(200, { items: list.slice((page - 1) * size, page * size), total: list.length });
+      return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size), iam), total: list.length });
     }
     if (req.mode === 'search') {
       return reply(200, { items: await search(req.q, iam) });

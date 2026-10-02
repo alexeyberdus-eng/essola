@@ -44,7 +44,7 @@ jobs:
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
-          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 256m --execution-timeout 60s --source-path scan.zip"
+          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 512m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.
           yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
             || yc serverless function version create $V --environment "$ENVV" >/dev/null
@@ -67,6 +67,7 @@ jobs:
                    '{"mode":"social.comment","key":"zz-smoke","id":"zzsmoke","nick":"smoke_test","text":"проверка"}' \
                    '{"mode":"user.get","id":"zzsmoke","viewer":"x"}' \
                    '{"mode":"forum.list"}' \
+                   '{"mode":"catalog","q":"la roche","size":2}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done

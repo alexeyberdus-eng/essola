@@ -15,7 +15,7 @@ import { ScoreBadge } from './ScoreBadge';
 import { Brand, Glow } from './silk';
 import { Press, tap } from './ui';
 
-export type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string };
+export type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string; url?: string };
 type Sort = 'popular' | 'best' | 'worst';
 
 const OBF = 'https://world.openbeautyfacts.org/cgi/search.pl';
@@ -25,6 +25,8 @@ const PAGE = 40;
 // Category chips map to Open Beauty Facts category tags.
 const CATS: { key: string; label: string; tag?: string }[] = [
   { key: 'all', label: 'Все' },
+  { key: 'makeup', label: 'Макияж', tag: 'makeup' },
+  { key: 'perfume', label: 'Парфюм', tag: 'perfume' },
   { key: 'face', label: 'Лицо', tag: 'face-creams' },
   { key: 'serum', label: 'Сыворотки', tag: 'serums' },
   { key: 'clean', label: 'Умывание', tag: 'face-cleansers' },
@@ -96,7 +98,10 @@ export async function pageOBF(q: string, tag: string | undefined, page: number):
 export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular'): Promise<{ list: Found[]; sorted: boolean }> {
   const c = await catalogPage(q, tag, sort, page);
   if (c && (c.total > 0 || page > 1)) {
-    const list = c.items.map((x) => ({ key: `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: 'Open Beauty Facts', barcode: x.k }));
+    const list = c.items.map((x) => {
+      const letu = x.k.startsWith('letu:');
+      return { key: letu ? x.k : `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: letu ? 'Летуаль' : 'Open Beauty Facts', barcode: letu ? undefined : x.k, url: x.u };
+    });
     return { list, sorted: true };
   }
   return { list: await pageOBF(q, tag, page), sorted: false };
@@ -173,7 +178,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
 
   const open = (p: Found, overall: number) => {
     tap();
-    const scan = saveScan({ title: [p.brand, p.title].filter(Boolean).join(' · '), text: p.text, overall, barcode: p.barcode, source: p.source, image: p.image });
+    const scan = saveScan({ title: [p.brand, p.title].filter(Boolean).join(' · '), text: p.text, overall, barcode: p.barcode, source: p.source, image: p.image, url: p.url });
     router.push(`/analysis/${scan.id}`);
   };
 

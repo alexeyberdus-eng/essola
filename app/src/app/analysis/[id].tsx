@@ -130,7 +130,7 @@ export default function AnalysisScreen() {
         <FadeIn>
           <LinearGradient colors={HERO[me?.verdict ?? (scores.overall >= 68 ? 'good' : scores.overall >= 50 ? 'caution' : 'avoid')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
             <Text style={styles.heroKicker} numberOfLines={1}>
-              {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : 'Скан состава'} · {items.length} ингредиентов
+              {scan.barcode ? `Штрихкод · ${scan.source ?? 'база Essola'}` : scan.source === 'Летуаль' ? 'Летуаль' : 'Скан состава'} · {items.length} ингредиентов
             </Text>
             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
               <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>
@@ -262,6 +262,8 @@ export default function AnalysisScreen() {
           </View>
         </FadeIn>
 
+
+        {!!scan.url && <Button label={`Купить в ${scan.source === 'Летуаль' ? 'Летуаль' : 'магазине'}`} icon="external" variant="outline" onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={{ marginTop: 14 }} />}
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
           <Button label={onShelf ? 'На полке' : 'На полку'} icon={onShelf ? 'check' : 'shelf'} onPress={toShelf} style={{ flex: 1 }} variant={onShelf ? 'outline' : 'honey'} />
