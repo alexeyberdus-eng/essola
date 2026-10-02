@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Image, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useUserContent } from '../../context/UserContentContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { LikeButton } from '../../components/RecipeRow';
@@ -18,6 +19,7 @@ export default function RecipeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const recipe = getRecipe(id);
   const insets = useSafeAreaInsets();
+  const { removeRecipe } = useUserContent();
 
   if (!recipe) {
     return (
@@ -45,6 +47,18 @@ export default function RecipeScreen() {
       <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
         <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <View style={styles.navRight}>
+          {recipe.own && (
+            <IconButton
+              icon="close"
+              label="Удалить рецепт"
+              onPress={() =>
+                Alert.alert('Удалить рецепт?', `«${recipe.title}» исчезнет из ваших рецептов.`, [
+                  { text: 'Отмена', style: 'cancel' },
+                  { text: 'Удалить', style: 'destructive', onPress: () => { removeRecipe(recipe.id); router.back(); } },
+                ])
+              }
+            />
+          )}
           <LikeButton id={recipe.id} withCount />
         </View>
       </View>
@@ -121,7 +135,7 @@ export default function RecipeScreen() {
         ))}
 
         <View style={styles.sectionHead}>
-          <T v="label">Процесс · {recipe.steps.length} шагов</T>
+          <T v="label">Процесс · {recipe.steps.length} {plural(recipe.steps.length, 'шаг', 'шага', 'шагов')}</T>
         </View>
         {recipe.steps.map((step, i) => (
           <View key={i} style={styles.step}>

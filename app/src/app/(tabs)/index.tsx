@@ -124,37 +124,8 @@ export default function FeedScreen() {
               <Icon name="close" size={16} color={colors.muted} />
             </Press>
           )}
-          <Press onPress={togglePanel} style={[styles.filterBtn, panel && { backgroundColor: colors.olive2 }]} accessibilityLabel="Фильтры">
-            <Icon name="filter" size={17} color={colors.onDark} />
-            {filters > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{filters}</Text>
-              </View>
-            )}
-          </Press>
         </View>
       </View>
-
-      {panel && (
-        <View style={styles.panel}>
-          <FilterRow title="Тип кожи" options={SKINS.map((s) => [s, s] as const)} value={skin} onChange={setSkin} />
-          <FilterRow title="Сложность" options={([1, 2, 3] as const).map((l) => [l, LEVELS[l]] as const)} value={level} onChange={setLevel} />
-          <FilterRow title="Время" options={TIMES} value={time} onChange={setTime} />
-          {filters > 0 && (
-            <Press
-              haptic={false}
-              onPress={() => {
-                setSkin(null);
-                setLevel(null);
-                setTime(null);
-              }}
-              style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
-            >
-              <Text style={styles.reset}>Сбросить фильтры</Text>
-            </Press>
-          )}
-        </View>
-      )}
 
       <View style={styles.sort}>
         {(

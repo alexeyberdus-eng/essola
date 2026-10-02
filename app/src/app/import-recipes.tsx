@@ -73,7 +73,7 @@ export default function ImportRecipes() {
         ) : (
         <>
         <Text style={styles.h1}>Рецепты из таблицы</Text>
-        <Text style={styles.sub}>Загрузите CSV из Excel, Google Таблиц или Numbers — рецепты появятся в ленте у всех пользователей с подписью «Редакция essola».</Text>
+        <Text style={styles.sub}>Загрузите CSV из Excel, Google Таблиц или Numbers — рецепты появятся в ленте у всех пользователей с подписью «essola lab».</Text>
 
         <View style={styles.card}>
           <Text style={styles.h2}>Как оформить таблицу</Text>

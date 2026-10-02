@@ -59,18 +59,6 @@ export default function Forum() {
           <Icon name="plus" size={18} color="#fff" />
         </Press>
       </View>
-      <View style={styles.seg}>
-        {(
-          [
-            ['topics', 'Темы'],
-            ['recipes', 'Рецепты участниц'],
-          ] as const
-        ).map(([k, l]) => (
-          <Press key={k} haptic={false} onPress={() => { tap(); setTab(k); }} style={[styles.segItem, tab === k && styles.segItemOn]}>
-            <Text style={[styles.segText, tab === k && { color: colors.ink }]}>{l}</Text>
-          </Press>
-        ))}
-      </View>
       {tab === 'topics' && (
         <View style={{ marginTop: 12 }}>
           <Seg small inset={space.gutter} options={[{ key: 'all', label: 'Все' }, ...FORUM_CATS.map((c) => ({ key: c, label: c }))]} value={cat} onChange={(k) => { tap(); setCat(k); }} />

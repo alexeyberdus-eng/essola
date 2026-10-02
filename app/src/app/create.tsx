@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { publishRecipe, saveMe } from '../lib/social';
+import { saveMe } from '../lib/social';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -66,7 +66,7 @@ export default function CreateRecipe() {
     };
     addRecipe(recipe);
     // Share it with the community under the user's nickname.
-    saveMe(user?.nick || 'essola_user', user?.name).then(() => publishRecipe(recipe));
+    saveMe(user?.nick || 'essola_user', user?.name);
     setDraft(null);
     router.replace(`/recipe/${recipe.id}`);
   };

@@ -66,7 +66,7 @@ const BOTTLE: Record<Category, Bottle> = { Лицо: 'dropper', Тело: 'jar',
 
 export function recipeMeta(recipe: Recipe) {
   const r = rng(recipe.id);
-  const author = recipe.editorial ? { name: 'Редакция essola', role: 'редакция' } : AUTHORS[Math.floor(r() * AUTHORS.length)];
+  const author = recipe.editorial ? { name: 'essola lab', role: 'редакция' } : AUTHORS[Math.floor(r() * AUTHORS.length)];
   return { author, bottle: BOTTLE[recipe.category], postedAgo: 60 + Math.floor(r() * 60 * 24 * 6) };
 }
 
