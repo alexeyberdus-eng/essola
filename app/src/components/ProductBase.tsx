@@ -32,6 +32,12 @@ const CATS: { key: string; label: string; tag?: string }[] = [
   { key: 'body', label: 'Тело', tag: 'body-lotions' },
   { key: 'sun', label: 'SPF', tag: 'sunscreens' },
   { key: 'lips', label: 'Губы', tag: 'lip-balms' },
+  { key: 'shower', label: 'Душ', tag: 'shower-gels' },
+  { key: 'hairmask', label: 'Маски для волос', tag: 'hair-masks' },
+  { key: 'deo', label: 'Дезодоранты', tag: 'deodorants' },
+  { key: 'mask', label: 'Маски', tag: 'face-masks' },
+  { key: 'hands', label: 'Руки', tag: 'hand-creams' },
+  { key: 'teeth', label: 'Зубные пасты', tag: 'toothpastes' },
 ];
 
 type OBFProduct = {
