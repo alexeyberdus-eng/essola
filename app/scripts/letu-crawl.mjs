@@ -11,7 +11,7 @@ const H = {
   'Accept-Language': 'ru-RU',
 };
 const CAP = 10000; // the searcher returns at most this many products per query
-const SIZE = 100;
+const SIZE = 36; // the page size the site itself uses; larger pages are rejected
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function req(url, body, tries = 4) {
@@ -20,6 +20,7 @@ async function req(url, body, tries = 4) {
       const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: H, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
       if (r.ok) return await r.json();
       if (r.status === 404) return null;
+      if (i === 0) console.log('HTTP', r.status, url.slice(0, 90), (await r.text()).slice(0, 160));
       await sleep(1500 * (i + 1));
     } catch {
       await sleep(1500 * (i + 1));
@@ -34,7 +35,7 @@ const bodyFor = (path, page, size = SIZE) => ({
   page: { number: page, size }, requestorInfo: [{ type: 'plp_category', url: path }], noAutocorrect: false, smartSearchMarker: false,
 });
 const search = (path, page, size) => req(`${BASE}/api/searcher/v1/search?pushSite=storeMobileRU`, bodyFor(path, page, size));
-const filters = (path) => req(`${BASE}/api/searcher/v1/filters?pushSite=storeMobileRU`, bodyFor(path, 1, 1));
+const filters = (path) => req(`${BASE}/api/searcher/v1/filters?pushSite=storeMobileRU`, bodyFor(path, 1, SIZE));
 
 // Finds the category node for `path` in the filters tree and returns its children paths.
 function childrenOf(tree, path) {
