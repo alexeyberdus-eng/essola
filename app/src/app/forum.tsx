@@ -1,44 +1,35 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '../components/Icon';
-import { RecipeCard } from '../components/RecipeCard';
+import { Icon, IconName } from '../components/Icon';
 import { Glow } from '../components/silk';
 import { Button, IconButton, Press, Seg, tap } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { ago, plural } from '../data/community';
-import { COMMUNITY_RECIPES, Recipe } from '../data/recipes';
-import { FORUM_CATS, forumCreate, forumList, recentRecipes, TopicRow } from '../lib/social';
+import { CAT_STYLE, FAQ, Faq } from '../data/forum-faq';
+import { normalize } from '../lib/analyze';
+import { FORUM_CATS, forumCreate, forumList, TopicRow } from '../lib/social';
 import { colors, fonts, space } from '../theme';
 
-type Tab = 'topics' | 'recipes';
+const catStyle = (c: string) => CAT_STYLE[c] ?? CAT_STYLE['Общее'];
 
-/** Forum: discussion topics by category plus fresh recipes published by essola users. */
+type Row = { kind: 'head'; title: string; sub?: string } | { kind: 'topic'; t: TopicRow } | { kind: 'faq'; f: Faq };
+
+/** Forum: questions answered by the essola lab technologist plus open discussions started by users. */
 export default function Forum() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>('topics');
   const [cat, setCat] = useState('all');
+  const [q, setQ] = useState('');
   const [topics, setTopics] = useState<TopicRow[] | null>(null);
-  const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState(false);
 
   const load = useCallback(async () => {
-    if (tab === 'topics') {
-      setTopics((await forumList(cat === 'all' ? undefined : cat).catch(() => ({ items: [] as TopicRow[] }))).items);
-    } else {
-      const list = await recentRecipes().catch(() => []);
-      setRecipes(
-        list.map(({ recipe, user: u }) => {
-          const r: Recipe = { ...recipe, own: false, author: { id: u.id, nick: u.nick } };
-          COMMUNITY_RECIPES.set(r.id, r);
-          return r;
-        }),
-      );
-    }
-  }, [tab, cat]);
+    setTopics((await forumList(cat === 'all' ? undefined : cat).catch(() => ({ items: [] as TopicRow[] }))).items);
+  }, [cat]);
 
   useEffect(() => {
     load();
@@ -50,8 +41,31 @@ export default function Forum() {
     setComposing(true);
   };
 
+  const rows = useMemo<Row[]>(() => {
+    const nq = normalize(q.trim());
+    const hit = (s: string) => !nq || normalize(s).includes(nq);
+    const live = (topics ?? []).filter((t) => hit(t.title + ' ' + t.preview));
+    const faq = FAQ.filter((x) => (cat === 'all' || x.cat === cat) && hit(x.title + ' ' + x.q + ' ' + x.tags.join(' ')));
+    const out: Row[] = [];
+    if (live.length) {
+      out.push({ kind: 'head', title: 'Обсуждения', sub: 'Вопросы участниц' });
+      out.push(...live.map((t) => ({ kind: 'topic' as const, t })));
+    }
+    if (faq.length) {
+      out.push({ kind: 'head', title: 'Ответы технолога', sub: `${faq.length} ${plural(faq.length, 'вопрос', 'вопроса', 'вопросов')} с разбором от essola lab` });
+      out.push(...faq.map((f) => ({ kind: 'faq' as const, f })));
+    }
+    return out;
+  }, [topics, cat, q]);
+
+  const counts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const x of FAQ) m[x.cat] = (m[x.cat] ?? 0) + 1;
+    return m;
+  }, []);
+
   const header = (
-    <View style={{ marginBottom: 10 }}>
+    <View style={{ marginBottom: 4 }}>
       <View style={styles.top}>
         <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <Text style={styles.h1}>Форум</Text>
@@ -59,79 +73,203 @@ export default function Forum() {
           <Icon name="plus" size={18} color="#fff" />
         </Press>
       </View>
-      {tab === 'topics' && (
-        <View style={{ marginTop: 12 }}>
-          <Seg small inset={space.gutter} options={[{ key: 'all', label: 'Все' }, ...FORUM_CATS.map((c) => ({ key: c, label: c }))]} value={cat} onChange={(k) => { tap(); setCat(k); }} />
+
+      <LinearGradient colors={['#2F3AB0', '#5B4BD6', '#A464C9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <Text style={styles.heroKicker}>essola lab · клуб домашней косметики</Text>
+        <Text style={styles.heroTitle}>Спросите технолога и тех, кто уже варит кремы</Text>
+        <View style={styles.stats}>
+          <Stat n={FAQ.length} label="ответов технолога" />
+          <Stat n={topics?.length ?? 0} label="обсуждений" />
+          <Stat n={FORUM_CATS.length} label="разделов" />
         </View>
+        <View style={styles.search}>
+          <Icon name="search" size={17} color={colors.muted} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Найти вопрос: консервант, ретинол, перхоть…" placeholderTextColor={colors.faint} style={styles.searchInput} returnKeyType="search" />
+          {!!q && (
+            <Press haptic={false} onPress={() => setQ('')} accessibilityLabel="Очистить">
+              <Icon name="close" size={16} color={colors.muted} />
+            </Press>
+          )}
+        </View>
+      </LinearGradient>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 14 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 8 }}>
+        <Chip on={cat === 'all'} label="Все темы" icon="home" fg={colors.ink} bg="#F3F4F8" onPress={() => setCat('all')} />
+        {FORUM_CATS.map((c) => {
+          const st = catStyle(c);
+          return <Chip key={c} on={cat === c} label={c} count={counts[c]} icon={st.icon} fg={st.fg} bg={st.bg} onPress={() => setCat(c)} />;
+        })}
+      </ScrollView>
+
+      {!composing && (
+        <Press onPress={newTopic} style={styles.ask}>
+          <View style={styles.askIcon}>
+            <Icon name="comment" size={18} color={colors.violet} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.askTitle}>Задать свой вопрос</Text>
+            <Text style={styles.askSub}>Про рецепт, ингредиент или уход — ответят участницы и технолог</Text>
+          </View>
+          <Icon name="arrowRight" size={18} color={colors.muted} />
+        </Press>
       )}
       {composing && <Composer nick={user?.nick || user?.name || 'гость'} onClose={() => setComposing(false)} onDone={(id) => { setComposing(false); router.push(`/topic/${id}` as never); load(); }} />}
     </View>
   );
 
-  const empty = (text: string) => (
-    <View style={styles.empty}>
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
-  );
-
-  const refresh = (
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={async () => {
-        setRefreshing(true);
-        await load();
-        setRefreshing(false);
-      }}
-    />
-  );
-
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Glow />
-      {tab === 'topics' ? (
-        <FlatList
-          data={topics ?? []}
-          keyExtractor={(t) => t.id}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 40 }}
-          refreshControl={refresh}
-          ListHeaderComponent={header}
-          ListEmptyComponent={topics === null ? <ActivityIndicator color={colors.violet} style={{ marginTop: 30 }} /> : empty('Тем пока нет. Задайте первый вопрос — про рецепт, ингредиент или уход. Нажмите «+» вверху.')}
-          renderItem={({ item }) => (
-            <Press haptic={false} onPress={() => router.push(`/topic/${item.id}` as never)} style={styles.topic}>
-              <Text style={styles.topicCat}>{item.cat}</Text>
-              <Text style={styles.topicTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              {!!item.preview && (
-                <Text style={styles.topicPreview} numberOfLines={2}>
-                  {item.preview}
-                </Text>
-              )}
-              <View style={styles.topicMeta}>
-                <Text style={styles.metaText}>@{item.author.nick}</Text>
-                <View style={styles.metaRight}>
-                  <Icon name="comment" size={14} color={colors.muted} />
-                  <Text style={styles.metaText}>
-                    {item.replies} {plural(item.replies, 'ответ', 'ответа', 'ответов')} · {ago(item.last)}
-                  </Text>
-                </View>
-              </View>
-            </Press>
-          )}
-        />
-      ) : (
-        <FlatList
-          data={recipes ?? []}
-          keyExtractor={(r) => r.id}
-          contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 40 }}
-          refreshControl={refresh}
-          ListHeaderComponent={header}
-          ListEmptyComponent={recipes === null ? <ActivityIndicator color={colors.violet} style={{ marginTop: 30 }} /> : empty('Здесь появятся рецепты участниц. Соберите формулу в конструкторе и сохраните её — она попадёт сюда.')}
-          renderItem={({ item, index }) => <RecipeCard recipe={item} index={index} />}
-        />
-      )}
+      <FlatList
+        data={rows}
+        keyExtractor={(r, i) => (r.kind === 'topic' ? r.t.id : r.kind === 'faq' ? r.f.id : `h${i}`)}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load();
+              setRefreshing(false);
+            }}
+          />
+        }
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          topics === null ? (
+            <ActivityIndicator color={colors.violet} style={{ marginTop: 30 }} />
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Ничего не нашлось. Задайте этот вопрос сами — нажмите «Задать свой вопрос».</Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) =>
+          item.kind === 'head' ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{item.title}</Text>
+              {!!item.sub && <Text style={styles.sectionSub}>{item.sub}</Text>}
+            </View>
+          ) : item.kind === 'topic' ? (
+            <TopicCard t={item.t} />
+          ) : (
+            <FaqCard f={item.f} />
+          )
+        }
+      />
     </KeyboardAvoidingView>
+  );
+}
+
+function Stat({ n, label }: { n: number; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statN}>{n}</Text>
+      <Text style={styles.statL}>{label}</Text>
+    </View>
+  );
+}
+
+function Chip({ on, label, count, icon, fg, bg, onPress }: { on: boolean; label: string; count?: number; icon: IconName; fg: string; bg: string; onPress: () => void }) {
+  return (
+    <Press
+      onPress={() => {
+        tap();
+        onPress();
+      }}
+      style={[styles.chip, { backgroundColor: on ? fg : bg }]}
+    >
+      <Icon name={icon} size={15} color={on ? '#fff' : fg} />
+      <Text style={[styles.chipText, { color: on ? '#fff' : fg }]}>{label}</Text>
+      {!!count && <Text style={[styles.chipCount, { color: on ? 'rgba(255,255,255,0.75)' : fg }]}>{count}</Text>}
+    </Press>
+  );
+}
+
+function Avatar({ nick, size = 30 }: { nick: string; size?: number }) {
+  const hues = ['#3F4BC9', '#B5527A', '#1F8A84', '#9A6A12', '#4D7A2A', '#7A4BC9'];
+  const c = hues[[...nick].reduce((a, ch) => a + ch.charCodeAt(0), 0) % hues.length];
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: c, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: size * 0.42, color: '#fff' }}>{(nick[0] || '?').toUpperCase()}</Text>
+    </View>
+  );
+}
+
+function TopicCard({ t }: { t: TopicRow }) {
+  const st = catStyle(t.cat);
+  return (
+    <Press haptic={false} onPress={() => router.push(`/topic/${t.id}` as never)} style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={[styles.badge, { backgroundColor: st.bg }]}>
+          <Icon name={st.icon} size={12} color={st.fg} />
+          <Text style={[styles.badgeText, { color: st.fg }]}>{t.cat}</Text>
+        </View>
+        <Text style={styles.metaText}>{ago(t.last)}</Text>
+      </View>
+      <Text style={styles.cardTitle} numberOfLines={2}>
+        {t.title}
+      </Text>
+      {!!t.preview && (
+        <Text style={styles.cardText} numberOfLines={2}>
+          {t.preview}
+        </Text>
+      )}
+      <View style={styles.cardFoot}>
+        <View style={styles.row}>
+          <Avatar nick={t.author.nick} size={22} />
+          <Text style={styles.metaText}>@{t.author.nick}</Text>
+        </View>
+        <View style={styles.row}>
+          <Icon name="comment" size={14} color={colors.muted} />
+          <Text style={styles.metaText}>
+            {t.replies} {plural(t.replies, 'ответ', 'ответа', 'ответов')}
+          </Text>
+        </View>
+      </View>
+    </Press>
+  );
+}
+
+function FaqCard({ f }: { f: Faq }) {
+  const st = catStyle(f.cat);
+  const first = f.a.split('\n')[0];
+  return (
+    <Press haptic={false} onPress={() => router.push(`/topic/${f.id}` as never)} style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={[styles.badge, { backgroundColor: st.bg }]}>
+          <Icon name={st.icon} size={12} color={st.fg} />
+          <Text style={[styles.badgeText, { color: st.fg }]}>{f.cat}</Text>
+        </View>
+        <View style={styles.solved}>
+          <Icon name="check" size={12} color="#1F8A84" />
+          <Text style={styles.solvedText}>есть ответ</Text>
+        </View>
+      </View>
+      <Text style={styles.cardTitle}>{f.title}</Text>
+      <View style={styles.answer}>
+        <View style={styles.labRow}>
+          <View style={styles.labAvatar}>
+            <Text style={styles.labLetter}>e</Text>
+          </View>
+          <Text style={styles.labName}>essola lab</Text>
+          <Text style={styles.labRole}>технолог</Text>
+        </View>
+        <Text style={styles.answerText} numberOfLines={3}>
+          {first}
+        </Text>
+      </View>
+      {!!f.tags.length && (
+        <View style={styles.tags}>
+          {f.tags.slice(0, 3).map((t) => (
+            <Text key={t} style={styles.tag}>
+              #{t}
+            </Text>
+          ))}
+        </View>
+      )}
+    </Press>
   );
 }
 
@@ -171,17 +309,45 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 52 },
   h1: { flex: 1, fontFamily: fonts.display, fontSize: 28, letterSpacing: -1, color: colors.ink },
   newBtn: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#F3F1F8', padding: 4, marginTop: 8 },
-  segItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  segItemOn: { backgroundColor: '#fff' },
-  segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },
-  topic: { padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7', marginTop: 10, gap: 4 },
-  topicCat: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.violet, textTransform: 'uppercase', letterSpacing: 0.5 },
-  topicTitle: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 21, color: colors.ink },
-  topicPreview: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2 },
-  topicMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  metaRight: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  hero: { marginTop: 10, borderRadius: 26, padding: 18, gap: 10 },
+  heroKicker: { fontFamily: fonts.semibold, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)' },
+  heroTitle: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, letterSpacing: -0.5, color: '#fff' },
+  stats: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  stat: { flex: 1, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.14)' },
+  statN: { fontFamily: fonts.display, fontSize: 20, color: '#fff' },
+  statL: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, color: 'rgba(255,255,255,0.8)' },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 46, borderRadius: 15, backgroundColor: '#fff', paddingHorizontal: 13, marginTop: 4 },
+  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, paddingVertical: 0 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 13, borderRadius: 18 },
+  chipText: { fontFamily: fonts.semibold, fontSize: 13.5 },
+  chipCount: { fontFamily: fonts.medium, fontSize: 12 },
+  ask: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, padding: 14, borderRadius: 20, backgroundColor: '#F6F7FD', borderWidth: 1, borderColor: '#E6E8F6' },
+  askIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  askTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  askSub: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 1 },
+  section: { marginTop: 22, marginBottom: 2 },
+  sectionTitle: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.4, color: colors.ink },
+  sectionSub: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
+  card: { padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ECEAF5', marginTop: 10, gap: 8, shadowColor: '#2F3AB0', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, height: 24, borderRadius: 12 },
+  badgeText: { fontFamily: fonts.semibold, fontSize: 11.5 },
+  solved: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  solvedText: { fontFamily: fonts.medium, fontSize: 11.5, color: '#1F8A84' },
+  cardTitle: { fontFamily: fonts.semibold, fontSize: 16.5, lineHeight: 22, color: colors.ink },
+  cardText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2 },
+  cardFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
+  answer: { padding: 12, borderRadius: 16, backgroundColor: '#F6F7FD', borderLeftWidth: 3, borderLeftColor: colors.violet, gap: 6 },
+  labRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  labAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  labLetter: { fontFamily: fonts.display, fontSize: 13, color: '#fff', marginTop: -2 },
+  labName: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink },
+  labRole: { fontFamily: fonts.medium, fontSize: 11, color: colors.violet, backgroundColor: '#E8EBFF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  answerText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19.5, color: colors.ink2 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   empty: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: '#F4F0FF' },
   emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   composer: { marginTop: 14, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EAE6F7', gap: 10 },
