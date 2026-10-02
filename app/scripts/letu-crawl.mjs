@@ -2,7 +2,7 @@
 //   node scripts/letu-crawl.mjs list out/ids-0.json /browse/uhod-za-kozhei — walk one section, collect product cards
 //   node scripts/letu-crawl.mjs tabs out 3 10 out/tabs                      — compositions for shard 3 of 10 (all ids-*.json in out)
 // Both save progress as they go, so a run cut by a time limit keeps what it collected.
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 
 const BASE = 'https://www.letu.ru';
 const H = {
@@ -113,7 +113,10 @@ async function tabs(idsDir, shard, of, outDir) {
     .filter((f) => /^ids-\d+\.json$/.test(f))
     .flatMap((f) => JSON.parse(readFileSync(`${idsDir}/${f}`, 'utf8')))
     .filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
-  const mine = all.filter((_, i) => i % of === shard);
+  // Products already in the base (KNOWN_IDS: a file with one id per line) are skipped, so runs continue each other.
+  const known = new Set(process.env.KNOWN_IDS && existsSync(process.env.KNOWN_IDS) ? readFileSync(process.env.KNOWN_IDS, 'utf8').split('\n').filter(Boolean) : []);
+  const mine = all.filter((p) => !known.has(p.id)).filter((_, i) => i % of === shard);
+  console.log(`shard ${shard}: ${mine.length} products to fetch, ${known.size} already in the base`);
   const res = {};
   let i = 0, got = 0;
   mkdirSync(outDir, { recursive: true });

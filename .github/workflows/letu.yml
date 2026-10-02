@@ -29,9 +29,6 @@ jobs:
         with:
           node-version: 20
       - id: find
-        env:
-          # Sections already in the base; a run only adds the rest (clear it for a full refresh).
-          SKIP_SECTIONS: /browse/uhod-za-kozhei,/browse/makiyazh,/browse/parfyumeriya
         run: echo "sections=$(node app/scripts/letu-crawl.mjs roots)" >> "$GITHUB_OUTPUT"
 
   list:
@@ -62,7 +59,7 @@ jobs:
   tabs:
     needs: list
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 350
     strategy:
       fail-fast: false
       matrix:
@@ -77,9 +74,22 @@ jobs:
           pattern: letu-ids-*
           path: out
           merge-multiple: true
+      - name: Products already in the base
+        env:
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n >/dev/null
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          curl -s -f -o out/prev-index.json "https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID/letu/index.json" -H "X-YaCloud-SubjectToken: $(yc iam create-token)" || echo '[]' > out/prev-index.json
+          node -e "console.log(require('./out/prev-index.json').map(x=>x.k.replace('letu:','')).join('\n'))" > out/known.txt
+          echo "already in the base: $(grep -c . out/known.txt || true)"
       - name: Fetch compositions
-        timeout-minutes: 280
+        timeout-minutes: 330
         continue-on-error: true
+        env:
+          KNOWN_IDS: out/known.txt
         run: node app/scripts/letu-crawl.mjs tabs out ${{ matrix.shard }} 10 out/tabs
       - uses: actions/upload-artifact@v4
         if: always()
