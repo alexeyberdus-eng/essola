@@ -1,0 +1,92 @@
+name: Letual catalog (with Letual's permission)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['app/scripts/letu-crawl.mjs', 'app/scripts/build-letu.ts', '.github/workflows/letu.yml']
+  schedule:
+    - cron: '23 1 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: letu
+  cancel-in-progress: false
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: mkdir -p out && node app/scripts/letu-crawl.mjs list out/ids.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: letu-ids
+          path: out/ids.json
+          retention-days: 3
+
+  tabs:
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: letu-ids
+          path: out
+      - run: node app/scripts/letu-crawl.mjs tabs out/ids.json ${{ matrix.shard }} 10 out/tabs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: letu-tabs-${{ matrix.shard }}
+          path: out/tabs/
+          retention-days: 3
+
+  build:
+    needs: [list, tabs]
+    if: always() && needs.list.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          pattern: letu-*
+          merge-multiple: true
+      - name: Score and shard
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p ../out/tabs && mv ../out/tabs-*.json ../out/tabs/ 2>/dev/null || true
+          npx --yes tsx scripts/build-letu.ts ../out/ids.json ../out/tabs ../out/build
+          du -sh ../out/build ../out/build/letu-index.json
+      - name: Upload to Object Storage
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          export TOKEN=$(yc iam create-token) B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          cd out/build
+          # Compositions first, then the index, so the app never sees cards without their shard.
+          ls x | xargs -P 24 -I{} sh -c 'curl -s -f -o /dev/null -X PUT "$B/letu/x/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @x/{} || echo "fail {}"'
+          curl -sS -f -X PUT "$B/letu/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @letu-index.json -w 'index HTTP %{http_code}\n'
