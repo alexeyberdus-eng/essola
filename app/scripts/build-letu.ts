@@ -1,9 +1,10 @@
 // Turns the collected Letual catalog into what our function serves:
 //   letu-index.json — compact cards (no compositions) for lists, sorting and search;
 //   x/<hhh>.json    — compositions, sharded by key hash, loaded only for the cards on screen.
-// Run: npx tsx scripts/build-letu.ts <idsDir> <tabsDir> <outDir>
+// Run: npx tsx scripts/build-letu.ts <idsDir> <tabsDir> <outDir> [prevDir]
+// prevDir (optional): the base already in the bucket (letu-index.json + x/*.json); its items are kept and merged.
 import { createHash } from 'crypto';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { analyze } from '../src/lib/analyze';
 
 const BASE = 'https://www.letu.ru';
@@ -32,7 +33,7 @@ export const shardOf = (key: string) => createHash('sha1').update(key).digest('h
 
 type Card = { id: string; t: string; b: string; cat: string; path: string; img: string; url: string; r: number; n: number };
 
-const [idsDir, tabsDir, outDir] = process.argv.slice(2);
+const [idsDir, tabsDir, outDir, prevDir] = process.argv.slice(2);
 const seen = new Set<string>();
 const cards = readdirSync(idsDir)
   .filter((f) => /^ids-\d+\.json$/.test(f))
@@ -52,6 +53,24 @@ for (const c of cards) {
   const k = `letu:${c.id}`;
   index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: a.scores.overall, n: a.items.length, p: c.n });
   (shards[shardOf(k)] ??= {})[k] = text.slice(0, 3000);
+}
+// Keep what is already in the base: earlier sections and products not collected this time.
+if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
+  const have = new Set(index.map((x) => x.k));
+  const prev = JSON.parse(readFileSync(`${prevDir}/letu-index.json`, 'utf8')) as typeof index;
+  let kept = 0;
+  for (const x of prev) {
+    if (have.has(x.k)) continue;
+    index.push(x);
+    kept++;
+    const h = shardOf(x.k);
+    if (!shards[h] && existsSync(`${prevDir}/x/${h}.json`)) shards[h] = {};
+  }
+  for (const h of Object.keys(shards)) {
+    const f = `${prevDir}/x/${h}.json`;
+    if (existsSync(f)) shards[h] = { ...(JSON.parse(readFileSync(f, 'utf8')) as Record<string, string>), ...shards[h] };
+  }
+  console.log('kept from the existing base', kept);
 }
 index.sort((a, b) => b.p - a.p);
 mkdirSync(`${outDir}/x`, { recursive: true });

@@ -56,7 +56,9 @@ export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiy
 // Top-level sections as the site's own menu lists them (falls back to the known ones).
 async function roots() {
   const menu = await req(`${BASE}/api/content-delivery/v1/public/header/top-menu?pushSite=storeMobileRU`);
-  const found = [...new Set([...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]))];
+  // Sections already in the base are skipped (comma-separated SKIP_SECTIONS), so a run only adds new ones.
+  const skip = new Set((process.env.SKIP_SECTIONS || '').split(',').map((x) => x.trim()).filter(Boolean));
+  const found = [...new Set([...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]))].filter((p) => !skip.has(p));
   const checked = [];
   for (const path of found) {
     const total = (await search(path, 1, SIZE))?.totalProducts ?? 0;

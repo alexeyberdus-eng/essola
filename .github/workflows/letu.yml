@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: 20
       - id: find
+        env:
+          # Sections already in the base; a run only adds the rest (clear it for a full refresh).
+          SKIP_SECTIONS: /browse/uhod-za-kozhei,/browse/makiyazh,/browse/parfyumeriya
         run: echo "sections=$(node app/scripts/letu-crawl.mjs roots)" >> "$GITHUB_OUTPUT"
 
   list:
@@ -103,19 +106,33 @@ jobs:
           path: out
           pattern: letu-*
           merge-multiple: true
+      - name: Yandex Cloud access and the existing base
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "B=https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID" >> "$GITHUB_ENV"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          mkdir -p out/prev/x
+          if curl -s -f -o out/prev/letu-index.json "$B/letu/index.json" -H "X-YaCloud-SubjectToken: $TOKEN"; then
+            node -e "const c=require('crypto');const i=require('./out/prev/letu-index.json');console.log([...new Set(i.map(x=>c.createHash('sha1').update(x.k).digest('hex').slice(0,3)))].join('\n'))" > out/prev/shards.txt
+            echo "existing items: $(node -e "console.log(require('./out/prev/letu-index.json').length)"), shards: $(wc -l < out/prev/shards.txt)"
+            cat out/prev/shards.txt | xargs -P 24 -I{} sh -c 'curl -s -f -o out/prev/x/{}.json "$0/letu/x/{}.json" -H "X-YaCloud-SubjectToken: $1" || true' "$B" "$TOKEN"
+          else
+            echo "no existing base"
+          fi
       - name: Score and shard
         working-directory: app
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           mkdir -p ../out/tabs && mv ../out/tabs-*.json ../out/tabs/ 2>/dev/null || true
-          npx --yes tsx scripts/build-letu.ts ../out ../out/tabs ../out/build
+          npx --yes tsx scripts/build-letu.ts ../out ../out/tabs ../out/build ../out/prev
           du -sh ../out/build ../out/build/letu-index.json
       - name: Upload to Object Storage
         run: |
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
-          export PATH="$HOME/yc/bin:$PATH"
-          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
-          export TOKEN=$(yc iam create-token) B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
           cd out/build
           # Compositions first, then the index, so the app never sees cards without their shard.
           ls x | xargs -P 24 -I{} sh -c 'curl -s -f -o /dev/null -X PUT "$B/letu/x/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @x/{} || echo "fail {}"'
