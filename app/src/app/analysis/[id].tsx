@@ -216,22 +216,6 @@ export default function AnalysisScreen() {
           </Press>
         )}
 
-        <FadeIn index={2}>
-          <View style={styles.opinion}>
-            <View style={styles.opHead}>
-              <View style={styles.opIcon}>
-                <Icon name="flask" size={16} color={colors.violet} strokeWidth={2} />
-              </View>
-              <Text style={styles.opTitle}>Мнение технолога · {op.title}</Text>
-            </View>
-            {op.paragraphs.map((t) => (
-              <Text key={t} style={styles.opText}>
-                {t}
-              </Text>
-            ))}
-          </View>
-        </FadeIn>
-
         <FadeIn index={3}>
           <View style={styles.tubes}>
             {(
@@ -250,7 +234,6 @@ export default function AnalysisScreen() {
               </View>
             ))}
           </View>
-          <CompositionSummary s={summary} />
         </FadeIn>
 
         {!!result.freeFrom.length && (
@@ -260,6 +243,25 @@ export default function AnalysisScreen() {
             ))}
           </View>
         )}
+
+        <CompositionSummary s={summary} />
+
+        <FadeIn index={4}>
+          <View style={styles.opinion}>
+            <View style={styles.opHead}>
+              <View style={styles.opIcon}>
+                <Icon name="flask" size={16} color={colors.violet} strokeWidth={2} />
+              </View>
+              <Text style={styles.opTitle}>Мнение технолога · {op.title}</Text>
+            </View>
+            {op.paragraphs.map((t) => (
+              <Text key={t} style={styles.opText}>
+                {t}
+              </Text>
+            ))}
+          </View>
+        </FadeIn>
+
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
           <Button label={onShelf ? 'На полке' : 'На полку'} icon={onShelf ? 'check' : 'shelf'} onPress={toShelf} style={{ flex: 1 }} variant={onShelf ? 'outline' : 'honey'} />

@@ -95,6 +95,15 @@ async function cachePut(key, iam, data, raw = false) {
   }
 }
 
+// Products resolved from shop links, merged into the catalog by the daily catalog build.
+async function shopAdd(iam, key, title, image, ingredients, source) {
+  if (!title || !ingredients || ingredients.length < 4) return;
+  const list = (await cacheGet('shop.json', iam)) || [];
+  const next = (Array.isArray(list) ? list : []).filter((x) => x.k !== key);
+  next.push({ k: key, t: String(title).slice(0, 160), i: image || '', x: `Ingredients: ${ingredients.join(', ')}`, s: source || '' });
+  await cachePut('shop.json', iam, next.slice(-20000), true);
+}
+
 // Small search index of everything cached: [{k, t, s, n}] — key, title, source, ingredient count.
 async function indexAdd(iam, key, title, source, n) {
   if (!title) return;
@@ -131,16 +140,18 @@ async function fromLetu(url) {
   const get = (u) => fetch(u, { headers: h, signal: AbortSignal.timeout(10000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const [tabs, detail] = await Promise.all([
     get(`https://www.letu.ru/s/api/product/v2/product-detail/${id}/tabs?locale=ru-RU&pushSite=storeMobileRU`),
-    get(`https://www.letu.ru/s/api/product/v3/product-detail/${id}?locale=ru-RU&pushSite=storeMobileRU`),
+    get(`https://www.letu.ru/s/api/product/v3/product-detail/${id}?locale=ru-RU&cityId=8113&pushSite=storeMobileRU`),
   ]);
   const found = (JSON.stringify(tabs || {}).match(/"composition"\s*:\s*"((?:[^"\\]|\\.){20,4000})"/) || [])[1];
   console.log('letu api', id, !!tabs, !!detail, found ? found.length : 0);
   if (!found) return null;
   const composition = JSON.parse(`"${found}"`).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const brand = detail?.brand?.name || detail?.brand?.displayName || '';
+  const brand = typeof detail?.brand === 'string' ? detail.brand : detail?.brand?.name || detail?.brand?.displayName || '';
   const name = detail?.displayName || '';
   const img = JSON.stringify(detail?.media || []).match(/"(?:url|src)"\s*:\s*"([^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
-  return { title: [brand, name].filter(Boolean).join(' · ').slice(0, 200), image: img ? (img[1].startsWith('http') ? img[1] : `https://www.letu.ru${img[1]}`) : null, composition };
+  const slug = (String(url).match(/letu\.ru\/product\/([^/]+)/) || [])[1] || '';
+  const title = [brand, name].filter(Boolean).join(' · ') || (JSON.stringify(tabs || {}).match(/"displayName"\s*:\s*"([^"]{3,200})"/) || [])[1] || slug.replace(/-/g, ' ');
+  return { title: title.slice(0, 200), image: img ? (img[1].startsWith('http') ? img[1] : `https://www.letu.ru${img[1]}`) : null, composition };
 }
 
 async function fromShopPage(url) {
@@ -296,6 +307,7 @@ module.exports.handler = async (event, context) => {
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
       if (!req.url || ingredients.length < 3) return reply(400, { error: 'bad_product' });
       await cachePut(keyFor({ url: req.url }), iam, { title: String(req.title || '').slice(0, 200), url: req.url, ingredients, source: 'shop' });
+      await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), null, ingredients, 'shop').catch(() => {});
       return reply(200, { ok: true });
     }
     if (req.mode === 'url') {
@@ -318,6 +330,7 @@ module.exports.handler = async (event, context) => {
       }
       const product = { title: page.title, image: page.image, url: req.url, ingredients, source: host.replace(/^www\./, '') };
       await cachePut(key, iam, product);
+      await shopAdd(iam, key, product.title, product.image, ingredients, product.source).catch(() => {});
       return reply(200, { product });
     }
     if (req.mode === 'review') {
