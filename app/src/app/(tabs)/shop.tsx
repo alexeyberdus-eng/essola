@@ -3,7 +3,8 @@ import { ReactNode, useMemo, useState } from 'react';
 import { ProductBase } from '../../components/ProductBase';
 import { FlatList, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
+import { router } from 'expo-router';
+import { ProductArt } from '../../components/ProductArt';
 import { Icon } from '../../components/Icon';
 import { Brand, FadeIn, Glow } from '../../components/silk';
 import { Press, Seg, tap } from '../../components/ui';
@@ -86,49 +87,6 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
   );
 }
 
-const TONES: Record<string, [string, string]> = {
-  Масла: ['#F1EDFF', '#A77BFF'],
-  'Эфирные масла': ['#FFF0F9', '#E08BF5'],
-  Гидролаты: ['#EEF1FF', '#8C9CFF'],
-  'Глины и маски': ['#F6F5F9', '#B9A6E0'],
-  'Для бороды': ['#EFEAF8', '#6A4BF2'],
-  Аксессуары: ['#EEF7F2', '#7FC7A0'],
-};
-
-/** Product visual: a bottle/jar silhouette tinted by category. */
-function ProductArt({ p }: { p: Product }) {
-  const [bg, tone] = TONES[p.category] ?? TONES['Масла'];
-  const jar = p.category === 'Глины и маски';
-  const small = p.category === 'Эфирные масла';
-  return (
-    <View style={[styles.art, { backgroundColor: bg }]}>
-      <Svg width="100%" height="100%" viewBox="0 0 120 100">
-        <Defs>
-          <SvgGradient id={`g${p.id}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={tone} stopOpacity="0.55" />
-            <Stop offset="1" stopColor={tone} stopOpacity="0.95" />
-          </SvgGradient>
-        </Defs>
-        {jar ? (
-          <>
-            <Rect x="38" y="30" width="44" height="10" rx="4" fill={colors.ink} />
-            <Rect x="35" y="39" width="50" height="46" rx="12" fill="rgba(255,255,255,0.7)" stroke="rgba(22,18,31,0.1)" />
-            <Rect x="35" y="58" width="50" height="27" rx="12" fill={`url(#g${p.id})`} />
-          </>
-        ) : (
-          <>
-            <Rect x={small ? 55 : 53} y={small ? 26 : 14} width={small ? 10 : 14} height={small ? 12 : 18} rx="3" fill={colors.ink} />
-            <Path d={small ? 'M50 38h20v44a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6Z' : 'M46 32h28v50a7 7 0 0 1-7 7H53a7 7 0 0 1-7-7Z'} fill="rgba(255,255,255,0.7)" stroke="rgba(22,18,31,0.1)" />
-            <Path d={small ? 'M50 58h20v24a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6Z' : 'M46 56h28v26a7 7 0 0 1-7 7H53a7 7 0 0 1-7-7Z'} fill={`url(#g${p.id})`} />
-            <Rect x={small ? 53 : 50} y={small ? 44 : 40} width={small ? 14 : 20} height="9" rx="2" fill="#fff" opacity="0.9" />
-          </>
-        )}
-      </Svg>
-      <Text style={styles.volume}>{p.volume}</Text>
-    </View>
-  );
-}
-
 function ProductCard({ p }: { p: Product }) {
   const open = (url: string | null) => {
     if (!url) return;
@@ -136,7 +94,7 @@ function ProductCard({ p }: { p: Product }) {
     Linking.openURL(url).catch(() => {});
   };
   return (
-    <View style={styles.card}>
+    <Press haptic={false} onPress={() => router.push(`/product/${p.id}` as never)} style={styles.card}>
       <ProductArt p={p} />
       <Text style={styles.cat}>{p.category}</Text>
       <Text style={styles.title} numberOfLines={2}>
@@ -157,7 +115,7 @@ function ProductCard({ p }: { p: Product }) {
           </Press>
         )}
       </View>
-    </View>
+    </Press>
   );
 }
 
