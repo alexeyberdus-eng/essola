@@ -53,6 +53,20 @@ function childrenOf(tree, path) {
 
 export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/dlya-muzhchin', '/browse/aptechnaya-kosmetika', '/browse/korejskaya-kosmetika', '/browse/organicheskaya-kosmetika', '/browse/dlya-doma'];
 
+// Top-level sections as the site's own menu lists them (falls back to the known ones).
+async function roots() {
+  const menu = await req(`${BASE}/api/content-delivery/v1/public/header/top-menu?pushSite=storeMobileRU`);
+  const found = [...new Set([...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]))];
+  const checked = [];
+  for (const path of found) {
+    const total = (await search(path, 1, SIZE))?.totalProducts ?? 0;
+    console.error('section', path, total);
+    if (total > 0) checked.push(path);
+    await sleep(150);
+  }
+  console.log(JSON.stringify((checked.length ? checked : ROOTS.slice(0, 3)).map((root, part) => ({ part, root }))));
+}
+
 async function list(out, root) {
   const products = new Map();
   const queue = root ? [root] : [...ROOTS];
@@ -124,6 +138,7 @@ async function tabs(idsDir, shard, of, outDir) {
 }
 
 const [cmd, a, b, c, d] = process.argv.slice(2);
-if (cmd === 'list') await list(a, b);
+if (cmd === 'roots') await roots();
+else if (cmd === 'list') await list(a, b);
 else if (cmd === 'tabs') await tabs(a, Number(b), Number(c), d);
 else console.log('usage: list <out> [root] | tabs <idsDir> <shard> <of> <outDir>');

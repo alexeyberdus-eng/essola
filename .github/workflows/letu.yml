@@ -18,22 +18,27 @@ concurrency:
 jobs:
   # One collector per site section, in parallel; each saves after every category and uploads what it has
   # even if it hits its time limit.
+  roots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sections: ${{ steps.find.outputs.sections }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: find
+        run: echo "sections=$(node app/scripts/letu-crawl.mjs roots)" >> "$GITHUB_OUTPUT"
+
   list:
+    needs: roots
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { part: 0, root: /browse/uhod-za-kozhei }
-          - { part: 1, root: /browse/volosy }
-          - { part: 2, root: /browse/makiyazh }
-          - { part: 3, root: /browse/parfyumeriya }
-          - { part: 4, root: /browse/dlya-muzhchin }
-          - { part: 5, root: /browse/aptechnaya-kosmetika }
-          - { part: 6, root: /browse/korejskaya-kosmetika }
-          - { part: 7, root: /browse/organicheskaya-kosmetika }
-          - { part: 8, root: /browse/dlya-doma }
+        include: ${{ fromJSON(needs.roots.outputs.sections) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
