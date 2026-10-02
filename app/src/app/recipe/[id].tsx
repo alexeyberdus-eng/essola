@@ -84,6 +84,26 @@ export default function RecipeScreen() {
           ))}
         </View>
 
+        {!!recipe.about && (
+          <View style={styles.about}>
+            <Text style={styles.aboutTitle}>О рецепте</Text>
+            <T style={{ fontSize: 14.5, lineHeight: 21 }}>{recipe.about}</T>
+          </View>
+        )}
+        {!!recipe.benefits?.length && (
+          <View style={styles.benefits}>
+            <Text style={styles.aboutTitle}>Что даёт</Text>
+            {recipe.benefits.map((b) => (
+              <View key={b} style={styles.benefit}>
+                <View style={styles.benefitIcon}>
+                  <Icon name="check" size={13} color={colors.violet} strokeWidth={2.4} />
+                </View>
+                <T style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>{b}</T>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.sectionHead}>
           <T v="label">Формула{pct ? ' · 100%' : ''}</T>
           <Press onPress={share} haptic={false} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -112,6 +132,15 @@ export default function RecipeScreen() {
           </View>
         ))}
 
+        {!!recipe.usage && (
+          <View style={[styles.note, { backgroundColor: '#F1EDFF' }]}>
+            <View style={styles.noteHead}>
+              <Icon name="drop" size={15} color={colors.violet} />
+              <Text style={[styles.noteTitle, { color: colors.violet }]}>Как применять</Text>
+            </View>
+            <T style={{ fontSize: 14, lineHeight: 20 }}>{recipe.usage}</T>
+          </View>
+        )}
         <View style={[styles.note, { backgroundColor: colors.sageSoft }]}>
           <View style={styles.noteHead}>
             <Icon name="spark" size={15} color={colors.sageDeep} />
@@ -142,6 +171,11 @@ export default function RecipeScreen() {
 }
 
 const styles = StyleSheet.create({
+  about: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7', gap: 6 },
+  aboutTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginBottom: 2 },
+  benefits: { marginTop: 10, padding: 16, borderRadius: 20, backgroundColor: '#F7F4FF', gap: 8 },
+  benefit: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  benefitIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginTop: 0 },
   center: { flex: 1, alignItems: 'center', gap: 14, backgroundColor: colors.bg },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 12 },
   navRight: { flexDirection: 'row', gap: 8 },

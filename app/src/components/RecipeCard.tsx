@@ -66,6 +66,23 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
             </View>
             <RecipeArt recipe={recipe} size={76} />
           </View>
+          {!!recipe.about && (
+            <Text style={styles.about} numberOfLines={3}>
+              {recipe.about}
+            </Text>
+          )}
+          {!!recipe.benefits?.length && (
+            <View style={styles.benefits}>
+              {recipe.benefits.slice(0, 3).map((b) => (
+                <View key={b} style={styles.benefit}>
+                  <Icon name="check" size={12} color={colors.good} strokeWidth={2.4} />
+                  <Text style={styles.benefitText} numberOfLines={1}>
+                    {b}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
           {top.length > 0 && (
             <View style={styles.acts}>
               {top.map((a) => (
@@ -103,6 +120,10 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
 }
 
 const styles = StyleSheet.create({
+  about: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2, marginTop: 10 },
+  benefits: { marginTop: 8, gap: 4 },
+  benefit: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  benefitText: { flex: 1, fontFamily: fonts.medium, fontSize: 13, color: colors.ink },
   frame: { borderRadius: 24, padding: 1.5, shadowColor: '#15172B', shadowOpacity: 0.1, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
   card: { borderRadius: 22.5, backgroundColor: 'rgba(255,255,255,0.96)', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
   meta: { flexDirection: 'row', justifyContent: 'space-between' },

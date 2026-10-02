@@ -141,6 +141,12 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <View style={{ marginTop: 14 }}>
+          {tab === 'recipes' && (
+            <Press haptic={false} onPress={() => router.push('/import-recipes' as never)} style={styles.importRow}>
+              <Icon name="plus" size={16} color={colors.violet} />
+              <Text style={styles.importText}>Загрузить рецепты из таблицы (CSV)</Text>
+            </Press>
+          )}
           {tab === 'recipes' &&
             (favourites.length || myRecipes.length ? (
               <>
@@ -290,6 +296,8 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  importRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC4F7', marginBottom: 10 },
+  importText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   socialRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   socialTile: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7' },
   socialTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },

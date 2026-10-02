@@ -1,3 +1,5 @@
+import { EDITORIAL } from './editorial';
+
 export type Category = 'Лицо' | 'Тело' | 'Волосы' | 'Губы' | 'Руки' | 'Ванна';
 export type Motif = 'drop' | 'arch' | 'orb' | 'leaf' | 'wave' | 'grain';
 
@@ -18,6 +20,14 @@ export type Recipe = {
   tone: [string, string];
   motif: Motif;
   baseLikes: number;
+  /** Longer editorial text: what this product is and why it works. */
+  about?: string;
+  /** What the product gives, one line each. */
+  benefits?: string[];
+  /** How and how often to use it. */
+  usage?: string;
+  /** Written by the essola editors. */
+  editorial?: boolean;
   /** Recipes created in the app by the user. */
   own?: boolean;
   photo?: string;
@@ -32,7 +42,7 @@ export const LEVELS = { 1: 'Просто', 2: 'Средне', 3: 'Для опы�
 const PRESERVATIVE_NOTE =
   'В рецепте есть вода — без консерванта средство живёт не дольше недели в холодильнике. Работайте в чистой посуде, обработанной спиртом.';
 
-export const RECIPES: Recipe[] = [
+const BASE: Recipe[] = [
   {
     id: 'golden-hour-oil',
     title: 'Золотой час',
@@ -868,6 +878,8 @@ export const RECIPES: Recipe[] = [
     baseLikes: 1153,
   },
 ];
+
+export const RECIPES: Recipe[] = [...BASE, ...EDITORIAL];
 
 let userRecipes: Recipe[] = [];
 /** Called by UserContentProvider so screens can open own recipes by id. */

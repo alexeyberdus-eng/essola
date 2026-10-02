@@ -66,12 +66,13 @@ const BOTTLE: Record<Category, Bottle> = { Лицо: 'dropper', Тело: 'jar',
 
 export function recipeMeta(recipe: Recipe) {
   const r = rng(recipe.id);
-  const author = AUTHORS[Math.floor(r() * AUTHORS.length)];
+  const author = recipe.editorial ? { name: 'Редакция essola', role: 'редакция' } : AUTHORS[Math.floor(r() * AUTHORS.length)];
   return { author, bottle: BOTTLE[recipe.category], postedAgo: 60 + Math.floor(r() * 60 * 24 * 6) };
 }
 
 /** Deterministic demo discussion for a recipe: 3–7 threads, some with long reply chains. */
 function seedComments(recipe: Recipe): Comment[] {
+  if (recipe.editorial) return [];
   const r = rng('c:' + recipe.id);
   const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length)];
   const ing = () => pick(recipe.ingredients).name.toLowerCase();
