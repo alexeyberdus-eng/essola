@@ -121,10 +121,10 @@ export default function ProfileScreen() {
             <Text style={styles.socialTitle}>Мой профиль</Text>
             <Text style={styles.socialText}>как его видят другие</Text>
           </Press>
-          <Press haptic={false} onPress={() => router.push('/community' as never)} style={styles.socialTile}>
+          <Press haptic={false} onPress={() => router.push('/forum' as never)} style={styles.socialTile}>
             <Icon name="heart" size={20} color={colors.violet} strokeWidth={2} />
-            <Text style={styles.socialTitle}>Сообщество</Text>
-            <Text style={styles.socialText}>рецепты и авторы</Text>
+            <Text style={styles.socialTitle}>Форум</Text>
+            <Text style={styles.socialText}>темы и рецепты</Text>
           </Press>
         </View>
 

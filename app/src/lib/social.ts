@@ -65,3 +65,22 @@ export async function comment(key: string, nick: string, text: string): Promise<
   return call<Social>({ mode: 'social.comment', key, nick, text, id: await myId() });
 }
 
+
+export type ForumAuthor = { id: string; nick: string };
+export type TopicRow = { id: string; title: string; cat: string; author: ForumAuthor; at: string; last: string; replies: number; preview: string };
+export type Topic = { id: string; title: string; text: string; cat: string; author: ForumAuthor; at: string; posts: { id: string; author: ForumAuthor; text: string; at: string }[] };
+export const FORUM_CATS = ['Общее', 'Рецепты', 'Уход за кожей', 'Волосы', 'Ингредиенты', 'Покупки'];
+
+export async function forumList(cat?: string, page = 1) {
+  if (!socialEnabled) return { items: [] as TopicRow[], total: 0 };
+  return call<{ items: TopicRow[]; total: number }>({ mode: 'forum.list', cat, page });
+}
+export async function forumGet(tid: string) {
+  return (await call<{ topic: Topic }>({ mode: 'forum.get', tid })).topic;
+}
+export async function forumCreate(nick: string, title: string, text: string, cat: string) {
+  return (await call<{ id: string }>({ mode: 'forum.create', id: await myId(), nick, title, text, cat })).id;
+}
+export async function forumReply(tid: string, nick: string, text: string) {
+  return (await call<{ topic: Topic }>({ mode: 'forum.reply', tid, id: await myId(), nick, text })).topic;
+}

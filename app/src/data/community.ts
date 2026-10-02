@@ -107,6 +107,9 @@ export function timeAgo(min: number) {
   return d < 7 ? `${d} д` : `${Math.floor(d / 7)} нед`;
 }
 
+/** "5 мин" / "3 д" since an ISO date. */
+export const ago = (iso: string) => timeAgo(Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+
 export function plural(n: number, one: string, few: string, many: string) {
   const m10 = n % 10;
   const m100 = n % 100;

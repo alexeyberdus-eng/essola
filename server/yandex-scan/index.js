@@ -271,6 +271,45 @@ module.exports.handler = async (event, context) => {
       await put(`users/${target}/followers.json`, list);
       return reply(200, { followers: list.length, following: !!req.on });
     }
+    // Forum: an index of topics (newest activity first) plus one file per topic with its replies.
+    if (req.mode === 'forum.list') {
+      const idx = await get('forum/index.json', []);
+      const list = req.cat ? idx.filter((t) => t.cat === req.cat) : idx;
+      const page = Math.max(Number(req.page) || 1, 1);
+      return reply(200, { items: list.slice((page - 1) * 30, page * 30), total: list.length });
+    }
+    if (req.mode === 'forum.get') {
+      const t = await get(`forum/t/${clean(req.tid, 40)}.json`, null);
+      return reply(t ? 200 : 404, t ? { topic: t } : { error: 'not_found' });
+    }
+    if (req.mode === 'forum.create') {
+      const me = uid(req.id);
+      const title = clean(req.title, 120);
+      const text = clean(req.text, 4000);
+      if (!me || title.length < 4) return reply(400, { error: 'bad_topic' });
+      const at = new Date().toISOString();
+      const tid = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const author = { id: me, nick: clean(req.nick, 24) || 'гость' };
+      const cat = clean(req.cat, 30) || 'Общее';
+      await put(`forum/t/${tid}.json`, { id: tid, title, text, cat, author, at, posts: [] });
+      const idx = await get('forum/index.json', []);
+      await put('forum/index.json', [{ id: tid, title, cat, author, at, last: at, replies: 0, preview: text.slice(0, 160) }, ...idx].slice(0, 5000));
+      return reply(200, { id: tid });
+    }
+    if (req.mode === 'forum.reply') {
+      const me = uid(req.id);
+      const tid = clean(req.tid, 40);
+      const text = clean(req.text, 3000);
+      const t = await get(`forum/t/${tid}.json`, null);
+      if (!me || !t || !text) return reply(400, { error: 'bad_reply' });
+      const at = new Date().toISOString();
+      t.posts = [...t.posts, { id: Date.now().toString(36), author: { id: me, nick: clean(req.nick, 24) || 'гость' }, text, at }].slice(-1000);
+      await put(`forum/t/${tid}.json`, t);
+      const idx = await get('forum/index.json', []);
+      const row = idx.find((x) => x.id === tid);
+      if (row) await put('forum/index.json', [{ ...row, last: at, replies: t.posts.length }, ...idx.filter((x) => x.id !== tid)]);
+      return reply(200, { topic: t });
+    }
     if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment') {
       const key = `social/${crypto.createHash('sha1').update(String(req.key || '')).digest('hex')}.json`;
       const me = uid(req.id);

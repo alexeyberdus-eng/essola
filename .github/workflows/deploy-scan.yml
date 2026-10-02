@@ -66,6 +66,7 @@ jobs:
                    '{"mode":"user.save","id":"zzsmoke","nick":"smoke_test","name":"Smoke"}' \
                    '{"mode":"social.comment","key":"zz-smoke","id":"zzsmoke","nick":"smoke_test","text":"проверка"}' \
                    '{"mode":"user.get","id":"zzsmoke","viewer":"x"}' \
+                   '{"mode":"forum.list"}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done
