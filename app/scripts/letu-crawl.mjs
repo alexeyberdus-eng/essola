@@ -1,7 +1,8 @@
 // Letual catalog collector (done with Letual's permission). Plain Node 20, no browser.
-//   node scripts/letu-crawl.mjs list out/ids.json            — walk categories, collect product cards
-//   node scripts/letu-crawl.mjs tabs out/ids.json 3 10 out/  — fetch compositions for shard 3 of 10
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+//   node scripts/letu-crawl.mjs list out/ids-0.json /browse/uhod-za-kozhei — walk one section, collect product cards
+//   node scripts/letu-crawl.mjs tabs out 3 10 out/tabs                      — compositions for shard 3 of 10 (all ids-*.json in out)
+// Both save progress as they go, so a run cut by a time limit keeps what it collected.
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 
 const BASE = 'https://www.letu.ru';
 const H = {
@@ -50,12 +51,12 @@ function childrenOf(tree, path) {
   return (walk(tree) || []).map((c) => `/browse${c.path}`);
 }
 
-async function list(out) {
-  const roots = new Set(['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/dlya-muzhchin', '/browse/aptechnaya-kosmetika', '/browse/korejskaya-kosmetika', '/browse/organicheskaya-kosmetika', '/browse/dlya-doma']);
-  const f0 = await filters('/browse/uhod-za-kozhei');
-  for (const n of f0?.categories || []) roots.add(`/browse${n.path}`);
+export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/dlya-muzhchin', '/browse/aptechnaya-kosmetika', '/browse/korejskaya-kosmetika', '/browse/organicheskaya-kosmetika', '/browse/dlya-doma'];
+
+async function list(out, root) {
   const products = new Map();
-  const queue = [...roots];
+  const queue = root ? [root] : [...ROOTS];
+  const save = () => writeFileSync(out, JSON.stringify([...products.values()]));
   const done = new Set();
   while (queue.length) {
     const path = queue.shift();
@@ -84,16 +85,23 @@ async function list(out) {
       await sleep(150);
     }
     console.log('  products so far', products.size);
+    save();
   }
-  writeFileSync(out, JSON.stringify([...products.values()]));
+  save();
   console.log('TOTAL products', products.size);
 }
 
-async function tabs(idsFile, shard, of, outDir) {
-  const all = JSON.parse(readFileSync(idsFile, 'utf8'));
+async function tabs(idsDir, shard, of, outDir) {
+  const seen = new Set();
+  const all = readdirSync(idsDir)
+    .filter((f) => /^ids-\d+\.json$/.test(f))
+    .flatMap((f) => JSON.parse(readFileSync(`${idsDir}/${f}`, 'utf8')))
+    .filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
   const mine = all.filter((_, i) => i % of === shard);
   const res = {};
   let i = 0, got = 0;
+  mkdirSync(outDir, { recursive: true });
+  const save = () => writeFileSync(`${outDir}/tabs-${shard}.json`, JSON.stringify(res));
   const worker = async () => {
     while (i < mine.length) {
       const p = mine[i++];
@@ -103,17 +111,19 @@ async function tabs(idsFile, shard, of, outDir) {
         res[p.id] = JSON.parse(`"${m[1]}"`).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         got++;
       }
-      if (i % 500 === 0) console.log(`shard ${shard}: ${i}/${mine.length}, with composition ${got}`);
+      if (i % 500 === 0) {
+        console.log(`shard ${shard}: ${i}/${mine.length}, with composition ${got}`);
+        save();
+      }
       await sleep(120);
     }
   };
   await Promise.all(Array.from({ length: 4 }, worker));
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(`${outDir}/tabs-${shard}.json`, JSON.stringify(res));
+  save();
   console.log(`shard ${shard} done: ${mine.length} products, ${got} with composition`);
 }
 
 const [cmd, a, b, c, d] = process.argv.slice(2);
-if (cmd === 'list') await list(a);
+if (cmd === 'list') await list(a, b);
 else if (cmd === 'tabs') await tabs(a, Number(b), Number(c), d);
-else console.log('usage: list <out> | tabs <ids> <shard> <of> <outDir>');
+else console.log('usage: list <out> [root] | tabs <idsDir> <shard> <of> <outDir>');

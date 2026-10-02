@@ -16,20 +16,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # One collector per site section, in parallel; each saves after every category and uploads what it has
+  # even if it hits its time limit.
   list:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { part: 0, root: /browse/uhod-za-kozhei }
+          - { part: 1, root: /browse/volosy }
+          - { part: 2, root: /browse/makiyazh }
+          - { part: 3, root: /browse/parfyumeriya }
+          - { part: 4, root: /browse/dlya-muzhchin }
+          - { part: 5, root: /browse/aptechnaya-kosmetika }
+          - { part: 6, root: /browse/korejskaya-kosmetika }
+          - { part: 7, root: /browse/organicheskaya-kosmetika }
+          - { part: 8, root: /browse/dlya-doma }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: mkdir -p out && node app/scripts/letu-crawl.mjs list out/ids.json
+      - name: Walk ${{ matrix.root }}
+        timeout-minutes: 120
+        continue-on-error: true
+        run: mkdir -p out && node app/scripts/letu-crawl.mjs list out/ids-${{ matrix.part }}.json ${{ matrix.root }}
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: letu-ids
-          path: out/ids.json
+          name: letu-ids-${{ matrix.part }}
+          path: out/ids-*.json
           retention-days: 3
+          if-no-files-found: ignore
 
   tabs:
     needs: list
@@ -46,10 +66,15 @@ jobs:
           node-version: 20
       - uses: actions/download-artifact@v4
         with:
-          name: letu-ids
+          pattern: letu-ids-*
           path: out
-      - run: node app/scripts/letu-crawl.mjs tabs out/ids.json ${{ matrix.shard }} 10 out/tabs
+          merge-multiple: true
+      - name: Fetch compositions
+        timeout-minutes: 280
+        continue-on-error: true
+        run: node app/scripts/letu-crawl.mjs tabs out ${{ matrix.shard }} 10 out/tabs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: letu-tabs-${{ matrix.shard }}
           path: out/tabs/
@@ -57,7 +82,7 @@ jobs:
 
   build:
     needs: [list, tabs]
-    if: always() && needs.list.result == 'success'
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -78,7 +103,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           mkdir -p ../out/tabs && mv ../out/tabs-*.json ../out/tabs/ 2>/dev/null || true
-          npx --yes tsx scripts/build-letu.ts ../out/ids.json ../out/tabs ../out/build
+          npx --yes tsx scripts/build-letu.ts ../out ../out/tabs ../out/build
           du -sh ../out/build ../out/build/letu-index.json
       - name: Upload to Object Storage
         run: |

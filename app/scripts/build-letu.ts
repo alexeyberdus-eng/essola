@@ -1,7 +1,7 @@
 // Turns the collected Letual catalog into what our function serves:
 //   letu-index.json — compact cards (no compositions) for lists, sorting and search;
 //   x/<hhh>.json    — compositions, sharded by key hash, loaded only for the cards on screen.
-// Run: npx tsx scripts/build-letu.ts <ids.json> <tabsDir> <outDir>
+// Run: npx tsx scripts/build-letu.ts <idsDir> <tabsDir> <outDir>
 import { createHash } from 'crypto';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { analyze } from '../src/lib/analyze';
@@ -32,8 +32,12 @@ export const shardOf = (key: string) => createHash('sha1').update(key).digest('h
 
 type Card = { id: string; t: string; b: string; cat: string; path: string; img: string; url: string; r: number; n: number };
 
-const [idsFile, tabsDir, outDir] = process.argv.slice(2);
-const cards = JSON.parse(readFileSync(idsFile, 'utf8')) as Card[];
+const [idsDir, tabsDir, outDir] = process.argv.slice(2);
+const seen = new Set<string>();
+const cards = readdirSync(idsDir)
+  .filter((f) => /^ids-\d+\.json$/.test(f))
+  .flatMap((f) => JSON.parse(readFileSync(`${idsDir}/${f}`, 'utf8')) as Card[])
+  .filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 const comp: Record<string, string> = {};
 for (const f of readdirSync(tabsDir).filter((f) => /^tabs-\d+\.json$/.test(f))) Object.assign(comp, JSON.parse(readFileSync(`${tabsDir}/${f}`, 'utf8')));
 console.log('cards', cards.length, 'with composition', Object.keys(comp).length);
