@@ -8,6 +8,7 @@ import { Glow } from '../../components/silk';
 import { IconButton, Press, tap } from '../../components/ui';
 import { RECIPES } from '../../data/recipes';
 import { PRODUCTS } from '../../data/shop';
+import { SITE } from '../../data/shop-site';
 import { colors, fonts, space } from '../../theme';
 
 // "Масло абрикосовой косточки" → "абрикосов": a stem good enough to find recipes that use the product.
@@ -24,6 +25,7 @@ export default function ProductScreen() {
   const insets = useSafeAreaInsets();
   const p = PRODUCTS.find((x) => x.id === id);
   if (!p) return null;
+  const site = SITE[p.id] ?? {};
   const s = stem(p.title);
   const recipes = s.length >= 4 ? RECIPES.filter((r) => r.ingredients.some((i) => i.name.toLowerCase().includes(s))).slice(0, 6) : [];
   const open = (url: string | null) => {
@@ -44,7 +46,19 @@ export default function ProductScreen() {
           {p.category} · {p.volume}
         </Text>
         <Text style={styles.title}>{p.title}</Text>
-        <Text style={styles.desc}>{p.desc}</Text>
+        <Text style={styles.desc}>{site.about || p.desc}</Text>
+        {!!site.inci && (
+          <View style={styles.inci}>
+            <Text style={styles.inciLabel}>Состав (INCI)</Text>
+            <Text style={styles.inciText}>{site.inci}</Text>
+          </View>
+        )}
+        {!!site.site && (
+          <Press haptic={false} onPress={() => Linking.openURL(site.site!).catch(() => {})} style={styles.more}>
+            <Text style={styles.moreText}>Подробнее на essola.ru: происхождение, протоколы, формулы</Text>
+            <Icon name="external" size={14} color={colors.violet} />
+          </Press>
+        )}
 
         <View style={styles.facts}>
           <View style={styles.fact}>
@@ -84,6 +98,11 @@ export default function ProductScreen() {
 }
 
 const styles = StyleSheet.create({
+  inci: { marginTop: 14, padding: 14, borderRadius: 16, backgroundColor: '#F4F0FF', gap: 4 },
+  inciLabel: { fontFamily: fonts.semibold, fontSize: 12, color: colors.violet, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inciText: { fontFamily: fonts.medium, fontSize: 14.5, color: colors.ink },
+  more: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 6 },
+  moreText: { flex: 1, fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   cat: { fontFamily: fonts.semibold, fontSize: 12, color: colors.violet, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 18 },
   title: { fontFamily: fonts.display, fontSize: 26, lineHeight: 31, letterSpacing: -0.8, color: colors.ink, marginTop: 6 },
   desc: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink2, marginTop: 10 },

@@ -1,4 +1,6 @@
+import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
+import { SITE } from '../data/shop-site';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 import type { Product } from '../data/shop';
 import { colors, fonts } from '../theme';
@@ -14,6 +16,14 @@ const TONES: Record<string, [string, string]> = {
 
 /** Product visual: a bottle/jar silhouette tinted by category. */
 export function ProductArt({ p, height = 110 }: { p: Product; height?: number }) {
+  const photo = SITE[p.id]?.image;
+  if (photo)
+    return (
+      <View style={[styles.art, { height, backgroundColor: '#F6F3EE' }]}>
+        <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="memory-disk" transition={150} />
+        <Text style={styles.volume}>{p.volume}</Text>
+      </View>
+    );
   const [bg, tone] = TONES[p.category] ?? TONES['Масла'];
   const jar = p.category === 'Глины и маски';
   const small = p.category === 'Эфирные масла';
