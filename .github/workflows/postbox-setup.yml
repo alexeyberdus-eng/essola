@@ -56,3 +56,6 @@ jobs:
           else
             jq '{VerifiedForSendingStatus, DkimAttributes: (.DkimAttributes | {Status, SigningAttributesOrigin})}' "$RUNNER_TEMP/get.json" || cat "$RUNNER_TEMP/get.json"
           fi
+      - name: What the internet sees in DNS
+        run: |
+          for N in "postbox._domainkey.$DOMAIN" "$DOMAIN" "_dmarc.$DOMAIN"; do echo "== $N"; dig +short TXT "$N" @8.8.8.8; dig +short TXT "$N" @ns1.reg.ru; done
