@@ -121,17 +121,17 @@ function ProductCard({ p }: { p: ShopItem }) {
 }
 
 const styles = StyleSheet.create({
-  toggle: { flexDirection: 'row', marginTop: 14, padding: 4, borderRadius: 16, backgroundColor: 'rgba(21,23,43,0.05)' },
+  toggle: { flexDirection: 'row', marginTop: 14, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
   tg: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  tgOn: { backgroundColor: '#fff', shadowColor: '#15172B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  tgOn: { backgroundColor: colors.ink },
   tgText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
-  tgTextOn: { fontFamily: fonts.semibold, color: colors.ink },
+  tgTextOn: { fontFamily: fonts.semibold, color: '#fff' },
   hero: { marginTop: 16, borderRadius: 24, padding: 18, overflow: 'hidden' },
   heroCircle: { position: 'absolute', right: -40, top: -50, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.15)' },
   heroKicker: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' },
   heroTitle: { fontFamily: fonts.display, fontSize: 21, lineHeight: 25, letterSpacing: -0.8, color: '#fff', marginTop: 8, maxWidth: 260 },
   heroText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.9)', marginTop: 6 },
-  search: { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: colors.surf, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  search: { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   card: { flex: 1, borderRadius: 20, backgroundColor: '#fff', padding: 10, borderWidth: 1, borderColor: colors.line, ...shadow },
   art: { height: 110, borderRadius: 14, overflow: 'hidden' },

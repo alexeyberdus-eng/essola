@@ -63,7 +63,7 @@ const BTN: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = 
   honey: { bg: colors.olive, fg: colors.onDark, border: 'rgba(216,188,134,0.45)' },
   dark: { bg: colors.olive, fg: colors.onDark },
   brass: { bg: colors.brass, fg: colors.olive },
-  outline: { bg: colors.card, fg: colors.ink, border: 'rgba(255,255,255,0.9)' },
+  outline: { bg: colors.card, fg: colors.ink, border: '#DCD8EE' },
 };
 
 export function Button({
@@ -238,10 +238,10 @@ const s = StyleSheet.create({
   btnFill: { borderRadius: 18 },
   btn: { height: 54, borderRadius: 18, overflow: 'hidden', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   btnText: { fontFamily: fonts.semibold, fontSize: 15 },
-  iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, ...shadow, alignItems: 'center', justifyContent: 'center' },
-  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
+  iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: '#E4E1F1', backgroundColor: colors.card, ...shadow, alignItems: 'center', justifyContent: 'center' },
+  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
   segSm: { height: 30, paddingHorizontal: 12, borderRadius: 99 },
-  segOn: { backgroundColor: colors.olive },
+  segOn: { backgroundColor: colors.olive, borderColor: colors.olive },
   segText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
   tagText: { fontFamily: fonts.medium, fontSize: 11.5 },

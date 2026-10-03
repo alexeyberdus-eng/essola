@@ -117,11 +117,11 @@ export function ShopPage({ url, onFound, onClose, onScreenshot }: { url: string 
 const styles = StyleSheet.create({
   sheet: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#fff', zIndex: 30 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: colors.line },
-  close: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surf, alignItems: 'center', justifyContent: 'center' },
+  close: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
   title: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   hint: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 1 },
   bar: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingTop: 10, borderTopWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
-  btn: { flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surf },
+  btn: { flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
   btnDark: { backgroundColor: colors.ink },
   btnText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
 });

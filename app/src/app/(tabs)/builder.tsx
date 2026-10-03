@@ -182,6 +182,31 @@ export default function BuilderScreen() {
         </View>
         <Text style={styles.intro}>Соберите своё средство из {INGREDIENTS.length}+ ингредиентов: мы посчитаем граммы, опишем эффект, а технолог essola lab подскажет, что улучшить.</Text>
 
+        {(
+          <View style={[styles.batch, { marginTop: 14 }]}>
+            <Text style={styles.batchLabel} numberOfLines={1}>Объём партии</Text>
+            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.max(10, v - 10)); }} style={styles.batchBtn} accessibilityLabel="Меньше на 10 г">
+              <Icon name="minus" size={16} color={colors.ink} strokeWidth={2.2} />
+            </Press>
+            <View style={styles.batchBox}>
+              <TextInput
+                value={String(volume)}
+                onChangeText={(t) => {
+                  const v = parseInt(t.replace(/\D/g, ''), 10);
+                  if (v > 0 && v <= 5000) setVolume(v);
+                }}
+                keyboardType="number-pad"
+                selectTextOnFocus
+                style={styles.volInput}
+                accessibilityLabel="Объём партии в граммах"
+              />
+              <Text style={styles.batchUnit}>г</Text>
+            </View>
+            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.min(5000, v + 10)); }} style={styles.batchBtn} accessibilityLabel="Больше на 10 г">
+              <Icon name="plus" size={16} color={colors.ink} strokeWidth={2.2} />
+            </Press>
+          </View>
+        )}
         <Text style={styles.ask}>Что делаем</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {KINDS.map((k) => (
@@ -299,31 +324,6 @@ export default function BuilderScreen() {
               <Text style={styles.statL}>Оценка</Text>
               <Text style={[styles.statN, { color: scoreColor(score) }]}>{score}</Text>
             </View>
-          </View>
-        )}
-        {items.length > 0 && (
-          <View style={styles.batch}>
-            <Text style={styles.batchLabel} numberOfLines={1}>Объём партии</Text>
-            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.max(10, v - 10)); }} style={styles.batchBtn} accessibilityLabel="Меньше на 10 г">
-              <Icon name="minus" size={16} color={colors.ink} strokeWidth={2.2} />
-            </Press>
-            <View style={styles.batchBox}>
-              <TextInput
-                value={String(volume)}
-                onChangeText={(t) => {
-                  const v = parseInt(t.replace(/\D/g, ''), 10);
-                  if (v > 0 && v <= 5000) setVolume(v);
-                }}
-                keyboardType="number-pad"
-                selectTextOnFocus
-                style={styles.volInput}
-                accessibilityLabel="Объём партии в граммах"
-              />
-              <Text style={styles.batchUnit}>г</Text>
-            </View>
-            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.min(5000, v + 10)); }} style={styles.batchBtn} accessibilityLabel="Больше на 10 г">
-              <Icon name="plus" size={16} color={colors.ink} strokeWidth={2.2} />
-            </Press>
           </View>
         )}
         {items.length > 0 && (
@@ -567,8 +567,8 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
   kicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
-  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.olive },
+  chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.olive, borderColor: colors.olive },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
   lab: { marginTop: 14, padding: 16 },
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   rowLine: { borderTopWidth: 1, borderColor: '#EFECF6' },
   name: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
-  step: { width: 26, height: 26, borderRadius: 9, backgroundColor: '#F3F1F8', alignItems: 'center', justifyContent: 'center' },
+  step: { width: 26, height: 26, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
   pct: { width: 44, textAlign: 'center', fontFamily: fonts.monoMedium, fontSize: 13, color: colors.ink, paddingVertical: 2 },
   g: { width: 58, textAlign: 'right', fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink2 },
   addBtn: { marginTop: 10, height: 46, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#D9D2EC', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
@@ -617,8 +617,8 @@ const styles = StyleSheet.create({
   reviewWarnText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: colors.warn },
   ask: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 14, marginBottom: 8 },
   intro: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginTop: 2 },
-  goal: { height: 30, paddingHorizontal: 12, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
-  goalOn: { backgroundColor: colors.violet },
+  goal: { height: 30, paddingHorizontal: 12, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
+  goalOn: { backgroundColor: colors.violet, borderColor: colors.violet },
   goalText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
   search: { marginTop: 16, height: 50, borderRadius: 16, backgroundColor: colors.cardSolid, borderWidth: 1, borderColor: '#E6E8F3', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, ...shadow },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   refreshText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   minHint: { marginTop: 12, fontFamily: fonts.medium, fontSize: 13.5, color: colors.warn, textAlign: 'center' },
   addSug: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
-  pctBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F1F8', borderRadius: 9, paddingRight: 6 },
+  pctBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', borderRadius: 9, paddingRight: 6 },
   pctSign: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.muted },
   saveBar: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row' },
   pHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter },

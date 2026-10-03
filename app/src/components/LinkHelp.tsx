@@ -130,7 +130,7 @@ export function LinkHelp() {
               ] as const
             ).map(([k, l]) => (
               <Press key={k} haptic={false} onPress={() => setTab(k)} style={[styles.segItem, tab === k && styles.segOn]}>
-                <Text style={[styles.segText, tab === k && { color: colors.ink }]}>{l}</Text>
+                <Text style={[styles.segText, tab === k && { color: '#fff' }]}>{l}</Text>
               </Press>
             ))}
           </View>
@@ -162,11 +162,11 @@ const styles = StyleSheet.create({
   hintText: { fontFamily: fonts.medium, fontSize: 13, color: colors.violet, textDecorationLine: 'underline' },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingBottom: 6 },
   title: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
-  close: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surf, alignItems: 'center', justifyContent: 'center' },
+  close: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
   lead: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, paddingHorizontal: 16 },
-  seg: { flexDirection: 'row', height: 42, borderRadius: 14, backgroundColor: '#F3F1F8', padding: 4, marginHorizontal: 16, marginTop: 12 },
+  seg: { flexDirection: 'row', height: 42, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', padding: 4, marginHorizontal: 16, marginTop: 12 },
   segItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
-  segOn: { backgroundColor: '#fff' },
+  segOn: { backgroundColor: colors.ink },
   segText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
   step: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EAE6F7' },
   num: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },

@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.muted },
   label: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted },
   input: { minHeight: 48, borderRadius: 14, backgroundColor: colors.cardSolid, paddingHorizontal: 14, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, ...shadow },
-  chip: { height: 34, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
+  chip: { height: 34, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
   chipOn: { backgroundColor: colors.olive },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.94)' },
