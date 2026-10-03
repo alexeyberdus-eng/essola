@@ -2,10 +2,11 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useIsAdmin } from '../../lib/admin';
 import { myId, saveMe } from '../../lib/social';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
 import { RecipeRow } from '../../components/RecipeRow';
+import { deleteAccount, unblockAll, useBlocked } from '../../lib/moderation';
 import { ScoreBadge } from '../../components/ScoreBadge';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountUp, FadeIn, Glow } from '../../components/silk';
@@ -176,7 +177,52 @@ export default function ProfileScreen() {
             ))}
           {tab === 'shelf' && <Shelf />}
         </View>
+        <AccountLinks signedIn={!!user} onDeleted={signOut} />
       </ScrollView>
+    </View>
+  );
+}
+
+/** Rules and privacy, hidden users and account deletion (App Store requirements). */
+function AccountLinks({ signedIn, onDeleted }: { signedIn: boolean; onDeleted: () => Promise<void> }) {
+  const { blocked } = useBlocked();
+  const [busy, setBusy] = useState(false);
+  const del = () =>
+    Alert.alert('Удалить аккаунт?', 'Удалятся профиль, опубликованные рецепты, подписки, уведомления и данные на этом телефоне. Сообщения на форуме станут анонимными. Это нельзя отменить.', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Удалить',
+        style: 'destructive',
+        onPress: async () => {
+          setBusy(true);
+          await deleteAccount();
+          await onDeleted().catch(() => {});
+          setBusy(false);
+          Alert.alert('Аккаунт удалён', 'Все ваши данные удалены.');
+          router.replace('/');
+        },
+      },
+    ]);
+  return (
+    <View style={styles.links}>
+      <Press haptic={false} onPress={() => router.push('/legal' as never)} style={styles.linkRow}>
+        <Icon name="shield" size={18} color={colors.violet} />
+        <Text style={styles.linkText}>Правила, данные и условия</Text>
+        <Icon name="arrowRight" size={15} color={colors.muted} />
+      </Press>
+      {blocked.length > 0 && (
+        <Press haptic={false} onPress={() => Alert.alert('Скрытые пользователи', `Скрыто: ${blocked.length}. Показать их сообщения снова?`, [{ text: 'Отмена', style: 'cancel' }, { text: 'Показать', onPress: unblockAll }])} style={styles.linkRow}>
+          <Icon name="user" size={18} color={colors.violet} />
+          <Text style={styles.linkText}>Скрытые пользователи · {blocked.length}</Text>
+          <Icon name="arrowRight" size={15} color={colors.muted} />
+        </Press>
+      )}
+      {signedIn && (
+        <Press haptic={false} onPress={del} disabled={busy} style={styles.linkRow}>
+          <Icon name="trash" size={18} color={colors.bad} />
+          <Text style={[styles.linkText, { color: colors.bad }]}>{busy ? 'Удаляем…' : 'Удалить аккаунт'}</Text>
+        </Press>
+      )}
     </View>
   );
 }
@@ -306,6 +352,9 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  links: { marginTop: 28, marginHorizontal: space.gutter, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1', overflow: 'hidden' },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, height: 54, borderBottomWidth: 1, borderColor: '#F0EEF7' },
+  linkText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
   compact: { paddingHorizontal: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7' },
   importRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC4F7', marginBottom: 10 },
   importText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },

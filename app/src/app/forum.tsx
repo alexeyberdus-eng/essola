@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { ago, plural } from '../data/community';
 import { CAT_STYLE } from '../data/forum-cats';
 import { useIsAdmin } from '../lib/admin';
+import { ensureRules, useBlocked } from '../lib/moderation';
 import { normalize } from '../lib/analyze';
 import { FORUM_CATS, forumCreate, forumList, TopicRow } from '../lib/social';
 import { colors, fonts, space } from '../theme';
@@ -27,6 +28,7 @@ export default function Forum() {
   const [topics, setTopics] = useState<TopicRow[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState(false);
+  const { isBlocked } = useBlocked();
 
   const load = useCallback(async () => {
     // A few pages at once, so search covers every topic.
@@ -52,9 +54,9 @@ export default function Forum() {
 
   const rows = useMemo<Row[]>(() => {
     const nq = normalize(q.trim());
-    const list = (topics ?? []).filter((t) => !nq || normalize(t.title + ' ' + t.preview).includes(nq));
+    const list = (topics ?? []).filter((t) => !isBlocked(t.author.id) && (!nq || normalize(t.title + ' ' + t.preview).includes(nq)));
     return list.map((t) => ({ kind: 'topic' as const, t }));
-  }, [topics, q]);
+  }, [topics, q, isBlocked]);
 
   const header = (
     <View style={{ marginBottom: 4 }}>
@@ -245,12 +247,13 @@ function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void
   const [error, setError] = useState('');
   const send = async () => {
     if (title.trim().length < 4) return setError('Заголовок — хотя бы 4 символа');
+    if (!(await ensureRules())) return;
     setBusy(true);
     setError('');
     try {
       onDone(await forumCreate(nick, title.trim(), text.trim(), cat, official && admin && user?.email ? { email: user.email } : null));
-    } catch {
-      setError('Не получилось отправить — проверьте интернет');
+    } catch (e) {
+      setError(String(e).includes('400') ? 'В тексте есть недопустимые слова — перефразируйте' : 'Не получилось отправить — проверьте интернет');
       setBusy(false);
     }
   };

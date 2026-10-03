@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-nati
 import { useAuth } from '../context/AuthContext';
 import { ago } from '../data/community';
 import { comment, rate, social, Social, socialEnabled } from '../lib/social';
+import { ensureRules, moderate, postError, useBlocked } from '../lib/moderation';
 import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
 import { Press, tap } from './ui';
@@ -33,6 +34,7 @@ export function ProductReviews({ id }: { id: string }) {
   const [data, setData] = useState<Social | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const { isBlocked } = useBlocked();
   useEffect(() => {
     if (socialEnabled) social(key).then(setData).catch(() => {});
   }, [key]);
@@ -48,12 +50,15 @@ export function ProductReviews({ id }: { id: string }) {
   const send = async () => {
     if (!user) return router.push('/auth');
     if (!text.trim() || busy) return;
+    if (!(await ensureRules())) return;
     tap('medium');
     setBusy(true);
     try {
       setData(await comment(key, user.nick || user.name || 'гость', text.trim()));
       setText('');
-    } catch {}
+    } catch (e) {
+      postError(e);
+    }
     setBusy(false);
   };
 
@@ -76,6 +81,7 @@ export function ProductReviews({ id }: { id: string }) {
         <Stars value={r?.mine ?? 0} size={26} onPick={pick} />
       </View>
       {data?.comments
+        .filter((c) => !isBlocked(c.user))
         .slice()
         .reverse()
         .slice(0, 20)
@@ -83,7 +89,12 @@ export function ProductReviews({ id }: { id: string }) {
           <View key={c.id} style={styles.comment}>
             <View style={styles.meta}>
               <Text style={styles.nick}>@{c.nick}</Text>
-              <Text style={styles.time}>{ago(c.at)}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={styles.time}>{ago(c.at)}</Text>
+                <Press haptic={false} onPress={() => moderate({ kind: 'review', target: `${key}/${c.id}`, author: { id: c.user, nick: c.nick }, text: c.text })} accessibilityLabel="Ещё">
+                  <Icon name="more" size={16} color={colors.muted} />
+                </Press>
+              </View>
             </View>
             <Text style={styles.text}>{c.text}</Text>
           </View>

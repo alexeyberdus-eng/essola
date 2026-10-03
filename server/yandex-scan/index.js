@@ -257,6 +257,54 @@ module.exports.handler = async (event, context) => {
     const clean = (x, n) => String(x || '').replace(/[<>]/g, '').trim().slice(0, n);
     const get = async (k, def) => (await cacheGet(k, iam)) ?? def;
     const put = (k, v) => cachePut(k, iam, v, true);
+    // Obscene words are refused in anything users publish (forum, comments, reviews, nicknames).
+    const RUDE = /(^|[^а-яё])(х[уy][йияеёю]|п[иі]зд|[её]б[аеиоуы]|бля[дт]?|сук[аи]|муд[аио]к|г[ао]ндон|шлюх|пид[оа]р|уеб|долбо[её]б)/i;
+    const rude = (t) => RUDE.test(String(t || '').toLowerCase());
+    if (['forum.create', 'forum.reply', 'social.comment', 'user.save'].includes(req.mode) && (rude(req.text) || rude(req.title) || rude(req.nick))) {
+      return reply(400, { error: 'rude' });
+    }
+    // ---- Reports, account deletion (App Store rules for apps with user content) ----
+    if (req.mode === 'report') {
+      const me = uid(req.id);
+      if (!me) return reply(400, { error: 'bad_report' });
+      const item = { at: new Date().toISOString(), from: me, kind: clean(req.kind, 20), target: clean(req.target, 120), author: uid(req.author), text: clean(req.text, 300), reason: clean(req.reason, 200) };
+      const list = await get('reports.json', []);
+      await put('reports.json', [item, ...list].slice(0, 2000));
+      return reply(200, { ok: true });
+    }
+    if (req.mode === 'user.delete') {
+      const me = uid(req.id);
+      if (!me) return reply(400, { error: 'bad_user' });
+      const prev = await get(`users/${me}.json`, null);
+      // Profile, published recipes, followers and notifications are removed; forum posts stay but lose the name.
+      await Promise.all([put(`users/${me}.json`, { id: me, nick: 'удалённый пользователь', deleted: true }), put(`users/${me}/recipes.json`, []), put(`users/${me}/followers.json`, []), put(`notif/${me}.json`, [])]);
+      if (prev?.nick) {
+        const nicks = await get('nicks.json', {});
+        delete nicks[String(prev.nick).toLowerCase()];
+        await put('nicks.json', nicks);
+      }
+      const feed = await get('community/recent.json', []);
+      await put('community/recent.json', feed.filter((x) => x.user?.id !== me));
+      const idx = await get('forum/index.json', []);
+      for (const row of idx) {
+        const t = await get(`forum/t/${row.id}.json`, null);
+        if (!t) continue;
+        let changed = false;
+        if (t.author?.id === me) {
+          t.author = { id: 'deleted', nick: 'удалённый пользователь' };
+          changed = true;
+        }
+        for (const p of t.posts) {
+          if (p.author?.id === me) {
+            p.author = { id: 'deleted', nick: 'удалённый пользователь' };
+            changed = true;
+          }
+        }
+        if (changed) await put(`forum/t/${row.id}.json`, t);
+      }
+      await put('forum/index.json', idx.map((r) => (r.author?.id === me ? { ...r, author: { id: 'deleted', nick: 'удалённый пользователь' } } : r)));
+      return reply(200, { ok: true });
+    }
     if (req.mode === 'user.save') {
       const id = uid(req.id);
       if (!id) return reply(400, { error: 'bad_user' });

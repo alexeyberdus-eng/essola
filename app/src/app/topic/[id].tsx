@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ago } from '../../data/community';
 import { CAT_STYLE } from '../../data/forum-cats';
 import { useIsAdmin } from '../../lib/admin';
+import { ensureRules, moderate, postError, useBlocked } from '../../lib/moderation';
 import { ForumAuthor, forumGet, forumLike, ForumPost, forumReply, myId, Topic } from '../../lib/social';
 import { colors, fonts, space } from '../../theme';
 
@@ -107,19 +108,23 @@ export default function TopicScreen() {
     forumGet(id).then(setTopic).catch(() => setTopic(null));
   }, [id]);
 
-  const nodes = useMemo(() => (topic ? thread(topic.posts) : []), [topic]);
+  const { isBlocked } = useBlocked();
+  const nodes = useMemo(() => (topic ? thread(topic.posts).filter((n) => !isBlocked(n.p.author.id)) : []), [topic, isBlocked]);
   const nick = user?.nick || user?.name || 'гость';
 
   const send = async () => {
     if (!user) return router.push('/auth');
     if (!text.trim() || busy) return;
+    if (!(await ensureRules())) return;
     tap('medium');
     setBusy(true);
     try {
       setTopic(await forumReply(id, nick, text.trim(), to?.id ?? null, official && admin && user.email ? { email: user.email } : null));
       setText('');
       setTo(null);
-    } catch {}
+    } catch (e) {
+      postError(e);
+    }
     setBusy(false);
   };
 
@@ -175,6 +180,9 @@ export default function TopicScreen() {
                   <Icon name="comment" size={16} color={colors.muted} />
                   <Text style={styles.actText}>{topic.posts.length || ''}</Text>
                 </Press>
+                <Press haptic={false} onPress={() => moderate({ kind: 'forum-topic', target: topic.id, author: topic.author, text: `${topic.title}\n${topic.text}` })} style={[styles.act, { marginLeft: 'auto' }]} accessibilityLabel="Ещё">
+                  <Icon name="more" size={17} color={colors.muted} />
+                </Press>
               </View>
             </View>
 
@@ -195,6 +203,9 @@ export default function TopicScreen() {
                     <Press haptic={false} onPress={() => like(p.id, !liked)} style={styles.act}>
                       <Icon name={liked ? 'heartFill' : 'heart'} size={15} color={liked ? '#E0466E' : colors.muted} />
                       <Text style={styles.actText}>{p.likes?.length || ''}</Text>
+                    </Press>
+                    <Press haptic={false} onPress={() => moderate({ kind: 'forum-post', target: `${topic.id}/${p.id}`, author: p.author, text: p.text })} style={[styles.act, { marginLeft: 'auto' }]} accessibilityLabel="Ещё">
+                      <Icon name="more" size={17} color={colors.muted} />
                     </Press>
                     <Press
                       haptic={false}
