@@ -44,7 +44,7 @@ jobs:
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
-          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 512m --execution-timeout 60s --source-path scan.zip"
+          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 2048m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.
           yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
             || yc serverless function version create $V --environment "$ENVV" >/dev/null
