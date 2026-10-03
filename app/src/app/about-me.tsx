@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   sHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
-  chipOn: { backgroundColor: colors.ink },
+  chipOn: { backgroundColor: colors.accent },
   chipBad: { backgroundColor: colors.badSoft },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },

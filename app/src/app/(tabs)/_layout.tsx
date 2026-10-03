@@ -4,7 +4,8 @@ import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
 import { Press, tap } from '../../components/ui';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, LAVENDER } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type BarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
@@ -79,7 +80,7 @@ function TabBar({ state, navigation }: BarProps) {
                       style={styles.fab}
                       accessibilityLabel={tab.label}
                     >
-                      <View style={[StyleSheet.absoluteFill, { borderRadius: 18, backgroundColor: colors.ink }]} />
+                      <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 18 }]} />
                       <View style={{ zIndex: 1 }}>
                         <Icon name="barcode" size={24} color="#fff" strokeWidth={1.7} />
                       </View>
@@ -141,9 +142,9 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: '#E2E6FF',
+    backgroundColor: '#EDE7FF',
     borderWidth: 1,
-    borderColor: 'rgba(63,75,201,0.22)',
+    borderColor: 'rgba(138,116,242,0.30)',
   },
   fab: {
     width: 56,

@@ -25,13 +25,13 @@ function makeNick() {
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { appleAvailable, signInWithApple, signInWithVk, requestEmailCode, verifyEmailCode } = useAuth();
+  const { appleAvailable, signInWithApple, signInWithVk, requestEmailCode, verifyEmailCode, updateProfile } = useAuth();
   const [email, setEmail] = useState('');
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [nick, setNick] = useState(makeNick);
   const [code, setCode] = useState('');
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [step, setStep] = useState<'email' | 'code' | 'nick'>('email');
   const [demo, setDemo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export default function AuthScreen() {
           ))}
         </View>
 
-        {Platform.OS === 'ios' && appleAvailable && (
+        {step !== 'nick' && Platform.OS === 'ios' && appleAvailable && (
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
@@ -95,10 +95,14 @@ export default function AuthScreen() {
           />
         )}
 
-        {vkEnabled && (
+        {step !== 'nick' && vkEnabled && (
           <Press
             onPress={() => run(async () => {
-              if (await signInWithVk()) done();
+              // After VK the person always picks their public nickname.
+              if (await signInWithVk()) {
+                setNick(makeNick());
+                setStep('nick');
+              }
             })}
             disabled={busy}
             style={[styles.vk, Platform.OS === 'ios' && appleAvailable && { marginTop: 10 }]}
@@ -109,7 +113,7 @@ export default function AuthScreen() {
           </Press>
         )}
 
-        {((Platform.OS === 'ios' && appleAvailable) || vkEnabled) && (
+        {step !== 'nick' && ((Platform.OS === 'ios' && appleAvailable) || vkEnabled) && (
           <View style={styles.or}>
             <Hairline style={{ flex: 1 }} />
             <T v="label">или по почте</T>
@@ -117,7 +121,30 @@ export default function AuthScreen() {
           </View>
         )}
 
-        {step === 'email' ? (
+        {step === 'nick' ? (
+          <View style={{ gap: 12 }}>
+            <Text style={styles.title}>Вы вошли через VK. Придумайте ник</Text>
+            <T>Его увидят на форуме и в комментариях. Имя и почта не показываются.</T>
+            <View style={styles.field}>
+              <Text style={styles.at}>@</Text>
+              <TextInput value={nick} onChangeText={(v) => setNick(v.replace(/[^a-z0-9_.]/gi, '').toLowerCase().slice(0, 24))} placeholder="ник" placeholderTextColor={colors.faint} autoCapitalize="none" autoFocus style={styles.input} />
+              <Press haptic={false} onPress={() => setNick(makeNick())} hitSlop={8} accessibilityLabel="Другой ник">
+                <Icon name="swap" size={17} color={colors.violet} />
+              </Press>
+            </View>
+            <Button
+              label="Готово"
+              loading={busy}
+              disabled={nick.length < 3}
+              onPress={() =>
+                run(async () => {
+                  await updateProfile({ nick });
+                  done();
+                })
+              }
+            />
+          </View>
+        ) : step === 'email' ? (
           <View style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={[styles.field, { flex: 1 }]}>

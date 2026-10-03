@@ -122,6 +122,6 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 1 },
   bar: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingTop: 10, borderTopWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
   btn: { flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
-  btnDark: { backgroundColor: colors.ink },
+  btnDark: { backgroundColor: colors.accent },
   btnText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
 });

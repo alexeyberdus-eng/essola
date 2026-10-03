@@ -31,7 +31,7 @@ type AuthValue = {
   signInWithVk: () => Promise<boolean>;
   requestEmailCode: (email: string) => Promise<{ demo: boolean }>;
   verifyEmailCode: (email: string, code: string, extra?: { name?: string; nick?: string }) => Promise<void>;
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => Promise<void>;
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'nick' | 'skinType' | 'hair'>>) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       id: `vk:${vk.id}`,
       email: vk.email ?? (same ? prev?.email ?? null : null),
       name: [vk.firstName, vk.lastName].filter(Boolean).join(' ') || (same ? prev?.name ?? null : null),
-      nick: same ? prev?.nick ?? null : null,
+      nick: null,
       provider: 'vk',
       since: same ? prev!.since : new Date().toISOString(),
       skinType: same ? prev?.skinType ?? null : null,
@@ -170,13 +170,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => {
+    async (patch: Partial<Pick<User, 'name' | 'nick' | 'skinType' | 'hair'>>) => {
       if (!user) return;
       const next = { ...user, ...patch };
       setUser(next);
       if (supabase && !user.local) {
         const data: Record<string, unknown> = {};
         if ('name' in patch) data.full_name = patch.name;
+        if ('nick' in patch) data.nick = patch.nick;
         if ('skinType' in patch) data.skin_type = patch.skinType;
         if ('hair' in patch) data.hair_type = patch.hair;
         await supabase.auth.updateUser({ data });

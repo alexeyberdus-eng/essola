@@ -123,7 +123,7 @@ function Bubble({ s }: { s: Story }) {
       {s.cover ? (
         <Image source={s.cover} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }]}>
           <Text style={{ fontFamily: fonts.display, fontSize: 26, color: '#fff', marginTop: -3 }}>e</Text>
         </View>
       )}
@@ -174,7 +174,7 @@ function Viewer({ stories, start, onClose, onSeen, onRemove }: { stories: Story[
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <LinearGradient colors={['#15172B', '#2B2F7A', '#5B4BD6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, paddingTop: insets.top + 8 }}>
+      <LinearGradient colors={['#5B47C9', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, paddingTop: insets.top + 8 }}>
         <View style={styles.bars}>
           {story.slides.map((_, i) => (
             <View key={i} style={styles.bar}>
@@ -303,6 +303,6 @@ const styles = StyleSheet.create({
   pick: { height: 260, borderRadius: 20, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 8 },
   pickText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.violet },
   input: { minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#FBFAFE', textAlignVertical: 'top' },
-  publish: { height: 50, borderRadius: 16, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  publish: { height: 50, borderRadius: 16, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   publishText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
 });

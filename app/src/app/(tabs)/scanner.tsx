@@ -1,5 +1,4 @@
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
-import { Hint } from '../../components/Hint';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -60,8 +59,6 @@ export default function ScannerScreen() {
   const [matches, setMatches] = useState<CatalogItem[] | null>(null);
   const [findQ, setFindQ] = useState('');
   const [finding, setFinding] = useState(false);
-  // «Этикетка»: the front of the pack was read, the product is looked up in our base by brand and name.
-  const [front, setFront] = useState<string | null>(null);
   // Close-ups go blurry on phones whose main lens can't focus near: step back and zoom in instead.
   const [zoom, setZoom] = useState(0);
   const [focus, setFocus] = useState<'on' | 'off'>('off');
@@ -72,8 +69,6 @@ export default function ScannerScreen() {
   const [digits, setDigits] = useState('');
   // The scanner is the screen; the history opens on demand below it.
   const [history, setHistory] = useState(false);
-  // On small phones the panel may not fit: then (and only then) it scrolls.
-  const [panelH, setPanelH] = useState({ box: 0, content: 0 });
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const laser = useRef(new Animated.Value(0)).current;
@@ -154,27 +149,36 @@ export default function ScannerScreen() {
     setFinding(false);
   };
 
+  // «Этикетка»: the name is read from the pack and the product opens straight from our base;
+  // if it isn't there, the server looks for its composition on the web.
   const readFront = async (uri: string) => {
     setBusy(true);
     setNotice(null);
-    setMatches(null);
     try {
       const r = await aiLabel(await toJpegBase64(uri, 720));
       if (r.notCosmetic) return finish(`NOT_COSMETIC: ${r.notCosmetic}`);
-      const q = [r.brand, r.name].filter(Boolean).join(' ');
-      if (!q) throw new Error('EMPTY');
-      tap('success');
-      pendingName.current = q;
-      setFront(q);
-      setFindQ(q);
-      const words = r.name.split(/\s+/).filter((w) => !/^\d+([.,]\d+)?(мл|ml|г|g)?$/i.test(w));
-      findByName(q, [[r.brand, ...words.slice(0, 3)].join(' '), [r.brand, ...words.slice(0, 2)].join(' '), words.slice(0, 3).join(' ')]);
-    } catch (e) {
-      setNotice(String(e).includes('EMPTY') ? 'Не разобрали название — снимите лицевую сторону упаковки целиком, при хорошем свете.' : 'Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз.');
+      const name = [r.brand, r.name].filter(Boolean).join(' ');
+      if (r.item) {
+        const title = [r.item.b, r.item.t].filter(Boolean).join(' · ');
+        if (!r.item.x) {
+          router.push({ pathname: '/item', params: { title: r.item.t, brand: r.item.b ?? '', image: r.item.i ?? '', url: r.item.u ?? '' } } as never);
+          return;
+        }
+        tap('success');
+        const a = analyze(r.item.x);
+        const scan = saveScan({ title, text: r.item.x, overall: a.scores.overall, source: 'Летуаль', image: r.item.i || null, url: r.item.u });
+        router.push(`/analysis/${scan.id}`);
+        return;
+      }
+      if (r.ingredients?.length) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, undefined, true);
+      setNotice(name ? `Узнали «${name}», но состав не нашли. Переключитесь на «Состав» и сфотографируйте список ингредиентов на упаковке.` : 'Не разобрали название — снимите лицевую сторону упаковки целиком, при хорошем свете.');
+    } catch {
+      setNotice('Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
   };
+
 
   const pickMatch = (item: CatalogItem) => {
     tap('success');
@@ -187,7 +191,6 @@ export default function ScannerScreen() {
     }
     setMatches(null);
     setFindQ('');
-    setFront(null);
     finish(text, title, { barcode: code ?? undefined, source: 'база essola' }, true);
   };
 
@@ -330,7 +333,6 @@ export default function ScannerScreen() {
     tap();
     setMode(m);
     setNotice(null);
-    setFront(null);
     setMatches(null);
     if (m === 'barcode') {
       setLookup(null);
@@ -394,7 +396,6 @@ export default function ScannerScreen() {
   const barcode = mode === 'barcode';
   const frameTop = insets.top + (full ? (barcode ? 190 : 100) : barcode ? 96 : 66);
   const frameH = barcode ? (full ? 150 : 120) : undefined;
-  const camH = full ? winH : Math.round(winH * 0.56);
 
   const findPanel = (
           <View style={styles.find}>
@@ -421,7 +422,6 @@ export default function ScannerScreen() {
   const sheet = (
       <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
         {full && <View style={styles.grab} />}
-        {!full && <Hint id="scanner" title="Как сканировать" text="Сфотографируйте блок «Состав» на упаковке крупно и ровно — оценим за пару секунд. Можно отсканировать штрихкод или вставить ссылку на товар." />}
         {lookup ? (
           <View>
             <View style={styles.live}>
@@ -454,21 +454,13 @@ export default function ScannerScreen() {
           </View>
         ) : busy ? (
           <View style={styles.live}>
-            <Text style={styles.liveText}>{mode === 'front' ? 'Узнаём средство…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
+            <Text style={styles.liveText}>{mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
           </View>
         ) : mode === 'front' ? (
-          front ? (
-            <>
-              <Text style={styles.sheetTitle}>Узнали: {front}</Text>
-              {findPanel}
-              <Text style={[styles.sheetText, { marginTop: 10 }]}>Нет нужного? Переключитесь на «Состав» и снимите список ингредиентов.</Text>
-            </>
-          ) : (
-            <>
-              <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на лицевую сторону упаковки</Text>
-              <Text style={[styles.sheetText, { textAlign: 'center' }]}>Узнаем средство по этикетке и найдём его состав в нашей базе</Text>
-            </>
-          )
+          <>
+            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на лицевую сторону упаковки</Text>
+            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Узнаем средство и сразу откроем его разбор</Text>
+          </>
         ) : barcode ? (
           <>
             <Text style={styles.sheetTitle}>Наведите на штрихкод</Text>
@@ -553,7 +545,7 @@ export default function ScannerScreen() {
     <View style={[styles.screen, !full && { backgroundColor: colors.bg }]}>
       <StatusBar style="light" />
       {engine}
-      <View style={[styles.camBox, full ? StyleSheet.absoluteFill : { height: camH }]}>
+      <View style={[styles.camBox, full ? StyleSheet.absoluteFill : { flex: 1, minHeight: Math.round(winH * 0.38) }]}>
       {permission?.granted ? (
         focused && (
           <CameraView
@@ -648,17 +640,16 @@ export default function ScannerScreen() {
         sheet
       ) : (
         // The panel under the camera stays put; it scrolls only while search results are shown.
-        <View style={{ flex: 1 }}>
-          <ScrollView
-            style={{ flex: 1 }}
-            scrollEnabled={!!lookup || !!front || panelH.content > panelH.box + 2}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            onLayout={(e) => { const box = e.nativeEvent.layout.height; setPanelH((p) => (p.box === box ? p : { ...p, box })); }}
-            onContentSizeChange={(_, content) => setPanelH((p) => (p.content === content ? p : { ...p, content }))}
-          >
-            {sheet}
-          </ScrollView>
+        // The panel under the camera has its own height and never moves; the camera takes the rest of the screen.
+        // Only search results (unknown barcode) can scroll, inside a capped box.
+        <View>
+          {lookup ? (
+            <ScrollView style={{ maxHeight: Math.round(winH * 0.5) }} bounces={false} keyboardShouldPersistTaps="handled">
+              {sheet}
+            </ScrollView>
+          ) : (
+            sheet
+          )}
           <Press haptic={false} onPress={() => { tap(); setHistory(true); }} style={[styles.historyBtn, styles.historyBar, { marginBottom: insets.bottom + 10 }]} accessibilityLabel="История сканирований">
             <Icon name="history" size={18} color={colors.violet} />
             <Text style={styles.historyTitle}>История сканирований</Text>

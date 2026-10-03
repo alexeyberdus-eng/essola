@@ -124,5 +124,5 @@ const styles = StyleSheet.create({
   text: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, backgroundColor: '#FBFAFE' },
-  send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
 });

@@ -68,7 +68,7 @@ export default function Forum() {
         </Press>
       </View>
 
-      <LinearGradient colors={['#2F3AB0', '#5B4BD6', '#A464C9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+      <LinearGradient colors={['#8A74F2', '#A98BF5', '#E6A3D8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <Text style={styles.heroKicker}>@essola · клуб домашней косметики</Text>
         <Text style={styles.heroTitle}>Спросите технолога и тех, кто уже варит кремы</Text>
         <View style={styles.stats}>
@@ -267,7 +267,7 @@ function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void
       <TextInput value={title} onChangeText={setTitle} placeholder="Заголовок: о чём хотите спросить?" placeholderTextColor={colors.faint} style={styles.input} maxLength={120} />
       <TextInput value={text} onChangeText={setText} placeholder="Подробности: рецепт, тип кожи, что уже пробовали…" placeholderTextColor={colors.faint} style={[styles.input, styles.area]} multiline maxLength={4000} />
       {admin && (
-        <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.offBtn, official && { backgroundColor: colors.ink }]}>
+        <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.offBtn, official && { backgroundColor: colors.accent }]}>
           <Text style={[styles.offText, official && { color: '#fff' }]}>{official ? 'Публикуется от @essola' : 'Опубликовать от @essola'}</Text>
         </Press>
       )}
@@ -280,7 +280,7 @@ function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 52 },
   h1: { flex: 1, fontFamily: fonts.display, fontSize: 28, letterSpacing: -1, color: colors.ink },
-  newBtn: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  newBtn: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   hero: { marginTop: 10, borderRadius: 26, padding: 18, gap: 10 },
   heroKicker: { fontFamily: fonts.semibold, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)' },
   heroTitle: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, letterSpacing: -0.5, color: '#fff' },
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   metaText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   answer: { padding: 12, borderRadius: 16, backgroundColor: '#F6F7FD', borderLeftWidth: 3, borderLeftColor: colors.violet, gap: 6 },
   labRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  labAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  labAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   labLetter: { fontFamily: fonts.display, fontSize: 13, color: '#fff', marginTop: -2 },
   labName: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink },
   labRole: { fontFamily: fonts.medium, fontSize: 11, color: colors.violet, backgroundColor: '#E8EBFF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },

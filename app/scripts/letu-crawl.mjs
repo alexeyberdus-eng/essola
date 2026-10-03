@@ -51,19 +51,10 @@ function childrenOf(tree, path) {
   return (walk(tree) || []).map((c) => `/browse${c.path}`);
 }
 
-export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/dlya-muzhchin', '/browse/aptechnaya-kosmetika', '/browse/korejskaya-kosmetika', '/browse/organicheskaya-kosmetika', '/browse/dlya-doma'];
+export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/uhod-za-volosami', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/muzhchinam', '/browse/detyam', '/browse/podarki', '/browse/apteka', '/browse/aptechnaya-kosmetika'];
 
-// Likely section addresses, checked one by one (a wrong one just reports 0 products).
-const GUESSES = [
-  'uhod-za-volosami', 'volosy-1', 'dlya-volos', 'sredstva-dlya-volos', 'uhod-za-volosami-1', 'shampuni', 'okrashivanie-volos', 'kraski-dlya-volos', 'ukladka-volos', 'stajling',
-  'muzhchinam', 'dlya-nego', 'muzhskaya-kosmetika', 'dlya-muzhchin-1', 'uhod-dlya-muzhchin', 'britie',
-  'uhod-za-telom', 'telo', 'dlya-tela', 'uhod-za-rukami', 'uhod-za-nogtyami', 'nogti', 'manikyur', 'pedikyur',
-  'dlya-detej', 'detskaya-kosmetika', 'detyam', 'mama-i-malysh',
-  'aksessuary', 'aksessuary-1', 'tehnika', 'tehnika-dlya-krasoty', 'gigiena', 'lichnaya-gigiena', 'polost-rta', 'uhod-za-polostyu-rta',
-  'zagar', 'solncezashhitnye-sredstva', 'sredstva-dlya-zagara', 'dom', 'tovary-dlya-doma', 'aromaty-dlya-doma', 'podarki', 'podarochnye-nabory', 'nabory',
-  'nishevaya-parfyumeriya', 'selektivnaya-parfyumeriya', 'lyuks', 'novinki', 'eksklyuziv', 'aziatskaya-kosmetika', 'korejskaya', 'naturalnaya-kosmetika', 'organicheskaya',
-  'aptechnaya', 'zdorove', 'bad', 'vitaminy', 'intimnaya-gigiena', 'dezodoranty',
-].map((x) => `/browse/${x}`);
+// Sections that are not cosmetics (furniture, stationery, gadgets, sport, optics…) never go into the base.
+const NOT_COSMETICS = /mebel|kantstovar|sport|optika|tehnika|vse-dlya-doma|rasprodazha|aksessuar|sexual/;
 
 // Top-level sections as the site's own menu lists them (falls back to the known ones).
 async function roots() {
@@ -90,7 +81,7 @@ async function roots() {
     await sleep(300);
   }
   console.error('sections in category trees:', [...fromKnown].join(' ') || 'none');
-  const found = [...new Set([...[...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]), ...fromTree, ...fromKnown, ...ROOTS, ...GUESSES])].filter((p) => !skip.has(p));
+  const found = [...new Set([...[...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]), ...fromTree, ...fromKnown, ...ROOTS])].filter((p) => !skip.has(p) && !NOT_COSMETICS.test(p));
   const checked = [];
   for (const path of found) {
     const total = (await search(path, 1, SIZE))?.totalProducts ?? 0;

@@ -20,9 +20,9 @@ export async function aiScan(dataUrl: string, barcode?: string | null, title?: s
 }
 
 /** Front of the pack (data URL) → brand and name, to find the product in our base. One short answer, few tokens. */
-export async function aiLabel(dataUrl: string): Promise<{ brand: string; name: string; kind: string; notCosmetic?: string }> {
-  const r = await call<{ brand?: string; name?: string; kind?: string; notCosmetic?: string }>({ mode: 'label', image: dataUrl });
-  return { brand: r.brand ?? '', name: r.name ?? '', kind: r.kind ?? '', notCosmetic: r.notCosmetic };
+export async function aiLabel(dataUrl: string): Promise<{ brand: string; name: string; kind: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[] }> {
+  const r = await call<{ brand?: string; name?: string; kind?: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[] }>({ mode: 'label', image: dataUrl });
+  return { brand: r.brand ?? '', name: r.name ?? '', kind: r.kind ?? '', notCosmetic: r.notCosmetic, item: r.item, ingredients: r.ingredients };
 }
 
 type AiText = { lead?: string; effects?: { title: string; text: string }[]; use?: string[] };

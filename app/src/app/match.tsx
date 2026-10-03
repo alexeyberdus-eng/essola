@@ -17,6 +17,7 @@ import { useProfile } from '../lib/profile';
 import type { Profile } from '../lib/profile';
 import { CatalogItem, matchProducts } from '../lib/ai';
 import { FREE_TAGS, GOAL_TAGS, productTags } from '../lib/tags';
+import { Dropdown } from '../components/Dropdown';
 import { Hero } from '../components/Hero';
 import { Icon } from '../components/Icon';
 import { RECIPE_INCI } from '../lib/wiki';
@@ -238,49 +239,15 @@ export default function Match() {
               </View>
             </Press>
 
-            <Text style={styles.label}>Для чего</Text>
-            <View style={styles.chips}>
-              {AREAS.map((a) => (
-                <Press key={a.key} haptic={false} onPress={() => { tap(); setArea(a); setCats([]); setPg([]); }} style={[styles.chip, area.key === a.key && styles.chipOn]}>
-                  <Text style={[styles.chipText, area.key === a.key && styles.chipTextOn]}>{a.label}</Text>
-                </Press>
-              ))}
+            {/* All filters as compact pills; each opens its list, the results below are what scrolls. */}
+            <View style={styles.pickers}>
+              <Dropdown label="Для чего" options={AREAS.map((x) => ({ key: x.key, label: x.label }))} value={area.key} onChange={(v) => { const n = AREAS.find((x) => x.key === v); if (n) { setArea(n); setCats([]); setPg([]); } }} />
+              <Dropdown label="Что ищем" options={area.cats.map(([k, l]) => ({ key: k, label: l }))} value={cats} onChange={(v) => setCats((v as string[]) ?? [])} multi placeholder="Всё" />
+              <Dropdown label="Задачи" options={area.goals.map((k) => ({ key: k, label: GOAL_TAGS[k].label }))} value={pg} onChange={(v) => setPg((v as string[]) ?? [])} multi placeholder="Любые" />
             </View>
-            {area.cats.length > 1 && (
-              <>
-                <Text style={styles.label}>Что ищем · можно несколько</Text>
-                <View style={styles.chips}>
-                  {area.cats.map(([k, l]) => (
-                    <Press key={k} haptic={false} onPress={() => toggle(cats, setCats, k)} style={[styles.chip, cats.includes(k) && styles.chipPick]}>
-                      <Text style={[styles.chipText, cats.includes(k) && styles.chipTextOn]}>{l}</Text>
-                    </Press>
-                  ))}
-                </View>
-              </>
-            )}
-            <Text style={styles.label}>Задачи</Text>
-            <View style={styles.chips}>
-              {area.goals.map((k) => (
-                <Press key={k} haptic={false} onPress={() => toggle(pg, setPg, k)} style={[styles.chip, pg.includes(k) && styles.chipPick]}>
-                  <Text style={[styles.chipText, pg.includes(k) && styles.chipTextOn]}>{GOAL_TAGS[k].label}</Text>
-                </Press>
-              ))}
-            </View>
-            <Text style={styles.label}>Состав</Text>
-            <View style={styles.chips}>
-              {FREE_KEYS.map((k) => (
-                <Press key={k} haptic={false} onPress={() => toggle(free, setFree, k)} style={[styles.chip, free.includes(k) && styles.chipPick]}>
-                  <Text style={[styles.chipText, free.includes(k) && styles.chipTextOn]}>{FREE_TAGS[k]}</Text>
-                </Press>
-              ))}
-            </View>
-            <Text style={styles.label}>Сортировка</Text>
-            <View style={styles.chips}>
-              {SORTS.map(([k, l]) => (
-                <Press key={k} haptic={false} onPress={() => { tap(); setSort(k); }} style={[styles.chip, sort === k && styles.chipOn]}>
-                  <Text style={[styles.chipText, sort === k && styles.chipTextOn]}>{l}</Text>
-                </Press>
-              ))}
+            <View style={styles.pickers}>
+              <Dropdown label="Состав" options={FREE_KEYS.map((k) => ({ key: k, label: FREE_TAGS[k] }))} value={free} onChange={(v) => setFree((v as string[]) ?? [])} multi placeholder="Любой" />
+              <Dropdown label="Сортировка" options={SORTS.map(([k, l]) => ({ key: k, label: l }))} value={sort} onChange={(v) => v && setSort(v as (typeof SORTS)[number][0])} />
             </View>
 
             <Press
@@ -320,24 +287,9 @@ export default function Match() {
           </>
         ) : (
           <>
-            <Text style={styles.label}>Зона</Text>
-            <View style={styles.chips}>
-              {ZONES.map((z) => (
-                <Press key={z} haptic={false} onPress={() => { tap(); setZone(z); setGoals([]); }} style={[styles.chip, zone === z && styles.chipOn]}>
-                  <Text style={[styles.chipText, zone === z && styles.chipTextOn]}>{z}</Text>
-                </Press>
-              ))}
-            </View>
-            <Text style={styles.label}>Цели · можно несколько</Text>
-            <View style={styles.chips}>
-              {goalsHere.map((g) => {
-                const on = goals.includes(g.key);
-                return (
-                  <Press key={g.key} haptic={false} onPress={() => toggle(goals, setGoals, g.key)} style={[styles.chip, on && styles.chipPick]}>
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{g.label}</Text>
-                  </Press>
-                );
-              })}
+            <View style={styles.pickers}>
+              <Dropdown label="Зона" options={ZONES.map((z) => ({ key: z, label: z }))} value={zone} onChange={(v) => { if (v) { setZone(v as Category); setGoals([]); } }} />
+              <Dropdown label="Цели" options={goalsHere.map((g) => ({ key: g.key, label: g.label }))} value={goals} onChange={(v) => setGoals((v as string[]) ?? [])} multi placeholder="Выберите" />
             </View>
             {chosen.length > 0 && (
               <View style={{ marginTop: 22 }}>
@@ -365,18 +317,19 @@ const styles = StyleSheet.create({
   h2: { fontFamily: fonts.display, fontSize: 19, color: colors.ink, marginBottom: 6 },
   sub: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginTop: 6 },
   label: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 18, marginBottom: 8 },
+  pickers: { flexDirection: 'row', gap: 6, marginTop: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipPick: { backgroundColor: colors.violet, borderColor: colors.violet },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
   switch: { flexDirection: 'row', marginTop: 18, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
   sw: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  swOn: { backgroundColor: colors.ink },
+  swOn: { backgroundColor: colors.accent },
   swText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
   swTextOn: { fontFamily: fonts.semibold, color: '#fff' },
-  me: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, padding: 14, borderRadius: 18, backgroundColor: '#F6F7FD', borderWidth: 1, borderColor: '#E6E8F6' },
+  me: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 12, borderRadius: 18, backgroundColor: '#F6F7FD', borderWidth: 1, borderColor: '#E6E8F6' },
   box: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#C9CDE0', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   boxOn: { backgroundColor: colors.violet, borderColor: colors.violet },
   meTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },

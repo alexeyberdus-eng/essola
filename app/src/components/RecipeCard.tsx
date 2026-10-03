@@ -31,8 +31,23 @@ const short = (n: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-/** Three key ingredients: the most active first, then the rest by share (water/base skipped). */
+// Recognising ingredients is the slow part of a card: done once per recipe, so re-sorting the feed is instant.
+const ACTIVES = new Map<string, ReturnType<typeof computeActives>>();
+const TEASERS = new Map<string, string>();
 function actives(recipe: Recipe) {
+  const key = `${recipe.id}|${recipe.ingredients.length}`;
+  let a = ACTIVES.get(key);
+  if (!a) ACTIVES.set(key, (a = computeActives(recipe)));
+  return a;
+}
+function teaser(recipe: Recipe) {
+  let t = TEASERS.get(recipe.id);
+  if (t === undefined) TEASERS.set(recipe.id, (t = recipeTeaser(recipe)));
+  return t;
+}
+
+/** Three key ingredients: the most active first, then the rest by share (water/base skipped). */
+function computeActives(recipe: Recipe) {
   const pct = percentages(recipe);
   return recipe.ingredients
     .map((it, i) => {
@@ -69,7 +84,7 @@ export const RecipeCard = memo(function RecipeCard({ recipe, index = 0 }: { reci
             <RecipeArt recipe={recipe} size={76} />
           </View>
           <Text style={styles.about} numberOfLines={3}>
-            {recipeTeaser(recipe)}
+            {teaser(recipe)}
           </Text>
           {!!recipe.benefits?.length && (
             <View style={styles.benefits}>
@@ -141,3 +156,21 @@ const styles = StyleSheet.create({
   authorLink: { color: colors.violet, backgroundColor: '#F1EEFF' },
   author: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: 'rgba(21,23,43,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden', maxWidth: 140 },
 });
+
+/** Prepares cards in small portions while the feed is idle, so switching «В топе / Новое» never waits for them. */
+export function warmRecipeCards(list: Recipe[]) {
+  let i = 0;
+  let stop = false;
+  const step = () => {
+    if (stop) return;
+    for (const end = Math.min(list.length, i + 15); i < end; i++) {
+      actives(list[i]);
+      teaser(list[i]);
+    }
+    if (i < list.length) setTimeout(step, 16);
+  };
+  setTimeout(step, 300);
+  return () => {
+    stop = true;
+  };
+}

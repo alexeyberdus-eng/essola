@@ -44,7 +44,7 @@ function Rich({ text }: { text: string }) {
 function Avatar({ a, size = 30 }: { a: ForumAuthor; size?: number }) {
   if (a.id === 'essola')
     return (
-      <View style={[styles.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.ink }]}>
+      <View style={[styles.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.accent }]}>
         <Text style={{ fontFamily: fonts.display, fontSize: size * 0.5, color: '#fff', marginTop: -2 }}>e</Text>
       </View>
     );
@@ -238,7 +238,7 @@ export default function TopicScreen() {
                 <View />
               )}
               {admin && (
-                <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.toChip, official && { backgroundColor: colors.ink }]}>
+                <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.toChip, official && { backgroundColor: colors.accent }]}>
                   <Text style={[styles.toText, official && { color: '#fff' }]}>от @essola</Text>
                 </Press>
               )}
@@ -285,5 +285,5 @@ const styles = StyleSheet.create({
   toChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: colors.tint },
   toText: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.violet },
   input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#FBFAFE' },
-  send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
 });

@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode, useRef } from 'react';
 import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
-import { colors, fonts, glowShadow, radius, shadow, STRIP, type } from '../theme';
+import { colors, fonts, glowShadow, LAVENDER, radius, shadow, STRIP, type } from '../theme';
 import { Icon, IconName } from './Icon';
 
 export function T({ v = 'body', style, ...rest }: TextProps & { v?: keyof typeof type }) {
@@ -60,8 +60,8 @@ export function Press({
 type ButtonVariant = 'honey' | 'dark' | 'outline' | 'brass';
 // 'honey' is the primary action: dark olive with a brass edge (name kept for existing screens).
 const BTN: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
-  honey: { bg: colors.olive, fg: colors.onDark, border: 'rgba(216,188,134,0.45)' },
-  dark: { bg: colors.olive, fg: colors.onDark },
+  honey: { bg: colors.accent, fg: colors.onDark, border: 'rgba(255,255,255,0.35)' },
+  dark: { bg: colors.accent, fg: colors.onDark },
   brass: { bg: colors.brass, fg: colors.olive },
   outline: { bg: colors.card, fg: colors.ink, border: '#DCD8EE' },
 };
@@ -93,14 +93,14 @@ export function Button({
       style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, variant !== 'outline' && glowShadow, variant === 'outline' && shadow, style]}
     >
       {(variant === 'honey' || variant === 'dark') && (
-        <LinearGradient colors={[colors.olive2, colors.olive]} style={[StyleSheet.absoluteFill, s.btnFill]} />
+        <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, s.btnFill]} />
       )}
       {variant === 'brass' && <LinearGradient colors={[colors.brassLight, colors.brassDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, s.btnFill]} />}
       {loading ? (
         <ActivityIndicator color={c.fg} />
       ) : (
         <View style={s.btnContent}>
-          {icon && <Icon name={icon} size={18} color={variant === 'honey' ? colors.brassLight : c.fg} strokeWidth={1.8} />}
+          {icon && <Icon name={icon} size={18} color={c.fg} strokeWidth={1.8} />}
           <Text style={[s.btnText, { color: c.fg }]}>{label}</Text>
           {iconRight && <Icon name={iconRight} size={18} color={c.fg} strokeWidth={1.8} />}
         </View>

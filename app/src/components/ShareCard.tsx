@@ -31,7 +31,7 @@ export function ShareCard({
 }) {
   const c = scoreColor(score);
   return (
-    <LinearGradient colors={['#15172B', '#2B2F7A', '#5B4BD6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+    <LinearGradient colors={['#5B47C9', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
       <View style={styles.top}>
         <Text style={styles.brand}>
           essola <Text style={styles.brandLab}>lab</Text>

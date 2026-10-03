@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Dropdown } from '../../components/Dropdown';
 import { Hero } from '../../components/Hero';
 import { Icon } from '../../components/Icon';
 import { Flask, FormulaBar } from '../../components/lab';
@@ -208,29 +209,12 @@ export default function BuilderScreen() {
             </Press>
           </View>
         )}
-        <Text style={styles.ask}>Что делаем</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
-          {KINDS.map((k) => (
-            <Press key={k.key} haptic={false} onPress={() => choose(k.key)} style={[styles.chip, kind === k.key && styles.chipOn]}>
-              <Text style={[styles.chipText, kind === k.key && styles.chipTextOn]}>{k.label}</Text>
-            </Press>
-          ))}
-        </ScrollView>
-        <Text style={styles.ask}>Для чего</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
-          {AREAS.map((a) => (
-            <Press key={a} haptic={false} onPress={() => { tap(); setArea(a); }} style={[styles.chip, area === a && styles.chipOn]}>
-              <Text style={[styles.chipText, area === a && styles.chipTextOn]}>{a}</Text>
-            </Press>
-          ))}
-        </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 6 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
-          {GOALS.map((g) => (
-            <Press key={g} haptic={false} onPress={() => { tap(); setGoal(goal === g ? null : g); }} style={[styles.goal, goal === g && styles.goalOn]}>
-              <Text style={[styles.goalText, goal === g && { color: '#fff', fontFamily: fonts.semibold }]}>{g}</Text>
-            </Press>
-          ))}
-        </ScrollView>
+        {/* What, where and why in one row: each opens its list, so the page needs no scrolling to set up. */}
+        <View style={styles.pickers}>
+          <Dropdown label="Что делаем" options={KINDS.map((k) => ({ key: k.key, label: k.label }))} value={kind} onChange={(v) => v && choose(v as Kind)} />
+          <Dropdown label="Зона" options={AREAS.map((a) => ({ key: a, label: a }))} value={area} onChange={(v) => v && setArea(v as string)} />
+          <Dropdown label="Цель" options={GOALS.map((g) => ({ key: g, label: g }))} value={goal} onChange={(v) => setGoal((v as string) || null)} allowNone placeholder="Любая" />
+        </View>
 
         <View style={styles.search}>
           <Icon name="search" size={18} color={colors.muted} />
@@ -608,7 +592,7 @@ const styles = StyleSheet.create({
   empty: { marginTop: 14, padding: 18, gap: 10 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.5, color: colors.ink },
   emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginBottom: 4 },
-  reviewBtn: { height: 52, borderRadius: 18, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  reviewBtn: { height: 52, borderRadius: 18, backgroundColor: colors.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   reviewBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
   reviewErr: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.bad, marginTop: 8, textAlign: 'center' },
   review: { padding: 16, gap: 12 },
@@ -626,6 +610,7 @@ const styles = StyleSheet.create({
   goal: { height: 30, paddingHorizontal: 12, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
   goalOn: { backgroundColor: colors.violet, borderColor: colors.violet },
   goalText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
+  pickers: { flexDirection: 'row', gap: 6, marginTop: 14 },
   search: { marginTop: 16, height: 50, borderRadius: 16, backgroundColor: colors.cardSolid, borderWidth: 1, borderColor: '#E6E8F3', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, ...shadow },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   results: { marginTop: 6, paddingHorizontal: 4 },
@@ -654,7 +639,7 @@ const styles = StyleSheet.create({
   stepsSub: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 1 },
   stepsCard: { marginTop: 8, padding: 16, gap: 12 },
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  stepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   stepNumText: { fontFamily: fonts.semibold, fontSize: 12, color: '#fff' },
   stepText: { flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 10, height: 42, borderRadius: 14, backgroundColor: colors.tint },

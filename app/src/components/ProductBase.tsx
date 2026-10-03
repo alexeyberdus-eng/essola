@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { Hero } from './Hero';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Keyboard, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../context/LibraryContext';
 import { catalogPage, searchProducts } from '../lib/ai';
@@ -201,11 +201,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const open = (p: Found, overall: number) => {
     tap();
     if (p.none) {
-      Alert.alert(p.title, 'Магазин не публикует состав этого средства. Его можно посмотреть на упаковке и отсканировать — оценка появится сразу.', [
-        { text: 'Сканировать состав', onPress: () => router.navigate('/scanner') },
-        ...(p.url ? [{ text: 'Открыть в Летуаль', onPress: () => Linking.openURL(p.url!).catch(() => {}) }] : []),
-        { text: 'Закрыть', style: 'cancel' as const },
-      ]);
+      router.push({ pathname: '/item', params: { title: p.title, brand: p.brand ?? '', image: p.image ?? '', url: p.url ?? '' } } as never);
       return;
     }
     const scan = saveScan({ title: [p.brand, p.title].filter(Boolean).join(' · '), text: p.text, overall, barcode: p.barcode, source: p.source, image: p.image, url: p.url });
@@ -216,7 +212,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
       {toggle}
-      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Более 125 000 кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
+      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Очень много кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
       <View style={styles.search}>
         <Icon name="search" size={18} color={colors.muted} />
         <TextInput
@@ -318,7 +314,7 @@ const styles = StyleSheet.create({
   search: { marginTop: 14, height: 50, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   chip: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
   sorts: { flexDirection: 'row', gap: 16, marginTop: 12, marginBottom: 4 },

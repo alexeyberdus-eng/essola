@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { Hero } from '../../components/Hero';
-import { startTransition, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { RecipeCard } from '../../components/RecipeCard';
+import { RecipeCard, warmRecipeCards } from '../../components/RecipeCard';
 import { Brand, FadeIn, Glow } from '../../components/silk';
 import { Zone } from '../../components/Zone';
 import { IconButton, Press, T, tap, Wordmark } from '../../components/ui';
@@ -68,6 +68,8 @@ export default function FeedScreen() {
     if (sort === 'for-you') l = by((r) => -likeCount(r.id));
     return l;
   }, [sort, cat, q, liked, likeCount, count, extra, skin, level, time]);
+
+  useEffect(() => warmRecipeCards([...extra, ...RECIPES]), [extra]);
 
   const togglePanel = () => {
     tap();
@@ -213,18 +215,18 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52 },
   badge: { position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#E0466E', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: '#fff' },
-  add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   h1: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.ink },
   modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', marginTop: 14 },
   mode: { flex: 1, height: 56, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  modeOn: { backgroundColor: colors.ink },
+  modeOn: { backgroundColor: colors.accent },
   modeText: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink2, textAlign: 'center' },
   kicker: { fontFamily: fonts.semibold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.muted, marginTop: 2, marginBottom: 10 },
   search: { height: 50, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', marginTop: 12 },
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 6 },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
-  filterBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  filterBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   panel: { marginTop: 10, padding: 14, gap: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, ...shadow },
   reset: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
@@ -233,7 +235,7 @@ const styles = StyleSheet.create({
   chipTextOn: { color: colors.violet, fontFamily: fonts.semibold },
   sort: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 12 },
   sortChip: { height: 36, paddingHorizontal: 13, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: 'rgba(21,23,43,0.06)', justifyContent: 'center' },
-  sortChipOn: { backgroundColor: colors.ink },
+  sortChipOn: { backgroundColor: colors.accent },
   sortText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   sortOn: { color: '#fff' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },

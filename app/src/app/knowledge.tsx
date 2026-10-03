@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', padding: 4, marginTop: 4 },
   knob: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 12, backgroundColor: colors.cardSolid, ...shadow },
   segItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  segItemOn: { backgroundColor: colors.ink },
+  segItemOn: { backgroundColor: colors.accent },
   segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },
   segOn: { color: '#fff' },
   search: { height: 50, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', marginTop: 12 },

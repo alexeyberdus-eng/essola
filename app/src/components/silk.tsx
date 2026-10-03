@@ -10,10 +10,10 @@ const native = Platform.OS !== 'web';
 
 /** White page with a soft lavender glow in the top corner. */
 const AURORA: { c: string; o: number; x: `${number}%`; y: number; r: number; dx: number; dy: number; t: number }[] = [
-  { c: '#FFBEA0', o: 0.74, x: '62%', y: -90, r: 190, dx: -60, dy: 70, t: 7000 },
-  { c: '#A0C8FF', o: 0.61, x: '-28%', y: 150, r: 200, dx: 70, dy: -55, t: 8500 },
-  { c: '#CDB4FF', o: 0.57, x: '58%', y: 420, r: 200, dx: -75, dy: 60, t: 7800 },
-  { c: '#AAEBD7', o: 0.61, x: '-20%', y: 680, r: 180, dx: 65, dy: -70, t: 9200 },
+  { c: '#FFBEA0', o: 0.74, x: '58%', y: -90, r: 200, dx: -150, dy: 120, t: 3600 },
+  { c: '#A0C8FF', o: 0.61, x: '-30%', y: 150, r: 210, dx: 160, dy: -110, t: 4300 },
+  { c: '#CDB4FF', o: 0.62, x: '55%', y: 420, r: 210, dx: -170, dy: 120, t: 3900 },
+  { c: '#AAEBD7', o: 0.61, x: '-22%', y: 680, r: 190, dx: 150, dy: -130, t: 4700 },
 ];
 
 // Phone tilt shared by every glow: one accelerometer subscription while any glow is on screen.
@@ -26,8 +26,16 @@ function useTilt() {
     tiltUsers++;
     if (!tiltSub) {
       Accelerometer.setUpdateInterval(60);
+      // How the phone is usually held drifts slowly into a baseline; the glows follow the change from it, amplified,
+      // so even a small tilt moves them visibly.
+      let bx: number | null = null;
+      let by = 0;
       tiltSub = Accelerometer.addListener(({ x, y }) => {
-        Animated.spring(tilt, { toValue: { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) }, speed: 6, bounciness: 2, useNativeDriver: true }).start();
+        if (bx === null) [bx, by] = [x, y];
+        bx = bx * 0.985 + x * 0.015;
+        by = by * 0.985 + y * 0.015;
+        const k = (v: number) => Math.max(-1, Math.min(1, v * 3.2));
+        Animated.spring(tilt, { toValue: { x: k(x - bx), y: k(y - by) }, speed: 9, bounciness: 3, useNativeDriver: true }).start();
       });
     }
     return () => {
@@ -54,14 +62,23 @@ export function Glow(_: { height?: number; flask?: boolean }) {
 
 function Drift({ c, o, x, y, r, dx, dy, t, i }: (typeof AURORA)[number] & { i: number }) {
   const v = useRef(new Animated.Value(0)).current;
+  const w = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([Animated.timing(v, { toValue: 1, duration: t, useNativeDriver: native }), Animated.timing(v, { toValue: 0, duration: t, useNativeDriver: native })]));
-    loop.start();
-    return () => loop.stop();
-  }, [v, t]);
+    const swing = (a: Animated.Value, d: number) =>
+      Animated.loop(Animated.sequence([Animated.timing(a, { toValue: 1, duration: d, easing: Easing.inOut(Easing.sin), useNativeDriver: native }), Animated.timing(a, { toValue: 0, duration: d, easing: Easing.inOut(Easing.sin), useNativeDriver: native })]));
+    // Horizontal and vertical swings run at different speeds, so each wash wanders in loops instead of a line.
+    const a = swing(v, t);
+    const b = swing(w, Math.round(t * 1.37));
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [v, w, t]);
   // Each wash shifts with the tilt by a different depth, so the layers slide past each other.
-  const depth = 40 + i * 22;
-  const move = { transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }] };
+  const depth = 70 + i * 30;
+  const move = { transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: w.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }, { scale: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) }] };
   const lean = { transform: [{ translateX: tilt.x.interpolate({ inputRange: [-1, 1], outputRange: [depth, -depth] }) }, { translateY: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: [-depth, depth] }) }] };
   return (
     <Animated.View style={[{ position: 'absolute', left: x, top: y, width: r * 2, height: r * 2 }, lean]}>

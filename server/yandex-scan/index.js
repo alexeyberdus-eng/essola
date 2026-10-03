@@ -240,6 +240,40 @@ async function withCompositions(items, iam) {
   return items.map((x) => (x.x || x.z ? x : { ...x, x: loaded[crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)]?.[x.k] || '' }));
 }
 
+const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
+
+/** Brand + name read from the pack → the product in our Letual base (titles there are Russian, packs often English,
+ * so a small text model picks among the brand's products), or a composition found on the web. */
+async function findByLabel(brand, name, kind, iam, model) {
+  const b = norm(brand).replace(/ /g, '');
+  const base = await loadLetu(iam);
+  const ours = b.length >= 2 ? base.filter((x) => { const xb = norm(x.b).replace(/ /g, ''); return xb && (xb === b || (b.length >= 4 && (xb.includes(b) || b.includes(xb)))); }) : [];
+  if (ours.length) {
+    const words = norm(`${name} ${kind}`).split(' ').filter((w) => w.length > 2 && !/^\d+(мл|ml|г|g)?$/.test(w));
+    const score = (x) => words.filter((w) => norm(x.t).includes(w)).length + (x.z ? -5 : 0);
+    const top = [...ours].sort((a, c) => score(c) - score(a) || (c.p || 0) - (a.p || 0)).slice(0, 60);
+    let pick = top.length === 1 && !top[0].z ? top[0] : null;
+    if (!pick) {
+      const list = top.map((x, i) => `${i + 1}. ${x.t}`).join('\n');
+      const ans = await chat(model, [{ role: 'user', content: `На упаковке: «${brand} ${name}»${kind ? ` (${kind})` : ''}. Какой товар из списка — это то же средство (переводы и сокращения допустимы)? Ответь только номером, или 0, если такого нет.\n${list}` }], 8, true).catch(() => '0');
+      const n = parseInt(String(ans).match(/\d+/)?.[0] || '0', 10);
+      pick = n > 0 && n <= top.length ? top[n - 1] : null;
+    }
+    if (pick) {
+      const [item] = await withCompositions([(({ g, ...x }) => x)(pick)], iam);
+      if (item.x) return { item };
+      return { item, none: true };
+    }
+  }
+  // Not in our base: look for the composition on the web and let the model copy the ingredient list out.
+  const docs = await search(`${brand} ${name} состав ingredients`, iam).catch(() => []);
+  if (!docs.length) return {};
+  const text = docs.slice(0, 6).map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n').slice(0, 6000);
+  const out = await chat(model, [{ role: 'user', content: `Найди в фрагментах страниц полный состав (ingredients) средства «${brand} ${name}». Выпиши ингредиенты через запятую, как в источнике, без пояснений. Если полного состава нет — ответь «нет».\n${text}` }], 600, true).catch(() => '');
+  const ingredients = String(out).replace(/^[^:\n]{0,25}:\s*/, '').split(/\s*,\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
+  return ingredients.length >= 5 ? { ingredients, web: true } : {};
+}
+
 module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
@@ -741,7 +775,8 @@ module.exports.handler = async (event, context) => {
       if (nc) return reply(200, { notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
       const [brand = '', name = '', kind = ''] = t.split('\n')[0].split('|').map((x) => x.replace(/^["«]|["»]$/g, '').trim());
       console.log('label:', brand, '|', name);
-      return reply(200, { brand: brand.slice(0, 60), name: name.slice(0, 120), kind: kind.slice(0, 40), _usage: lastUsage });
+      const found = await findByLabel(brand, name, kind, iam, textModel);
+      return reply(200, { brand: brand.slice(0, 60), name: name.slice(0, 120), kind: kind.slice(0, 40), ...found, _usage: lastUsage });
     }
     const image = String(req.image || '');
     console.log('scan request, image chars:', image.length);
