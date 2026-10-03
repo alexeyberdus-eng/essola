@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { myId, socialEnabled } from './social';
 import { readJSON, writeJSON } from './storage';
-import { supabase } from './supabase';
+import { cloud, setSession } from './cloud';
 
 // What the App Store asks of apps with user content: report content, hide (block) users, accept community rules
 // before posting, and delete the account from inside the app.
@@ -117,17 +117,11 @@ export function postError(e: unknown) {
   else Alert.alert('Не отправлено', 'Проверьте интернет и попробуйте ещё раз.');
 }
 
-/** Deletes everything the person published, their account and the data on this phone. */
+/** Deletes everything the person published, their account on our server and the data on this phone. */
 export async function deleteAccount() {
   if (socialEnabled) await call({ mode: 'user.delete', id: await myId() }).catch(() => {});
-  if (supabase) {
-    // A SQL function in the project (docs/HANDOFF.md) removes the sign-in itself; without it the session just ends.
-    await supabase.rpc('delete_user').then(
-      () => {},
-      () => {},
-    );
-    await supabase.auth.signOut().catch(() => {});
-  }
-  const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => k.startsWith('essola.') || k.startsWith('ai:'));
+  await cloud('account.delete').catch(() => {});
+  await setSession(null);
+  const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => k.startsWith('essola.') || k.startsWith('ai:') || k.startsWith('ai2:'));
   await AsyncStorage.multiRemove(keys).catch(() => {});
 }

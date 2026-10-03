@@ -13,6 +13,11 @@ async function call<T>(body: object): Promise<T> {
 }
 
 let cachedId: string | null = null;
+/** Signed in: the community identity is the account's id, the same on every phone. */
+export function setMyId(id: string) {
+  cachedId = id;
+  writeJSON('essola.uid', id);
+}
 /** Stable anonymous id of this device's profile. */
 export async function myId() {
   if (cachedId) return cachedId;

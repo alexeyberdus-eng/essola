@@ -89,8 +89,11 @@ export default function AuthScreen() {
             cornerRadius={14}
             style={styles.apple}
             onPress={() => run(async () => {
-              await signInWithApple();
-              done();
+              const r = await signInWithApple();
+              if (r.needsNick) {
+                setNick(makeNick());
+                setStep('nick');
+              } else done();
             })}
           />
         )}
@@ -99,10 +102,12 @@ export default function AuthScreen() {
           <Press
             onPress={() => run(async () => {
               // After VK the person always picks their public nickname.
-              if (await signInWithVk()) {
+              const r = await signInWithVk();
+              if (!r) return;
+              if (r.needsNick) {
                 setNick(makeNick());
                 setStep('nick');
-              }
+              } else done();
             })}
             disabled={busy}
             style={[styles.vk, Platform.OS === 'ios' && appleAvailable && { marginTop: 10 }]}
@@ -123,7 +128,7 @@ export default function AuthScreen() {
 
         {step === 'nick' ? (
           <View style={{ gap: 12 }}>
-            <Text style={styles.title}>Вы вошли через VK. Придумайте ник</Text>
+            <Text style={styles.title}>Вы вошли! Придумайте ник</Text>
             <T>Его увидят на форуме и в комментариях. Имя и почта не показываются.</T>
             <View style={styles.field}>
               <Text style={styles.at}>@</Text>

@@ -9,9 +9,16 @@ export async function readJSON<T>(key: string, fallback: T): Promise<T> {
   }
 }
 
+// Listeners told about every write (the account sync uses it to know what changed).
+const writeListeners: ((key: string) => void)[] = [];
+export function onStorageWrite(f: (key: string) => void) {
+  writeListeners.push(f);
+}
+
 export async function writeJSON(key: string, value: unknown) {
   try {
     await AsyncStorage.setItem(key, JSON.stringify(value));
+    writeListeners.forEach((f) => f(key));
   } catch {
     // Storage is a convenience layer; the UI keeps working from memory.
   }

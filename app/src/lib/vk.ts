@@ -8,7 +8,7 @@ const clientId = process.env.EXPO_PUBLIC_VK_ID;
 const bounce = process.env.EXPO_PUBLIC_SCAN_URL;
 export const vkEnabled = !!clientId && !!bounce;
 
-export type VkUser = { id: string; firstName: string; lastName: string; email: string | null; avatar: string | null };
+export type VkUser = { id: string; firstName: string; lastName: string; email: string | null; avatar: string | null; /** checked by our server, which then opens the account */ accessToken: string };
 
 const b64url = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const randomString = () => b64url(Crypto.randomUUID() + Crypto.randomUUID()).replace(/-/g, '');
@@ -56,5 +56,5 @@ export async function signInWithVk(): Promise<VkUser | null> {
   });
   const info = await form('https://id.vk.com/oauth2/user_info', { client_id: clientId!, access_token: token.access_token });
   const u = info.user ?? {};
-  return { id: String(u.user_id ?? token.user_id), firstName: u.first_name ?? '', lastName: u.last_name ?? '', email: u.email || null, avatar: u.avatar || null };
+  return { id: String(u.user_id ?? token.user_id), firstName: u.first_name ?? '', lastName: u.last_name ?? '', email: u.email || null, avatar: u.avatar || null, accessToken: token.access_token };
 }
