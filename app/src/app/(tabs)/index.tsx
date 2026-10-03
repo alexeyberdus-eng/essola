@@ -14,6 +14,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { recipeMeta } from '../../data/community';
 import { useExtraRecipes } from '../../lib/editorial';
 import { useNotices } from '../../lib/notices';
+import { Stories } from '../../components/Stories';
 import { setDraft } from '../../lib/builder';
 import { CATEGORIES, Category, LEVELS, Recipe, RECIPES } from '../../data/recipes';
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
@@ -92,6 +93,7 @@ export default function FeedScreen() {
           </Press>
         </View>
       </View>
+      <Stories />
       <View style={styles.hello}>
         <Text style={styles.h1}>
           Что сегодня{'\n'}

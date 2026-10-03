@@ -407,6 +407,29 @@ module.exports.handler = async (event, context) => {
       if (req.on && target.author && target.author.id !== me) await notify(target.author.id, { type: 'like', tid: t.id, title: t.title, from: clean(req.nick, 24) || 'кто-то', text: pid ? String(target.text).slice(0, 100) : '' });
       return reply(200, { topic: t });
     }
+    // ---- Stories on the home screen: posted by the admin, shown to everyone ----
+    if (req.mode === 'stories.list') {
+      return reply(200, { items: await get('stories.json', []) });
+    }
+    if (req.mode === 'stories.add') {
+      if (!isAdmin()) return reply(403, { error: 'not_admin' });
+      const img = String(req.image || '');
+      if (!/^[A-Za-z0-9+/=]+$/.test(img) || img.length > 900000) return reply(400, { error: 'bad_image' });
+      const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+      await put(`stories/img/${id}.json`, { data: img });
+      const item = { id, title: clean(req.title, 40) || 'essola', text: clean(req.text, 300), link: clean(req.link, 200), at: new Date().toISOString() };
+      await put('stories.json', [item, ...(await get('stories.json', []))].slice(0, 50));
+      return reply(200, { item });
+    }
+    if (req.mode === 'stories.remove') {
+      if (!isAdmin()) return reply(403, { error: 'not_admin' });
+      await put('stories.json', (await get('stories.json', [])).filter((x) => x.id !== clean(req.sid, 20)));
+      return reply(200, { ok: true });
+    }
+    if (req.mode === 'stories.img') {
+      const x = await get(`stories/img/${clean(req.sid, 20)}.json`, null);
+      return reply(x ? 200 : 404, x || { error: 'not_found' });
+    }
     if (req.mode === 'notif.list') {
       const me = uid(req.id);
       return reply(200, { items: me ? await get(`notif/${me}.json`, []) : [] });

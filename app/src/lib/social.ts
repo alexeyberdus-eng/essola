@@ -107,3 +107,20 @@ export async function editorialList(): Promise<Recipe[]> {
 export async function editorialAdd(email: string, recipes: Recipe[]) {
   return call<{ count: number }>({ mode: 'editorial.add', email, recipes });
 }
+
+/** Stories the admin posted (images are fetched separately, see storyImage). */
+export type ServerStory = { id: string; title: string; text: string; link?: string; at: string };
+export async function storiesList(): Promise<ServerStory[]> {
+  if (!socialEnabled) return [];
+  return (await call<{ items: ServerStory[] }>({ mode: 'stories.list' }).catch(() => ({ items: [] }))).items ?? [];
+}
+export async function storyImage(sid: string): Promise<string | null> {
+  const r = await call<{ data?: string }>({ mode: 'stories.img', sid }).catch(() => null);
+  return r?.data ? `data:image/jpeg;base64,${r.data}` : null;
+}
+export async function storyAdd(email: string, title: string, text: string, image: string) {
+  return (await call<{ item: ServerStory }>({ mode: 'stories.add', email, title, text, image })).item;
+}
+export async function storyRemove(email: string, sid: string) {
+  await call({ mode: 'stories.remove', email, sid });
+}
