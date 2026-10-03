@@ -72,7 +72,7 @@ export default function AnalysisScreen() {
   const share = async () => {
     try {
       tap();
-      const uri = await captureRef(card, { format: 'png', quality: 1 });
+      const uri = await captureRef(card, { format: 'png', quality: 1, width: 1080, height: 1920 });
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Поделиться разбором' });
     } catch {
       // sharing cancelled or unavailable
@@ -280,6 +280,7 @@ export default function AnalysisScreen() {
               scores={scores}
               good={groups.active.slice(0, 3).map((i) => i.ing.ru)}
               bad={groups.risk.slice(0, 3).map((i) => i.ing.ru)}
+              image={scan.image}
             />
           </View>
         </View>
