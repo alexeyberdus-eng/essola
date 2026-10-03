@@ -45,7 +45,8 @@ export type IconName =
   | 'shelf'
   | 'camera'
   | 'bag'
-  | 'sun';
+  | 'sun'
+  | 'bell';
 
 type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
 
@@ -54,6 +55,13 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.5 }:
   const p = { stroke: color, strokeWidth, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   const body = (() => {
     switch (name) {
+      case 'bell':
+        return (
+          <>
+            <Path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5z" {...p} />
+            <Path d="M10 20.5a2.2 2.2 0 0 0 4 0" {...p} />
+          </>
+        );
       case 'flask':
         return (
           <>

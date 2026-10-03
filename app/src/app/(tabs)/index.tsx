@@ -13,6 +13,7 @@ import { useLibrary } from '../../context/LibraryContext';
 import { useUserContent } from '../../context/UserContentContext';
 import { recipeMeta } from '../../data/community';
 import { useExtraRecipes } from '../../lib/editorial';
+import { useNotices } from '../../lib/notices';
 import { setDraft } from '../../lib/builder';
 import { CATEGORIES, Category, LEVELS, Recipe, RECIPES } from '../../data/recipes';
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
@@ -32,6 +33,7 @@ export default function FeedScreen() {
   const { liked, likeCount } = useLibrary();
   const { count } = useCommunity();
   const extra = useExtraRecipes();
+  const { unread } = useNotices();
   const [sort, setSort] = useState<Sort>('for-you');
   const [cat, setCat] = useState<'all' | 'mine' | Category>('all');
   const [query, setQuery] = useState('');
@@ -74,6 +76,14 @@ export default function FeedScreen() {
         <Brand />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <IconButton icon={sort === 'saved' ? 'heartFill' : 'heart'} label="Избранное" onPress={() => setSort(sort === 'saved' ? 'for-you' : 'saved')} color={sort === 'saved' ? colors.violet : colors.ink} />
+          <View>
+            <IconButton icon="bell" label="Уведомления" onPress={() => router.push('/notifications' as never)} />
+            {unread > 0 && (
+              <View pointerEvents="none" style={styles.badge}>
+                <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            )}
+          </View>
           <Press onPress={() => {
             setDraft(null);
             router.push('/create');
@@ -198,6 +208,8 @@ function FilterRow<K extends string | number>({ title, options, value, onChange 
 
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52 },
+  badge: { position: 'absolute', top: -3, right: -3, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#E0466E', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: '#fff' },
   add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   h1: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.ink },
@@ -210,8 +222,6 @@ const styles = StyleSheet.create({
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 6 },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   filterBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: colors.lilac, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: '#fff' },
   panel: { marginTop: 10, padding: 14, gap: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, ...shadow },
   reset: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   chip: { height: 32, paddingHorizontal: 13, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },
