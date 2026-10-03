@@ -72,6 +72,8 @@ jobs:
                    '{"mode":"forum.list"}' \
                    '{"mode":"catalog","q":"la roche","size":2}' \
                    '{"mode":"barcode.web","barcode":"3337875597197"}' \
+                   '{"mode":"nk","gtin":"03337875597197"}' \
+                   '{"mode":"nk","gtin":"04607043450067"}' \
                    '{"mode":"catalog","sort":"best","size":2}' \
                    '{"mode":"catalog","sort":"best","size":2,"page":2}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
