@@ -35,7 +35,7 @@ jobs:
           yc serverless function get --name essola-scan >/dev/null 2>&1 || yc serverless function create --name essola-scan
           yc serverless function allow-unauthenticated-invoke essola-scan || echo "::warning::Make the function public in the console (needs admin role)"
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
-          (cd server/yandex-scan && zip -q ../../scan.zip index.js)
+          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json)
           BUCKET="essola-products-$YC_FOLDER_ID"
           set +e
           yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3

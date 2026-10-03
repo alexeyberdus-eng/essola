@@ -70,8 +70,11 @@ export async function comment(key: string, nick: string, text: string): Promise<
 
 
 export type ForumAuthor = { id: string; nick: string };
-export type TopicRow = { id: string; title: string; cat: string; author: ForumAuthor; at: string; last: string; replies: number; preview: string };
-export type Topic = { id: string; title: string; text: string; cat: string; author: ForumAuthor; at: string; posts: { id: string; author: ForumAuthor; text: string; at: string }[] };
+export type TopicRow = { id: string; title: string; cat: string; author: ForumAuthor; at: string; last: string; replies: number; likes?: number; preview: string };
+export type ForumPost = { id: string; parent?: string | null; author: ForumAuthor; text: string; at: string; likes?: string[] };
+export type Topic = { id: string; title: string; text: string; cat: string; author: ForumAuthor; at: string; likes?: string[]; posts: ForumPost[] };
+/** Admin posting as the official @essola account (checked on the server by the admin's email). */
+export type AsOfficial = { email: string } | null;
 export const FORUM_CATS = ['Общее', 'Рецепты', 'Уход за кожей', 'Волосы', 'Ингредиенты', 'Покупки'];
 
 export async function forumList(cat?: string, page = 1) {
@@ -81,11 +84,19 @@ export async function forumList(cat?: string, page = 1) {
 export async function forumGet(tid: string) {
   return (await call<{ topic: Topic }>({ mode: 'forum.get', tid })).topic;
 }
-export async function forumCreate(nick: string, title: string, text: string, cat: string) {
-  return (await call<{ id: string }>({ mode: 'forum.create', id: await myId(), nick, title, text, cat })).id;
+export async function forumCreate(nick: string, title: string, text: string, cat: string, official: AsOfficial = null) {
+  return (await call<{ id: string }>({ mode: 'forum.create', id: await myId(), nick, title, text, cat, official: !!official, email: official?.email })).id;
 }
-export async function forumReply(tid: string, nick: string, text: string) {
-  return (await call<{ topic: Topic }>({ mode: 'forum.reply', tid, id: await myId(), nick, text })).topic;
+export async function forumReply(tid: string, nick: string, text: string, parent: string | null = null, official: AsOfficial = null) {
+  return (await call<{ topic: Topic }>({ mode: 'forum.reply', tid, id: await myId(), nick, text, parent, official: !!official, email: official?.email })).topic;
+}
+export async function forumLike(tid: string, pid: string | null, on: boolean, nick: string) {
+  return (await call<{ topic: Topic }>({ mode: 'forum.like', tid, pid, on, nick, id: await myId() })).topic;
+}
+export type Notice = { id: string; at: string; type: 'reply' | 'topic' | 'mention' | 'like'; tid: string; title: string; from: string; text: string };
+export async function notifications(): Promise<Notice[]> {
+  if (!socialEnabled) return [];
+  return (await call<{ items: Notice[] }>({ mode: 'notif.list', id: await myId() })).items ?? [];
 }
 
 /** Recipes the admin published from a table. */

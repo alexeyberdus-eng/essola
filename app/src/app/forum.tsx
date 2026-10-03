@@ -8,16 +8,17 @@ import { Glow } from '../components/silk';
 import { Button, IconButton, Press, Seg, tap } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { ago, plural } from '../data/community';
-import { CAT_STYLE, FAQ, Faq } from '../data/forum-faq';
+import { CAT_STYLE } from '../data/forum-cats';
+import { useIsAdmin } from '../lib/admin';
 import { normalize } from '../lib/analyze';
 import { FORUM_CATS, forumCreate, forumList, TopicRow } from '../lib/social';
 import { colors, fonts, space } from '../theme';
 
 const catStyle = (c: string) => CAT_STYLE[c] ?? CAT_STYLE['Общее'];
 
-type Row = { kind: 'head'; title: string; sub?: string } | { kind: 'topic'; t: TopicRow } | { kind: 'faq'; f: Faq };
+type Row = { kind: 'head'; title: string; sub?: string } | { kind: 'topic'; t: TopicRow };
 
-/** Forum: questions answered by the essola lab technologist plus open discussions started by users. */
+/** Forum: discussions by users and the official @essola account, by category, with search. */
 export default function Forum() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -28,7 +29,15 @@ export default function Forum() {
   const [composing, setComposing] = useState(false);
 
   const load = useCallback(async () => {
-    setTopics((await forumList(cat === 'all' ? undefined : cat).catch(() => ({ items: [] as TopicRow[] }))).items);
+    // A few pages at once, so search covers every topic.
+    const all: TopicRow[] = [];
+    for (let page = 1; page <= 6; page++) {
+      const r = await forumList(cat === 'all' ? undefined : cat, page).catch(() => null);
+      if (!r) break;
+      all.push(...r.items);
+      if (all.length >= r.total || !r.items.length) break;
+    }
+    setTopics(all);
   }, [cat]);
 
   useEffect(() => {
@@ -43,26 +52,9 @@ export default function Forum() {
 
   const rows = useMemo<Row[]>(() => {
     const nq = normalize(q.trim());
-    const hit = (s: string) => !nq || normalize(s).includes(nq);
-    const live = (topics ?? []).filter((t) => hit(t.title + ' ' + t.preview));
-    const faq = FAQ.filter((x) => (cat === 'all' || x.cat === cat) && hit(x.title + ' ' + x.q + ' ' + x.tags.join(' ')));
-    const out: Row[] = [];
-    if (live.length) {
-      out.push({ kind: 'head', title: 'Обсуждения', sub: 'Вопросы участниц' });
-      out.push(...live.map((t) => ({ kind: 'topic' as const, t })));
-    }
-    if (faq.length) {
-      out.push({ kind: 'head', title: 'Ответы технолога', sub: `${faq.length} ${plural(faq.length, 'вопрос', 'вопроса', 'вопросов')} с разбором от essola lab` });
-      out.push(...faq.map((f) => ({ kind: 'faq' as const, f })));
-    }
-    return out;
-  }, [topics, cat, q]);
-
-  const counts = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const x of FAQ) m[x.cat] = (m[x.cat] ?? 0) + 1;
-    return m;
-  }, []);
+    const list = (topics ?? []).filter((t) => !nq || normalize(t.title + ' ' + t.preview).includes(nq));
+    return list.map((t) => ({ kind: 'topic' as const, t }));
+  }, [topics, q]);
 
   const header = (
     <View style={{ marginBottom: 4 }}>
@@ -75,11 +67,11 @@ export default function Forum() {
       </View>
 
       <LinearGradient colors={['#2F3AB0', '#5B4BD6', '#A464C9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <Text style={styles.heroKicker}>essola lab · клуб домашней косметики</Text>
+        <Text style={styles.heroKicker}>@essola · клуб домашней косметики</Text>
         <Text style={styles.heroTitle}>Спросите технолога и тех, кто уже варит кремы</Text>
         <View style={styles.stats}>
-          <Stat n={FAQ.length} label="ответов технолога" />
-          <Stat n={topics?.length ?? 0} label="обсуждений" />
+          <Stat n={topics?.length ?? 0} label="тем" />
+          <Stat n={(topics ?? []).reduce((a, t) => a + t.replies, 0)} label="ответов" />
           <Stat n={FORUM_CATS.length} label="разделов" />
         </View>
         <View style={styles.search}>
@@ -97,7 +89,7 @@ export default function Forum() {
         <Chip on={cat === 'all'} label="Все темы" icon="home" fg={colors.ink} bg="#F3F4F8" onPress={() => setCat('all')} />
         {FORUM_CATS.map((c) => {
           const st = catStyle(c);
-          return <Chip key={c} on={cat === c} label={c} count={counts[c]} icon={st.icon} fg={st.fg} bg={st.bg} onPress={() => setCat(c)} />;
+          return <Chip key={c} on={cat === c} label={c} icon={st.icon} fg={st.fg} bg={st.bg} onPress={() => setCat(c)} />;
         })}
       </ScrollView>
 
@@ -122,7 +114,7 @@ export default function Forum() {
       <Glow />
       <FlatList
         data={rows}
-        keyExtractor={(r, i) => (r.kind === 'topic' ? r.t.id : r.kind === 'faq' ? r.f.id : `h${i}`)}
+        keyExtractor={(r, i) => (r.kind === 'topic' ? r.t.id : `h${i}`)}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 40 }}
         refreshControl={
@@ -151,10 +143,8 @@ export default function Forum() {
               <Text style={styles.sectionTitle}>{item.title}</Text>
               {!!item.sub && <Text style={styles.sectionSub}>{item.sub}</Text>}
             </View>
-          ) : item.kind === 'topic' ? (
-            <TopicCard t={item.t} />
           ) : (
-            <FaqCard f={item.f} />
+            <TopicCard t={item.t} />
           )
         }
       />
@@ -218,10 +208,22 @@ function TopicCard({ t }: { t: TopicRow }) {
       )}
       <View style={styles.cardFoot}>
         <View style={styles.row}>
-          <Avatar nick={t.author.nick} size={22} />
-          <Text style={styles.metaText}>@{t.author.nick}</Text>
+          {t.author.id === 'essola' ? (
+            <View style={styles.labAvatar}>
+              <Text style={styles.labLetter}>e</Text>
+            </View>
+          ) : (
+            <Avatar nick={t.author.nick} size={22} />
+          )}
+          <Text style={[styles.metaText, t.author.id === 'essola' && { color: colors.ink, fontFamily: fonts.semibold }]}>@{t.author.nick}</Text>
         </View>
         <View style={styles.row}>
+          {!!t.likes && (
+            <>
+              <Icon name="heart" size={14} color={colors.muted} />
+              <Text style={styles.metaText}>{t.likes}</Text>
+            </>
+          )}
           <Icon name="comment" size={14} color={colors.muted} />
           <Text style={styles.metaText}>
             {t.replies} {plural(t.replies, 'ответ', 'ответа', 'ответов')}
@@ -232,48 +234,10 @@ function TopicCard({ t }: { t: TopicRow }) {
   );
 }
 
-function FaqCard({ f }: { f: Faq }) {
-  const st = catStyle(f.cat);
-  const first = f.a.split('\n')[0];
-  return (
-    <Press haptic={false} onPress={() => router.push(`/topic/${f.id}` as never)} style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={[styles.badge, { backgroundColor: st.bg }]}>
-          <Icon name={st.icon} size={12} color={st.fg} />
-          <Text style={[styles.badgeText, { color: st.fg }]}>{f.cat}</Text>
-        </View>
-        <View style={styles.solved}>
-          <Icon name="check" size={12} color="#1F8A84" />
-          <Text style={styles.solvedText}>есть ответ</Text>
-        </View>
-      </View>
-      <Text style={styles.cardTitle}>{f.title}</Text>
-      <View style={styles.answer}>
-        <View style={styles.labRow}>
-          <View style={styles.labAvatar}>
-            <Text style={styles.labLetter}>e</Text>
-          </View>
-          <Text style={styles.labName}>essola lab</Text>
-          <Text style={styles.labRole}>технолог</Text>
-        </View>
-        <Text style={styles.answerText} numberOfLines={3}>
-          {first}
-        </Text>
-      </View>
-      {!!f.tags.length && (
-        <View style={styles.tags}>
-          {f.tags.slice(0, 3).map((t) => (
-            <Text key={t} style={styles.tag}>
-              #{t}
-            </Text>
-          ))}
-        </View>
-      )}
-    </Press>
-  );
-}
-
 function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void; onDone: (id: string) => void }) {
+  const admin = useIsAdmin();
+  const { user } = useAuth();
+  const [official, setOfficial] = useState(false);
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [cat, setCat] = useState(FORUM_CATS[0]);
@@ -284,7 +248,7 @@ function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void
     setBusy(true);
     setError('');
     try {
-      onDone(await forumCreate(nick, title.trim(), text.trim(), cat));
+      onDone(await forumCreate(nick, title.trim(), text.trim(), cat, official && admin && user?.email ? { email: user.email } : null));
     } catch {
       setError('Не получилось отправить — проверьте интернет');
       setBusy(false);
@@ -299,6 +263,11 @@ function Composer({ nick, onClose, onDone }: { nick: string; onClose: () => void
       <Seg small options={FORUM_CATS.map((c) => ({ key: c, label: c }))} value={cat} onChange={setCat} />
       <TextInput value={title} onChangeText={setTitle} placeholder="Заголовок: о чём хотите спросить?" placeholderTextColor={colors.faint} style={styles.input} maxLength={120} />
       <TextInput value={text} onChangeText={setText} placeholder="Подробности: рецепт, тип кожи, что уже пробовали…" placeholderTextColor={colors.faint} style={[styles.input, styles.area]} multiline maxLength={4000} />
+      {admin && (
+        <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.offBtn, official && { backgroundColor: colors.ink }]}>
+          <Text style={[styles.offText, official && { color: '#fff' }]}>{official ? 'Публикуется от @essola' : 'Опубликовать от @essola'}</Text>
+        </Press>
+      )}
       {!!error && <Text style={styles.error}>{error}</Text>}
       <Button label={busy ? 'Публикуем…' : 'Опубликовать'} icon="send" onPress={send} disabled={busy} />
     </View>
@@ -348,6 +317,8 @@ const styles = StyleSheet.create({
   answerText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19.5, color: colors.ink2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
+  offBtn: { alignSelf: 'flex-start', height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.tint, justifyContent: 'center' },
+  offText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   empty: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: '#F4F0FF' },
   emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   composer: { marginTop: 14, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EAE6F7', gap: 10 },

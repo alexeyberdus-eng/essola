@@ -1,32 +1,26 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { Glow } from '../../components/silk';
 import { IconButton, Press, tap } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
-import { comment, forumGet, forumReply, like, social, Social, Topic } from '../../lib/social';
-import { CAT_STYLE, FAQ, FAQ_BY_ID, Faq } from '../../data/forum-faq';
-import { colors, fonts, space } from '../../theme';
 import { ago } from '../../data/community';
+import { CAT_STYLE } from '../../data/forum-cats';
+import { useIsAdmin } from '../../lib/admin';
+import { ForumAuthor, forumGet, forumLike, ForumPost, forumReply, myId, Topic } from '../../lib/social';
+import { colors, fonts, space } from '../../theme';
 
-/** One forum topic: the question, replies and a reply box. */
-export default function TopicScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const faq = FAQ_BY_ID.get(id);
-  return faq ? <FaqScreen f={faq} /> : <LiveTopic id={id} />;
-}
-
-/** Splits an answer into paragraphs and bullet lines. */
+/** Paragraphs and "•" bullet lines of a post. */
 function Rich({ text }: { text: string }) {
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 8 }}>
       {text.split('\n\n').map((para, i) => {
         const lines = para.split('\n');
-        if (lines.every((l) => l.startsWith('•'))) {
+        if (lines.length > 1 && lines.every((l) => l.startsWith('•'))) {
           return (
-            <View key={i} style={{ gap: 7 }}>
+            <View key={i} style={{ gap: 6 }}>
               {lines.map((l, j) => (
                 <View key={j} style={styles.bullet}>
                   <View style={styles.dot} />
@@ -46,129 +40,75 @@ function Rich({ text }: { text: string }) {
   );
 }
 
-function CatBadge({ cat }: { cat: string }) {
-  const st = CAT_STYLE[cat] ?? CAT_STYLE['Общее'];
+function Avatar({ a, size = 30 }: { a: ForumAuthor; size?: number }) {
+  if (a.id === 'essola')
+    return (
+      <View style={[styles.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.ink }]}>
+        <Text style={{ fontFamily: fonts.display, fontSize: size * 0.5, color: '#fff', marginTop: -2 }}>e</Text>
+      </View>
+    );
+  const hues = ['#3F4BC9', '#B5527A', '#1F8A84', '#9A6A12', '#4D7A2A', '#7A4BC9'];
+  const c = hues[[...a.nick].reduce((s, ch) => s + ch.charCodeAt(0), 0) % hues.length];
   return (
-    <View style={[styles.badge, { backgroundColor: st.bg }]}>
-      <Icon name={st.icon} size={12} color={st.fg} />
-      <Text style={[styles.badgeText, { color: st.fg }]}>{cat}</Text>
+    <View style={[styles.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: c }]}>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: size * 0.42, color: '#fff' }}>{(a.nick[0] || '?').toUpperCase()}</Text>
     </View>
   );
 }
 
-/** A pinned question with the technologist's answer; readers' replies are stored as comments. */
-function FaqScreen({ f }: { f: Faq }) {
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const key = `faq:${f.id}`;
-  const [data, setData] = useState<Social | null>(null);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    social(key).then(setData).catch(() => {});
-  }, [key]);
-  const related = FAQ.filter((x) => x.cat === f.cat && x.id !== f.id).slice(0, 3);
-  const send = async () => {
-    if (!user) return router.push('/auth');
-    if (!text.trim() || busy) return;
-    tap('medium');
-    setBusy(true);
-    try {
-      setData(await comment(key, user.nick || user.name || 'гость', text.trim()));
-      setText('');
-    } catch {}
-    setBusy(false);
-  };
-  const useful = async () => {
-    tap();
-    const on = !data?.liked;
-    setData((d) => (d ? { ...d, liked: on, likes: d.likes + (on ? 1 : -1) } : d));
-    like(key, on).then(setData).catch(() => {});
-  };
+function Name({ a }: { a: ForumAuthor }) {
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Glow />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: 30 }}>
-        <View style={{ height: 52, justifyContent: 'center' }}>
-          <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/forum' as never))} />
+    <Press haptic={false} onPress={() => a.id !== 'essola' && router.push(`/user/${a.id}` as never)} style={styles.nameRow}>
+      <Text style={styles.nick}>@{a.nick}</Text>
+      {a.id === 'essola' && (
+        <View style={styles.official}>
+          <Icon name="check" size={10} color="#fff" strokeWidth={3} />
         </View>
-        <View style={styles.card}>
-          <CatBadge cat={f.cat} />
-          <Text style={styles.title}>{f.title}</Text>
-          <Text style={styles.text}>{f.q}</Text>
-          <View style={styles.tagRow}>
-            {f.tags.map((t) => (
-              <Text key={t} style={styles.tag}>
-                #{t}
-              </Text>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.answer}>
-          <View style={styles.labRow}>
-            <View style={styles.labAvatar}>
-              <Text style={styles.labLetter}>e</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.labName}>essola lab</Text>
-              <Text style={styles.labRole}>технолог · ответ закреплён</Text>
-            </View>
-            <Icon name="check" size={18} color="#1F8A84" />
-          </View>
-          <Rich text={f.a} />
-          <Press onPress={useful} style={[styles.useful, data?.liked && styles.usefulOn]}>
-            <Icon name={data?.liked ? 'heartFill' : 'heart'} size={16} color={data?.liked ? '#fff' : colors.violet} />
-            <Text style={[styles.usefulText, data?.liked && { color: '#fff' }]}>Полезно{data?.likes ? ` · ${data.likes}` : ''}</Text>
-          </Press>
-        </View>
-
-        <Text style={styles.h2}>{data?.comments.length ? `Обсуждение · ${data.comments.length}` : 'Обсуждение'}</Text>
-        {!data?.comments.length && <Text style={styles.hint}>Поделитесь опытом или задайте уточняющий вопрос — ответ увидят все.</Text>}
-        {data?.comments.map((c) => (
-          <View key={c.id} style={styles.post}>
-            <View style={styles.meta}>
-              <Press haptic={false} onPress={() => router.push(`/user/${c.user}` as never)}>
-                <Text style={styles.nick}>@{c.nick}</Text>
-              </Press>
-              <Text style={styles.time}>{ago(c.at)}</Text>
-            </View>
-            <Text style={styles.text}>{c.text}</Text>
-          </View>
-        ))}
-
-        {!!related.length && (
-          <>
-            <Text style={styles.h2}>Похожие вопросы</Text>
-            {related.map((r) => (
-              <Press key={r.id} haptic={false} onPress={() => router.push(`/topic/${r.id}` as never)} style={styles.related}>
-                <Text style={styles.relatedText}>{r.title}</Text>
-                <Icon name="arrowRight" size={16} color={colors.muted} />
-              </Press>
-            ))}
-          </>
-        )}
-      </ScrollView>
-      <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
-        <TextInput value={text} onChangeText={setText} placeholder={user ? 'Ваш комментарий…' : 'Войдите, чтобы ответить'} placeholderTextColor={colors.faint} style={styles.input} multiline maxLength={500} editable={!!user} />
-        <Press onPress={send} disabled={busy} style={styles.send} accessibilityLabel="Отправить">
-          {busy ? <ActivityIndicator color="#fff" /> : <Icon name={user ? 'send' : 'user'} size={18} color="#fff" />}
-        </Press>
-      </View>
-    </KeyboardAvoidingView>
+      )}
+    </Press>
   );
 }
 
-function LiveTopic({ id }: { id: string }) {
+type Node = { p: ForumPost; depth: number };
+/** Posts as a tree: replies under the post they answer, nesting capped so text stays readable. */
+function thread(posts: ForumPost[]): Node[] {
+  const kids = new Map<string | null, ForumPost[]>();
+  const ids = new Set(posts.map((p) => p.id));
+  for (const p of posts) {
+    const parent = p.parent && ids.has(p.parent) ? p.parent : null;
+    kids.set(parent, [...(kids.get(parent) ?? []), p]);
+  }
+  const out: Node[] = [];
+  const walk = (parent: string | null, depth: number) => {
+    for (const p of kids.get(parent) ?? []) {
+      out.push({ p, depth: Math.min(depth, 3) });
+      walk(p.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/** A forum topic: the question, threaded replies with likes, and a reply box. */
+export default function TopicScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const admin = useIsAdmin();
+  const [me, setMe] = useState('');
   const [topic, setTopic] = useState<Topic | null | undefined>(undefined);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [to, setTo] = useState<ForumPost | null>(null);
+  const [official, setOfficial] = useState(false);
 
   useEffect(() => {
+    myId().then(setMe);
     forumGet(id).then(setTopic).catch(() => setTopic(null));
   }, [id]);
+
+  const nodes = useMemo(() => (topic ? thread(topic.posts) : []), [topic]);
+  const nick = user?.nick || user?.name || 'гость';
 
   const send = async () => {
     if (!user) return router.push('/auth');
@@ -176,17 +116,26 @@ function LiveTopic({ id }: { id: string }) {
     tap('medium');
     setBusy(true);
     try {
-      setTopic(await forumReply(id, user.nick || user.name || 'гость', text.trim()));
+      setTopic(await forumReply(id, nick, text.trim(), to?.id ?? null, official && admin && user.email ? { email: user.email } : null));
       setText('');
+      setTo(null);
     } catch {}
     setBusy(false);
   };
 
-  const author = (a: { id: string; nick: string }) => (
-    <Press haptic={false} onPress={() => router.push(`/user/${a.id}` as never)}>
-      <Text style={styles.nick}>@{a.nick}</Text>
-    </Press>
-  );
+  const like = (pid: string | null, on: boolean) => {
+    if (!user) return router.push('/auth');
+    tap('light');
+    setTopic((t) => {
+      if (!t) return t;
+      const flip = (l?: string[]) => (on ? [...(l ?? []).filter((x) => x !== me), me] : (l ?? []).filter((x) => x !== me));
+      return pid ? { ...t, posts: t.posts.map((p) => (p.id === pid ? { ...p, likes: flip(p.likes) } : p)) } : { ...t, likes: flip(t.likes) };
+    });
+    forumLike(id, pid, on, nick).then(setTopic).catch(() => {});
+  };
+
+  const st = topic ? CAT_STYLE[topic.cat] ?? CAT_STYLE['Общее'] : null;
+  const topicLiked = !!topic?.likes?.includes(me);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -202,33 +151,94 @@ function LiveTopic({ id }: { id: string }) {
         ) : (
           <>
             <View style={styles.card}>
-              <CatBadge cat={topic.cat} />
+              {st && (
+                <View style={[styles.badge, { backgroundColor: st.bg }]}>
+                  <Icon name={st.icon} size={12} color={st.fg} />
+                  <Text style={[styles.badgeText, { color: st.fg }]}>{topic.cat}</Text>
+                </View>
+              )}
               <Text style={styles.title}>{topic.title}</Text>
               <View style={styles.meta}>
-                {author(topic.author)}
+                <View style={styles.who}>
+                  <Avatar a={topic.author} size={26} />
+                  <Name a={topic.author} />
+                </View>
                 <Text style={styles.time}>{ago(topic.at)}</Text>
               </View>
-              {!!topic.text && <Text style={styles.text}>{topic.text}</Text>}
-            </View>
-            <Text style={styles.h2}>{topic.posts.length ? `Ответы · ${topic.posts.length}` : 'Ответов пока нет — будьте первой'}</Text>
-            {topic.posts.map((p) => (
-              <View key={p.id} style={styles.post}>
-                <View style={styles.meta}>
-                  {author(p.author)}
-                  <Text style={styles.time}>{ago(p.at)}</Text>
-                </View>
-                <Text style={styles.text}>{p.text}</Text>
+              {!!topic.text && <Rich text={topic.text} />}
+              <View style={styles.actions}>
+                <Press haptic={false} onPress={() => like(null, !topicLiked)} style={styles.act}>
+                  <Icon name={topicLiked ? 'heartFill' : 'heart'} size={16} color={topicLiked ? '#E0466E' : colors.muted} />
+                  <Text style={styles.actText}>{topic.likes?.length || ''}</Text>
+                </Press>
+                <Press haptic={false} onPress={() => setTo(null)} style={styles.act}>
+                  <Icon name="comment" size={16} color={colors.muted} />
+                  <Text style={styles.actText}>{topic.posts.length || ''}</Text>
+                </Press>
               </View>
-            ))}
+            </View>
+
+            <Text style={styles.h2}>{topic.posts.length ? 'Обсуждение' : 'Ответов пока нет — будьте первой'}</Text>
+            {nodes.map(({ p, depth }) => {
+              const liked = !!p.likes?.includes(me);
+              return (
+                <View key={p.id} style={[styles.post, { marginLeft: depth * 16 }, depth > 0 && styles.child, p.author.id === 'essola' && styles.postOfficial]}>
+                  <View style={styles.meta}>
+                    <View style={styles.who}>
+                      <Avatar a={p.author} size={24} />
+                      <Name a={p.author} />
+                    </View>
+                    <Text style={styles.time}>{ago(p.at)}</Text>
+                  </View>
+                  <Rich text={p.text} />
+                  <View style={styles.actions}>
+                    <Press haptic={false} onPress={() => like(p.id, !liked)} style={styles.act}>
+                      <Icon name={liked ? 'heartFill' : 'heart'} size={15} color={liked ? '#E0466E' : colors.muted} />
+                      <Text style={styles.actText}>{p.likes?.length || ''}</Text>
+                    </Press>
+                    <Press
+                      haptic={false}
+                      onPress={() => {
+                        tap();
+                        setTo(p);
+                        if (!text.startsWith(`@${p.author.nick}`)) setText(`@${p.author.nick} ${text}`);
+                      }}
+                      style={styles.act}
+                    >
+                      <Text style={styles.replyText}>Ответить</Text>
+                    </Press>
+                  </View>
+                </View>
+              );
+            })}
           </>
         )}
       </ScrollView>
       {!!topic && (
         <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
-          <TextInput value={text} onChangeText={setText} placeholder={user ? 'Ваш ответ…' : 'Войдите, чтобы ответить'} placeholderTextColor={colors.faint} style={styles.input} multiline maxLength={3000} editable={!!user} />
-          <Press onPress={send} disabled={busy} style={styles.send} accessibilityLabel="Отправить">
-            {busy ? <ActivityIndicator color="#fff" /> : <Icon name={user ? 'send' : 'user'} size={18} color="#fff" />}
-          </Press>
+          {(to || admin) && (
+            <View style={styles.barTop}>
+              {to ? (
+                <Press haptic={false} onPress={() => setTo(null)} style={styles.toChip}>
+                  <Text style={styles.toText}>Ответ @{to.author.nick}</Text>
+                  <Icon name="close" size={12} color={colors.violet} />
+                </Press>
+              ) : (
+                <View />
+              )}
+              {admin && (
+                <Press haptic={false} onPress={() => setOfficial(!official)} style={[styles.toChip, official && { backgroundColor: colors.ink }]}>
+                  <Text style={[styles.toText, official && { color: '#fff' }]}>от @essola</Text>
+                </Press>
+              )}
+            </View>
+          )}
+          <View style={styles.barRow}>
+            <TextInput value={text} onChangeText={setText} placeholder={user ? 'Ваш ответ…' : 'Войдите, чтобы ответить'} placeholderTextColor={colors.faint} style={styles.input} multiline maxLength={3000} editable={!!user} />
+            <Press onPress={send} disabled={busy} style={styles.send} accessibilityLabel="Отправить">
+              {busy ? <ActivityIndicator color="#fff" /> : <Icon name={user ? 'send' : 'user'} size={18} color="#fff" />}
+            </Press>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -236,34 +246,33 @@ function LiveTopic({ id }: { id: string }) {
 }
 
 const styles = StyleSheet.create({
-  card: { padding: 18, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#EAE6F7', gap: 8 },
+  card: { padding: 18, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#EAE6F7', gap: 10 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, height: 24, borderRadius: 12, alignSelf: 'flex-start' },
   badgeText: { fontFamily: fonts.semibold, fontSize: 11.5 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.muted },
-  answer: { marginTop: 14, padding: 18, borderRadius: 22, backgroundColor: '#F6F7FD', borderWidth: 1, borderColor: '#E3E6F7', gap: 14 },
-  labRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  labAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  labLetter: { fontFamily: fonts.display, fontSize: 20, color: '#fff', marginTop: -3 },
-  labName: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
-  labRole: { fontFamily: fonts.medium, fontSize: 12, color: colors.violet },
-  bullet: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.violet, marginTop: 9 },
-  useful: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', height: 38, paddingHorizontal: 14, borderRadius: 19, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCE0F7' },
-  usefulOn: { backgroundColor: colors.violet, borderColor: colors.violet },
-  usefulText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
-  hint: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.muted },
-  related: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EFEDF6', marginTop: 8 },
-  relatedText: { flex: 1, fontFamily: fonts.medium, fontSize: 14.5, lineHeight: 20, color: colors.ink },
-  cat: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.violet, textTransform: 'uppercase', letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, color: colors.ink },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nick: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  av: { alignItems: 'center', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nick: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink },
+  official: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
   time: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   text: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink2 },
+  bullet: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.violet, marginTop: 9 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 2 },
+  act: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 28 },
+  actText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
+  replyText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   h2: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginTop: 22, marginBottom: 6 },
-  post: { padding: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EFEDF6', marginTop: 8, gap: 6 },
-  bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: space.gutter, paddingTop: 10, backgroundColor: 'rgba(255,255,255,0.97)', borderTopWidth: 1, borderColor: colors.line },
+  post: { padding: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EFEDF6', marginTop: 8, gap: 8 },
+  child: { borderLeftWidth: 3, borderLeftColor: '#E3E6F7' },
+  postOfficial: { backgroundColor: '#F6F7FD', borderColor: '#E3E6F7' },
+  bar: { paddingHorizontal: space.gutter, paddingTop: 10, backgroundColor: 'rgba(255,255,255,0.97)', borderTopWidth: 1, borderColor: colors.line, gap: 8 },
+  barTop: { flexDirection: 'row', justifyContent: 'space-between' },
+  barRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  toChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: colors.tint },
+  toText: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.violet },
   input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#FBFAFE' },
   send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
 });

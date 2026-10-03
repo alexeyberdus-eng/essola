@@ -261,8 +261,13 @@ module.exports.handler = async (event, context) => {
       const id = uid(req.id);
       if (!id) return reply(400, { error: 'bad_user' });
       const prev = await get(`users/${id}.json`, {});
-      const user = { ...prev, id, nick: clean(req.nick, 24) || prev.nick || 'user', name: clean(req.name, 60) || prev.name || '', bio: clean(req.bio, 160) || prev.bio || '' };
+      let nick = clean(req.nick, 24) || prev.nick || 'user';
+      if (/^essola/i.test(nick)) nick = `${nick}_`;
+      const user = { ...prev, id, nick, name: clean(req.name, 60) || prev.name || '', bio: clean(req.bio, 160) || prev.bio || '' };
       await put(`users/${id}.json`, user);
+      // nick → id, for @mentions in the forum
+      const nicks = await get('nicks.json', {});
+      if (nicks[nick.toLowerCase()] !== id) await put('nicks.json', { ...nicks, [nick.toLowerCase()]: id });
       return reply(200, { user });
     }
     if (req.mode === 'user.get') {
@@ -310,14 +315,48 @@ module.exports.handler = async (event, context) => {
       return reply(200, { count: next.length });
     }
     // Forum: an index of topics (newest activity first) plus one file per topic with its replies.
+    // ---- Forum: topics, threaded replies, likes, the official @essola account and notifications ----
+    const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32c'];
+    const isAdmin = () => ADMINS.includes(crypto.createHash('sha256').update(String(req.email || '').trim().toLowerCase()).digest('hex'));
+    const ESSOLA = { id: 'essola', nick: 'essola' };
+    // Who is writing: the admin may post as @essola; nobody else may take that name.
+    const authorOf = (me) => {
+      if (req.official && isAdmin()) return ESSOLA;
+      const nick = clean(req.nick, 24) || 'гость';
+      return { id: me, nick: /^essola/i.test(nick) ? `${nick}_` : nick };
+    };
+    const SEED = (() => {
+      try {
+        return require('./forum-seed.json');
+      } catch {
+        return [];
+      }
+    })();
+    const rowOf = (t) => ({ id: t.id, title: t.title, cat: t.cat, author: t.author, at: t.at, last: t.posts.length ? t.posts[t.posts.length - 1].at : t.at, replies: t.posts.length, likes: (t.likes || []).length, preview: String(t.text || '').slice(0, 160) });
+    const loadTopic = async (tid) => {
+      const seed = SEED.find((x) => x.id === tid);
+      return (await get(`forum/t/${tid}.json`, null)) || (seed ? JSON.parse(JSON.stringify(seed)) : null);
+    };
+    const saveTopic = async (t) => {
+      await put(`forum/t/${t.id}.json`, t);
+      const idx = await get('forum/index.json', []);
+      await put('forum/index.json', [rowOf(t), ...idx.filter((x) => x.id !== t.id)].slice(0, 5000));
+    };
+    const notify = async (to, n) => {
+      if (!to || to === 'essola') return;
+      const list = await get(`notif/${to}.json`, []);
+      await put(`notif/${to}.json`, [{ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, at: new Date().toISOString(), ...n }, ...list].slice(0, 100));
+    };
     if (req.mode === 'forum.list') {
       const idx = await get('forum/index.json', []);
-      const list = req.cat ? idx.filter((t) => t.cat === req.cat) : idx;
+      const have = new Set(idx.map((x) => x.id));
+      let list = [...idx, ...SEED.filter((t) => !have.has(t.id)).map(rowOf)].sort((a, b) => (a.last < b.last ? 1 : -1));
+      if (req.cat) list = list.filter((t) => t.cat === req.cat);
       const page = Math.max(Number(req.page) || 1, 1);
-      return reply(200, { items: list.slice((page - 1) * 30, page * 30), total: list.length });
+      return reply(200, { items: list.slice((page - 1) * 40, page * 40), total: list.length });
     }
     if (req.mode === 'forum.get') {
-      const t = await get(`forum/t/${clean(req.tid, 40)}.json`, null);
+      const t = await loadTopic(clean(req.tid, 40));
       return reply(t ? 200 : 404, t ? { topic: t } : { error: 'not_found' });
     }
     if (req.mode === 'forum.create') {
@@ -327,26 +366,50 @@ module.exports.handler = async (event, context) => {
       if (!me || title.length < 4) return reply(400, { error: 'bad_topic' });
       const at = new Date().toISOString();
       const tid = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      const author = { id: me, nick: clean(req.nick, 24) || 'гость' };
-      const cat = clean(req.cat, 30) || 'Общее';
-      await put(`forum/t/${tid}.json`, { id: tid, title, text, cat, author, at, posts: [] });
-      const idx = await get('forum/index.json', []);
-      await put('forum/index.json', [{ id: tid, title, cat, author, at, last: at, replies: 0, preview: text.slice(0, 160) }, ...idx].slice(0, 5000));
+      const t = { id: tid, title, text, cat: clean(req.cat, 30) || 'Общее', author: authorOf(me), at, likes: [], posts: [] };
+      await saveTopic(t);
       return reply(200, { id: tid });
     }
     if (req.mode === 'forum.reply') {
       const me = uid(req.id);
-      const tid = clean(req.tid, 40);
       const text = clean(req.text, 3000);
-      const t = await get(`forum/t/${tid}.json`, null);
+      const t = await loadTopic(clean(req.tid, 40));
       if (!me || !t || !text) return reply(400, { error: 'bad_reply' });
-      const at = new Date().toISOString();
-      t.posts = [...t.posts, { id: Date.now().toString(36), author: { id: me, nick: clean(req.nick, 24) || 'гость' }, text, at }].slice(-1000);
-      await put(`forum/t/${tid}.json`, t);
-      const idx = await get('forum/index.json', []);
-      const row = idx.find((x) => x.id === tid);
-      if (row) await put('forum/index.json', [{ ...row, last: at, replies: t.posts.length }, ...idx.filter((x) => x.id !== tid)]);
+      const parent = t.posts.find((p) => p.id === clean(req.parent, 20)) || null;
+      const author = authorOf(me);
+      const post = { id: Date.now().toString(36), parent: parent ? parent.id : null, author, text, at: new Date().toISOString(), likes: [] };
+      t.posts = [...t.posts, post].slice(-1000);
+      await saveTopic(t);
+      // Notifications: the topic's author, the author of the post replied to, and everyone @mentioned.
+      const snippet = text.slice(0, 140);
+      const sent = new Set([author.id]);
+      const send = async (to, type) => {
+        if (!to || sent.has(to)) return;
+        sent.add(to);
+        await notify(to, { type, tid: t.id, title: t.title, from: author.nick, text: snippet });
+      };
+      if (parent) await send(parent.author.id, 'reply');
+      await send(t.author.id, 'topic');
+      const nicks = await get('nicks.json', {});
+      for (const m of text.matchAll(/@([\p{L}\d_.-]{2,24})/gu)) await send(nicks[m[1].toLowerCase()], 'mention');
       return reply(200, { topic: t });
+    }
+    if (req.mode === 'forum.like') {
+      const me = uid(req.id);
+      const t = await loadTopic(clean(req.tid, 40));
+      if (!me || !t) return reply(400, { error: 'bad_like' });
+      const pid = clean(req.pid, 20);
+      const target = pid ? t.posts.find((p) => p.id === pid) : t;
+      if (!target) return reply(404, { error: 'not_found' });
+      target.likes = (target.likes || []).filter((x) => x !== me);
+      if (req.on) target.likes.push(me);
+      await saveTopic(t);
+      if (req.on && target.author && target.author.id !== me) await notify(target.author.id, { type: 'like', tid: t.id, title: t.title, from: clean(req.nick, 24) || 'кто-то', text: pid ? String(target.text).slice(0, 100) : '' });
+      return reply(200, { topic: t });
+    }
+    if (req.mode === 'notif.list') {
+      const me = uid(req.id);
+      return reply(200, { items: me ? await get(`notif/${me}.json`, []) : [] });
     }
     if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment' || req.mode === 'social.rate') {
       const key = `social/${crypto.createHash('sha1').update(String(req.key || '')).digest('hex')}.json`;
