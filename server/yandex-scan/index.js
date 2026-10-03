@@ -698,15 +698,12 @@ module.exports.handler = async (event, context) => {
       if (hit) return reply(200, hit);
       if (!process.env.NK_API_KEY) return reply(200, { found: false, reason: 'no_key' });
       const nkUrl = `https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`;
-      // The catalog sometimes drops a connection: one more try before giving up.
-      let res = await fetch(nkUrl, { signal: AbortSignal.timeout(9000) }).catch((e) => ({ ok: false, status: String(e) }));
-      if (!res.ok && !(res.status >= 400 && res.status < 500)) res = await fetch(nkUrl, { signal: AbortSignal.timeout(9000) }).catch((e) => ({ ok: false, status: String(e) }));
-      if (!res.ok) {
-        console.log('nk http', res.status);
-        return reply(200, { found: false, reason: `http_${res.status}` });
-      }
-      const json = await res.json().catch(() => null);
-      const card = Array.isArray(json?.result) ? json.result[0] : json?.result || json;
+      // The catalog sometimes drops a connection (one quick retry) and can hang on unknown codes: then we move on.
+      let res = await fetch(nkUrl, { signal: AbortSignal.timeout(6000) }).catch((e) => ({ ok: false, status: String(e) }));
+      if (!res.ok && /fetch failed|ECONNRESET/.test(String(res.status))) res = await fetch(nkUrl, { signal: AbortSignal.timeout(6000) }).catch((e) => ({ ok: false, status: String(e) }));
+      if (!res.ok) console.log('nk http', res.status);
+      const json = res.ok ? await res.json().catch(() => null) : null;
+      const card = Array.isArray(json?.result) ? json.result[0] : json?.result || (json?.good_name ? json : null);
       const attrs = [...(card?.good_attrs || []), ...(card?.attrs || [])];
       const val = (re) => attrs.find((a) => re.test(String(a.attr_name || a.name || '')))?.attr_value ?? attrs.find((a) => re.test(String(a.attr_name || a.name || '')))?.value;
       const title = String(card?.good_name || val(/наименование/i) || '').trim();
