@@ -35,15 +35,24 @@ jobs:
           yc resource-manager folder add-access-binding "$YC_FOLDER_ID" --role postbox.sender --service-account-id "$SA_ID" \
             || echo "::warning::Could not grant postbox.sender (needs the admin role) — grant it in the console"
           umask 077
-          openssl genrsa -out "$RUNNER_TEMP/dkim.pem" 2048 2>/dev/null
-          yc postbox address create --help | head -40 || true
-          yc postbox address create --address "$DOMAIN" --selector postbox --private-key-file "$RUNNER_TEMP/dkim.pem" \
-            || echo "::warning::Address not created (it may already exist)"
-          yc postbox address list || true
-          PUB=$(openssl rsa -in "$RUNNER_TEMP/dkim.pem" -pubout -outform der 2>/dev/null | base64 -w0)
-          rm -f "$RUNNER_TEMP/dkim.pem"
-          echo "================ DNS records for $DOMAIN ================"
-          echo "1) TXT   name: postbox._domainkey   value: v=DKIM1;h=sha256;k=rsa;p=$PUB"
-          echo "2) TXT   name: @                    value: v=spf1 include:spf.postbox.yandexcloud.net ~all   (если SPF-запись уже есть — добавьте include:spf.postbox.yandexcloud.net в неё)"
-          echo "3) TXT   name: _dmarc               value: v=DMARC1; p=none"
-          echo "========================================================="
+          TOKEN=$(yc iam create-token)
+          API=https://postbox.cloud.yandex.net/v2/email/identities
+          # Already registered? Then only show its state and records.
+          CODE=$(curl -s -o "$RUNNER_TEMP/get.json" -w '%{http_code}' -H "X-YaCloud-SubjectToken: $TOKEN" "$API/$DOMAIN")
+          echo "existing identity: HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            openssl genrsa -out "$RUNNER_TEMP/dkim.pem" 2048 2>/dev/null
+            KEY=$(grep -v -- '-----' "$RUNNER_TEMP/dkim.pem" | tr -d '\n')
+            jq -n --arg d "$DOMAIN" --arg k "$KEY" '{EmailIdentity:$d, DkimSigningAttributes:{DomainSigningSelector:"postbox", DomainSigningPrivateKey:$k}}' > "$RUNNER_TEMP/body.json"
+            curl -s -X POST -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/body.json" "$API" -w '\ncreate: HTTP %{http_code}\n' | sed 's/"DomainSigningPrivateKey":"[^"]*"/"DomainSigningPrivateKey":"***"/'
+            rm -f "$RUNNER_TEMP/body.json"
+            PUB=$(openssl rsa -in "$RUNNER_TEMP/dkim.pem" -pubout -outform der 2>/dev/null | base64 -w0)
+            rm -f "$RUNNER_TEMP/dkim.pem"
+            echo "================ DNS records for $DOMAIN ================"
+            echo "1) TXT   name: postbox._domainkey   value: v=DKIM1;h=sha256;k=rsa;p=$PUB"
+            echo "2) TXT   name: @                    value: v=spf1 include:spf.postbox.yandexcloud.net ~all   (если SPF-запись уже есть — добавьте include:spf.postbox.yandexcloud.net в неё)"
+            echo "3) TXT   name: _dmarc               value: v=DMARC1; p=none"
+            echo "========================================================="
+          else
+            jq '{VerifiedForSendingStatus, DkimAttributes: (.DkimAttributes | {Status, SigningAttributesOrigin})}' "$RUNNER_TEMP/get.json" || cat "$RUNNER_TEMP/get.json"
+          fi
