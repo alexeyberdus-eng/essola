@@ -13,7 +13,7 @@ const join = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1
  * A short technologist-style verdict written from our own base, no AI calls:
  * what the product is, its strong sides, what to watch, who it suits and how to use it.
  */
-export type Opinion = { title: string; strong: string; watch: string | null; suits: string | null; tips: string[] };
+export type Opinion = { title: string; strong: string; weak: string | null; watch: string | null; suits: string | null; tips: string[] };
 
 /**
  * A technologist-style verdict written from our own base, no AI calls: strong sides, what to watch,
@@ -44,16 +44,34 @@ export function opinion(a: Analysis, special?: string | null): Opinion {
         ? `Активов с доказанным действием немного — средство работает в основном за счёт базы: ${join(base.map(name))}.`
         : 'Выраженных активов нет — это скорее базовый уход, чем средство с целевым эффектом.';
 
-  const watchList: string[] = [];
-  const say = (xs: AnalyzedItem[], one: string, many: string) => {
-    const n = names(xs);
-    if (n.length) watchList.push(`${join(n)} — ${n.length > 1 ? many : one}`);
+  // Each ingredient is named once with all its reasons («спирт — может сушить, возможный аллерген»);
+  // ingredients with the same reasons are listed together.
+  const reasons = new Map<string, string[]>();
+  const add = (xs: AnalyzedItem[], why: string) => {
+    for (const n of names(xs)) reasons.set(n, [...new Set([...(reasons.get(n) ?? []), why])]);
   };
-  say(risky, 'спорный компонент', 'спорные компоненты');
-  say(allergens, 'возможный аллерген', 'возможные аллергены');
-  say(drying, 'может сушить', 'могут сушить');
-  if (!special) say(clog, 'может забивать поры', 'могут забивать поры');
+  add(risky, 'спорный компонент');
+  add(allergens, 'возможный аллерген');
+  add(drying, 'может сушить');
+  if (!special) add(clog, 'может забивать поры');
+  const groups = new Map<string, string[]>();
+  for (const [n, why] of reasons) groups.set(why.join(', '), [...(groups.get(why.join(', ')) ?? []), n]);
+  const plural: Record<string, string> = { 'спорный компонент': 'спорные компоненты', 'возможный аллерген': 'возможные аллергены', 'может сушить': 'могут сушить', 'может забивать поры': 'могут забивать поры' };
+  const watchList = [...groups].map(([why, ns]) => `${join(ns)} — ${ns.length > 1 ? why.split(', ').map((w) => plural[w] ?? w).join(', ') : why}`);
   const watch = watchList.length ? `${watchList.join('; ').replace(/^./, (c) => c.toUpperCase())}.` : null;
+
+  // Weak side: what limits the effect, from the order of the list (earlier = more of it).
+  const pos = (it: AnalyzedItem) => a.items.indexOf(it);
+  const preservative = known.find((it) => it.ing.fn.includes('preservative'));
+  const weakList: string[] = [];
+  if (!special) {
+    if (!actives.length) weakList.push('Нет активов с доказанным действием — заметного целевого эффекта ждать не стоит');
+    else if (preservative && actives.every((it) => pos(it) > pos(preservative))) weakList.push('Активы стоят после консерванта — их, скорее всего, меньше 1%, эффект будет мягким');
+    if (drying.some((it) => pos(it) < 5)) weakList.push('Спирт или сульфаты в начале состава — при ежедневном применении может сушить');
+    if (allergens.length >= 2 || known.some((it) => it.ing.fn.includes('fragrance') && pos(it) < 8)) weakList.push('Отдушка и аллергены не дают пользы коже, но добавляют риск раздражения');
+    if (clog.some((it) => pos(it) < 6) && !surf) weakList.push('Комедогенные компоненты в начале списка — не лучший выбор для жирной кожи');
+  }
+  const weak = weakList.length ? `${weakList.slice(0, 2).join('. ')}.` : null;
 
   let suits: string | null = null;
   if (!special) {
@@ -70,5 +88,5 @@ export function opinion(a: Analysis, special?: string | null): Opinion {
   if (has(/ascorbic acid/i)) tips.push('Витамин C лучше утром под SPF');
   if (surf && !special) tips.push('Не держите на коже долго — нанесите и смойте');
 
-  return { title: score >= 75 ? 'Хороший выбор' : score >= 55 ? 'Можно, но с оговорками' : 'Стоит подумать', strong, watch, suits, tips };
+  return { title: score >= 75 ? 'Хороший выбор' : score >= 55 ? 'Можно, но с оговорками' : 'Стоит подумать', strong, weak, watch, suits, tips };
 }

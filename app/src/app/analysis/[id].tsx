@@ -57,7 +57,10 @@ export default function AnalysisScreen() {
   const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
   // Not skin care (nail polish remover, toothpaste…): our own description only, the AI would call it a skin product.
   const special = useMemo(() => specialKind(result?.items.map((i) => i.ing) ?? []), [result]);
-  const summary = useAiSummary(special ? [] : result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
+  // A product found by its label, barcode or in our base already has a name: the technologist judges the composition
+  // for that product instead of guessing what it is.
+  const named = scan && !/^Состав №/.test(scan.title) ? scan.title : undefined;
+  const summary = useAiSummary(special ? [] : result?.items.map((i) => i.ing.inci) ?? [], named, local);
   // Analogs by composition from our base (Letual), matched by the composition fingerprint.
   const [similar, setSimilar] = useState<SimilarItem[] | null | undefined>(undefined);
   const sig = useMemo(() => (result ? signature(result) : ''), [result]);

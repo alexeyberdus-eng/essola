@@ -10,10 +10,9 @@
 const LLM_URL = 'https://llm.api.cloud.yandex.net/v1/chat/completions'; // OpenAI-compatible AI Studio API
 
 const SCAN = `Выпиши с фото состав косметики (после «Состав»/«Ingredients») по порядку, каждый ингредиент в INCI (русские переведи: «масло ши» → Butyrospermum Parkii Butter), группы раскрывай, опечатки исправляй, ничего не выдумывай. Ответ — только список через «; ». Нет состава — пустой ответ. Если это не косметика (средство для стирки, посуды или уборки, еда, лекарство) — ответь одной строкой «НЕ КОСМЕТИКА: что это». /no_think`;
-const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Верни ТОЛЬКО JSON:
-{"lead":"1–2 предложения: что это за средство и для какой кожи","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"use":["куда и как применять, до 12 слов"]}
-effects: 2–4 пункта, use: 1–3 пункта. Без медицинских обещаний, без выдуманных ингредиентов.`;
-
+const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Если указано «Средство» (название с упаковки) — не угадывай тип, он известен: оцени, насколько состав эффективен именно для такого средства и его обещаний. Верни ТОЛЬКО JSON:
+{"lead":"1–2 предложения: что это за средство и насколько состав справляется со своей задачей","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"weak":"главная слабая сторона состава для этого средства, одно предложение до 18 слов, или пустая строка","use":["куда и как применять, до 12 слов"]}
+effects: 2–4 пункта, use: 1–3 пункта. Каждый ингредиент упоминай один раз. Без медицинских обещаний, без выдуманных ингредиентов.`;
 const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
 + ингредиент (INCI) | доля | что даст, до 14 слов
@@ -717,11 +716,18 @@ module.exports.handler = async (event, context) => {
       console.log('nk card:', gtin, !!card, title.slice(0, 60), 'ingredients', ingredients.length);
       // Not every maker fills in the composition: then the name goes on to our base and the web.
       let out = { found: !!card, gtin, title, brand, ingredients };
-      if (ingredients.length < 3 && title) {
-        const more = await findByLabel(brand, title, '', iam, textModel).catch(() => ({}));
+      // Not in the catalog (an ordinary barcode of an unmarked product): its name from the web, by the code.
+      if (!card) {
+        const ean = gtin.replace(/^0/, '');
+        const docs = await search(ean, iam).catch(() => []);
+        const named = docs.map((d) => d.title.replace(/\s*[|—–-]\s*(купить|цена|отзывы|интернет-магазин|ozon|озон|wildberries|вайлдберриз|яндекс маркет|золотое яблоко|летуаль).*$/i, '').replace(new RegExp(ean, 'g'), '').trim()).find((t) => t.length > 5 && !/штрих|barcode|ean|gtin|код товара/i.test(t));
+        if (named) out = { ...out, title: named };
+      }
+      if (out.ingredients.length < 3 && out.title) {
+        const more = await findByLabel(out.brand, out.title, '', iam, textModel).catch(() => ({}));
         out = { ...out, ...more };
       }
-      if (card) await cachePut(ck, iam, out, true).catch(() => {});
+      if (card || out.item || out.ingredients.length >= 3) await cachePut(ck, iam, out, true).catch(() => {});
       return reply(200, out);
     }
     if (req.mode === 'barcode.web') {
@@ -824,10 +830,10 @@ module.exports.handler = async (event, context) => {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
       // One description per composition for everyone: opening the same product again costs no tokens.
-      const dk = `desc/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
+      const dk = `desc2/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
       if (hit && hit.lead) return reply(200, hit);
-      const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Состав: ${list}` }], 600);
+      const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 650);
       if (out && out.lead) await cachePut(dk, iam, out, true);
       return reply(200, out);
     }

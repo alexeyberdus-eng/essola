@@ -2,7 +2,7 @@ import type { IconName } from '../components/Icon';
 import type { Fn, Ingredient } from '../data/ingredients';
 
 export type Effect = { icon: IconName; title: string; text: string };
-export type Summary = { kind: string; lead: string; effects: Effect[]; use: string[] };
+export type Summary = { kind: string; lead: string; effects: Effect[]; use: string[]; /** AI: what limits this product for its purpose */ weak?: string };
 
 type Rule = { key: string; icon: IconName; title: string; verb: string; match: (i: Ingredient) => boolean };
 

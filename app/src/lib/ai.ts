@@ -30,7 +30,7 @@ export async function nkLookup(gtin: string): Promise<{ found: boolean; title?: 
   return call({ mode: 'nk', gtin });
 }
 
-type AiText = { lead?: string; effects?: { title: string; text: string }[]; use?: string[] };
+type AiText = { lead?: string; effects?: { title: string; text: string }[]; use?: string[]; weak?: string };
 
 /**
  * "What this composition gives", written by the AI. Shows the local rule-based summary immediately
@@ -42,7 +42,7 @@ export function useAiSummary(names: string[], kind: string | undefined, local: S
   useEffect(() => {
     if (!aiEnabled || names.length < 2) return;
     let alive = true;
-    const cacheKey = `ai:${sig.length > 180 ? hash(sig) : sig}`;
+    const cacheKey = `ai2:${sig.length > 180 ? hash(sig) : sig}`;
     const t = setTimeout(async () => {
       const cached = await readJSON<AiText | null>(cacheKey, null);
       if (cached) return alive && setAi({ sig, data: cached });
@@ -63,12 +63,13 @@ export function useAiSummary(names: string[], kind: string | undefined, local: S
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, delay]);
   if (!ai || ai.sig !== sig) return local;
-  const { lead, effects, use } = ai.data;
+  const { lead, effects, use, weak } = ai.data;
   return {
     kind: local.kind,
     lead: lead ?? local.lead,
     effects: effects?.length ? effects.slice(0, 4).map((e, i) => ({ icon: local.effects[i]?.icon ?? 'spark', title: e.title, text: e.text })) : local.effects,
     use: use?.length ? use : local.use,
+    weak: weak || undefined,
   };
 }
 

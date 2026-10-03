@@ -150,7 +150,7 @@ export default function ScannerScreen() {
   const czBusy = useRef(false);
   const onMarking = async ({ data }: BarcodeScanningResult) => {
     if (czBusy.current || busy) return;
-    const gtin = data.replace(/[^\x20-\x7e]/g, '').match(/^\(?01\)?(\d{14})/)?.[1] ?? (/^\d{13,14}$/.test(data) ? data : null);
+    const gtin = data.replace(/[^\x20-\x7e]/g, '').match(/^\(?01\)?(\d{14})/)?.[1] ?? (/^\d{8,14}$/.test(data) ? data.padStart(14, '0') : null);
     if (!gtin) return;
     czBusy.current = true;
     tap('success');
@@ -164,7 +164,7 @@ export default function ScannerScreen() {
         const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: 'Летуаль', image: r.item.i || null, url: r.item.u });
         router.push(`/analysis/${scan.id}`);
       } else if (r.ingredients && r.ingredients.length >= 3) finish(`Состав: ${r.ingredients.join(', ')}`, name, { barcode: gtin.replace(/^0/, ''), source: 'Честный знак' }, true);
-      else setNotice(r.found ? `Нашли «${name ?? 'средство'}» в Честном знаке, но состав там не указан. Переключитесь на «Состав» и сфотографируйте его на упаковке.` : 'Не нашли этот код в Честном знаке. Переключитесь на «Состав» и сфотографируйте список ингредиентов.');
+      else setNotice(name ? `Нашли «${name}», но состав не указан. Переключитесь на «Состав» и сфотографируйте его на упаковке.` : 'Не нашли средство по этому коду. Переключитесь на «Этикетка» или «Состав».');
     } catch {
       setNotice('Не получилось проверить код — проверьте интернет и попробуйте ещё раз.');
     } finally {
@@ -478,12 +478,12 @@ export default function ScannerScreen() {
           </View>
         ) : busy ? (
           <View style={styles.live}>
-            <Text style={styles.liveText}>{mode === 'cz' ? 'Ищем в Честном знаке…' : mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
+            <Text style={styles.liveText}>{mode === 'cz' ? 'Ищем средство по коду…' : mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
           </View>
         ) : mode === 'cz' ? (
           <>
-            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на квадратный код «Честный знак»</Text>
-            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Найдём средство в Национальном каталоге и откроем разбор состава</Text>
+            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на штрихкод или квадратный код «Честный знак»</Text>
+            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Найдём средство в Национальном каталоге, нашей базе и интернете и откроем разбор</Text>
           </>
         ) : mode === 'front' ? (
           <>
@@ -588,7 +588,7 @@ export default function ScannerScreen() {
             enableTorch={torch}
             zoom={zoom}
             autofocus={focus}
-            barcodeScannerSettings={mode === 'cz' ? { barcodeTypes: ['datamatrix'] } : undefined}
+            barcodeScannerSettings={mode === 'cz' ? { barcodeTypes: ['datamatrix', 'ean13', 'ean8', 'upc_a', 'upc_e'] } : undefined}
             onBarcodeScanned={mode === 'cz' && !busy ? onMarking : undefined}
             onCameraReady={() => setReady(true)}
           />
@@ -635,7 +635,7 @@ export default function ScannerScreen() {
             {(
               [
                 ['label', 'Состав'],
-                ...(aiEnabled ? ([['front', 'Этикетка'], ['cz', 'Честный знак']] as const) : []),
+                ...(aiEnabled ? ([['front', 'Этикетка'], ['cz', 'Штрихкод']] as const) : []),
               ] as const
             ).map(([k, l]) => (
               <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>
