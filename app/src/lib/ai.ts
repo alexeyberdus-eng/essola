@@ -25,6 +25,11 @@ export async function aiLabel(dataUrl: string): Promise<{ brand: string; name: s
   return { brand: r.brand ?? '', name: r.name ?? '', kind: r.kind ?? '', notCosmetic: r.notCosmetic, item: r.item, ingredients: r.ingredients };
 }
 
+/** «Честный знак»: GTIN from the DataMatrix code → the National Catalog card (composition if filled in), else our base or the web. */
+export async function nkLookup(gtin: string): Promise<{ found: boolean; title?: string; brand?: string; ingredients?: string[]; item?: CatalogItem; reason?: string }> {
+  return call({ mode: 'nk', gtin });
+}
+
 type AiText = { lead?: string; effects?: { title: string; text: string }[]; use?: string[] };
 
 /**

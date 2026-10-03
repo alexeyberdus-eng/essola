@@ -1,4 +1,4 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,7 +15,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiLabel, aiScan, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiLabel, aiScan, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -29,7 +29,7 @@ const native = Platform.OS !== 'web';
 
 const LINK_NOTICE = 'Скопируйте ссылку на товар в приложении или на сайте Летуаль и нажмите «Ссылка Летуаль» ещё раз. Для других магазинов сделайте скриншот состава и загрузите его через «Галерея».';
 
-type Mode = 'barcode' | 'label' | 'front';
+type Mode = 'barcode' | 'label' | 'front' | 'cz';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
 
 export default function ScannerScreen() {
@@ -144,6 +144,33 @@ export default function ScannerScreen() {
     }
     setMatches(items);
     setFinding(false);
+  };
+
+  // «Честный знак»: the square DataMatrix code carries the GTIN after «01»; the server asks the National Catalog.
+  const czBusy = useRef(false);
+  const onMarking = async ({ data }: BarcodeScanningResult) => {
+    if (czBusy.current || busy) return;
+    const gtin = data.replace(/[^\x20-\x7e]/g, '').match(/^\(?01\)?(\d{14})/)?.[1] ?? (/^\d{13,14}$/.test(data) ? data : null);
+    if (!gtin) return;
+    czBusy.current = true;
+    tap('success');
+    setBusy(true);
+    setNotice(null);
+    try {
+      const r = await nkLookup(gtin);
+      const name = [r.brand, r.title].filter(Boolean).join(' ') || undefined;
+      if (r.item?.x) {
+        const a = analyze(r.item.x);
+        const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: 'Летуаль', image: r.item.i || null, url: r.item.u });
+        router.push(`/analysis/${scan.id}`);
+      } else if (r.ingredients && r.ingredients.length >= 3) finish(`Состав: ${r.ingredients.join(', ')}`, name, { barcode: gtin.replace(/^0/, ''), source: 'Честный знак' }, true);
+      else setNotice(r.found ? `Нашли «${name ?? 'средство'}» в Честном знаке, но состав там не указан. Переключитесь на «Состав» и сфотографируйте его на упаковке.` : 'Не нашли этот код в Честном знаке. Переключитесь на «Состав» и сфотографируйте список ингредиентов.');
+    } catch {
+      setNotice('Не получилось проверить код — проверьте интернет и попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+      setTimeout(() => (czBusy.current = false), 1500);
+    }
   };
 
   // «Этикетка»: the name is read from the pack and the product opens straight from our base;
@@ -451,8 +478,13 @@ export default function ScannerScreen() {
           </View>
         ) : busy ? (
           <View style={styles.live}>
-            <Text style={styles.liveText}>{mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
+            <Text style={styles.liveText}>{mode === 'cz' ? 'Ищем в Честном знаке…' : mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
           </View>
+        ) : mode === 'cz' ? (
+          <>
+            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на квадратный код «Честный знак»</Text>
+            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Найдём средство в Национальном каталоге и откроем разбор состава</Text>
+          </>
         ) : mode === 'front' ? (
           <>
             <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на лицевую сторону упаковки</Text>
@@ -511,7 +543,7 @@ export default function ScannerScreen() {
         {(!lookup || (lookup.state === 'missing' && mode === 'label')) && (
           <>
             <View style={styles.controls}>
-              {mode !== 'barcode' ? (
+              {mode === 'label' || mode === 'front' ? (
                 <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
                   <View style={styles.shutterIn} />
                 </Press>
@@ -556,6 +588,8 @@ export default function ScannerScreen() {
             enableTorch={torch}
             zoom={zoom}
             autofocus={focus}
+            barcodeScannerSettings={mode === 'cz' ? { barcodeTypes: ['datamatrix'] } : undefined}
+            onBarcodeScanned={mode === 'cz' && !busy ? onMarking : undefined}
             onCameraReady={() => setReady(true)}
           />
         )
@@ -601,7 +635,7 @@ export default function ScannerScreen() {
             {(
               [
                 ['label', 'Состав'],
-                ...(aiEnabled ? ([['front', 'Этикетка']] as const) : []),
+                ...(aiEnabled ? ([['front', 'Этикетка'], ['cz', 'Честный знак']] as const) : []),
               ] as const
             ).map(([k, l]) => (
               <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>

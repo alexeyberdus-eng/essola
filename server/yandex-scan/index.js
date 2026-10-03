@@ -689,6 +689,38 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'search') {
       return reply(200, { items: await searchCache(req.q, iam) });
     }
+    if (req.mode === 'nk') {
+      // «Честный знак»: the GTIN from the DataMatrix code → the published card in the National Catalog
+      // (official API with the participant's key), its composition if the maker filled it in.
+      const gtin = String(req.gtin || '').replace(/\D/g, '').padStart(14, '0').slice(-14);
+      if (!/^\d{14}$/.test(gtin) || /^0+$/.test(gtin)) return reply(400, { error: 'bad_gtin' });
+      const ck = `nk/${gtin}.json`;
+      const hit = await cacheGet(ck, iam);
+      if (hit) return reply(200, hit);
+      if (!process.env.NK_API_KEY) return reply(200, { found: false, reason: 'no_key' });
+      const res = await fetch(`https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`, { signal: AbortSignal.timeout(15000) }).catch((e) => ({ ok: false, status: String(e) }));
+      if (!res.ok) {
+        console.log('nk http', res.status);
+        return reply(200, { found: false, reason: `http_${res.status}` });
+      }
+      const json = await res.json().catch(() => null);
+      const card = Array.isArray(json?.result) ? json.result[0] : json?.result || json;
+      const attrs = [...(card?.good_attrs || []), ...(card?.attrs || [])];
+      const val = (re) => attrs.find((a) => re.test(String(a.attr_name || a.name || '')))?.attr_value ?? attrs.find((a) => re.test(String(a.attr_name || a.name || '')))?.value;
+      const title = String(card?.good_name || val(/наименование/i) || '').trim();
+      const brand = String(card?.brand_name || val(/товарный знак|бренд/i) || '').trim();
+      const comp = String(val(/состав|ингредиент/i) || '').trim();
+      const ingredients = comp ? comp.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
+      console.log('nk card:', gtin, !!card, title.slice(0, 60), 'ingredients', ingredients.length);
+      // Not every maker fills in the composition: then the name goes on to our base and the web.
+      let out = { found: !!card, gtin, title, brand, ingredients };
+      if (ingredients.length < 3 && title) {
+        const more = await findByLabel(brand, title, '', iam, textModel).catch(() => ({}));
+        out = { ...out, ...more };
+      }
+      if (card) await cachePut(ck, iam, out, true).catch(() => {});
+      return reply(200, out);
+    }
     if (req.mode === 'barcode.web') {
       // Unknown barcode: search the web (marketplaces, shops, barcode catalogs) for the product name.
       const code = String(req.barcode || '').replace(/\D/g, '');
