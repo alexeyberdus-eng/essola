@@ -698,7 +698,10 @@ module.exports.handler = async (event, context) => {
       const hit = await cacheGet(ck, iam);
       if (hit) return reply(200, hit);
       if (!process.env.NK_API_KEY) return reply(200, { found: false, reason: 'no_key' });
-      const res = await fetch(`https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`, { signal: AbortSignal.timeout(15000) }).catch((e) => ({ ok: false, status: String(e) }));
+      const nkUrl = `https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`;
+      // The catalog sometimes drops a connection: one more try before giving up.
+      let res = await fetch(nkUrl, { signal: AbortSignal.timeout(9000) }).catch((e) => ({ ok: false, status: String(e) }));
+      if (!res.ok && !(res.status >= 400 && res.status < 500)) res = await fetch(nkUrl, { signal: AbortSignal.timeout(9000) }).catch((e) => ({ ok: false, status: String(e) }));
       if (!res.ok) {
         console.log('nk http', res.status);
         return reply(200, { found: false, reason: `http_${res.status}` });
