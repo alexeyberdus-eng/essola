@@ -231,7 +231,7 @@ export default function ScannerScreen() {
     const t = (await Clipboard.getStringAsync().catch(() => '')) ?? '';
     const url = t.match(SHOP_LINK)?.[0];
     if (url) checkLink(url);
-    else setNotice('Скопируйте ссылку на товар в приложении или на сайте Золотого Яблока или Летуаль и нажмите «Ссылка» ещё раз.');
+    else setNotice('Скопируйте ссылку на товар в приложении или на сайте Летуаль и нажмите «Ссылка Летуаль» ещё раз. Для других магазинов сделайте скриншот состава и загрузите его через «Галерея».');
   };
 
   const readImage = async (uri: string) => {
@@ -487,7 +487,7 @@ export default function ScannerScreen() {
               {aiEnabled && !lookup && (
                 <Press onPress={pasteLink} style={styles.action}>
                   <Icon name="external" size={20} color={colors.violet} />
-                  <Text style={styles.actionText}>Ссылка Летуаль / ЗЯ</Text>
+                  <Text style={styles.actionText}>Ссылка Летуаль</Text>
                 </Press>
               )}
             </View>
@@ -632,7 +632,7 @@ export default function ScannerScreen() {
           setBusy(false);
           const list = text.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
           saveProduct(url, title, list);
-          finish(`Состав: ${text}`, title || undefined, { source: url.includes('letu') ? 'Летуаль' : 'Золотое Яблоко' }, true);
+          finish(`Состав: ${text}`, title || undefined, { source: 'Летуаль' }, true);
         }}
       />
       {busy && <Reading />}

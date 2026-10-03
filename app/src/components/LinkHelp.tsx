@@ -33,7 +33,7 @@ function ShopScreen({ app }: { app: boolean }) {
     <Phone>
       {!app && (
         <View style={styles.url}>
-          <Text style={styles.urlText}>goldapple.ru/19000…</Text>
+          <Text style={styles.urlText}>letu.ru/product/…</Text>
         </View>
       )}
       <View style={styles.photo} />
@@ -91,7 +91,7 @@ function EssolaScreen() {
 }
 
 const STEPS_APP: [string, ReactNode][] = [
-  ['Откройте товар в приложении Золотого Яблока или Летуаль и нажмите «Поделиться»', <ShopScreen key="a" app />],
+  ['Откройте товар в приложении Летуаль и нажмите «Поделиться»', <ShopScreen key="a" app />],
   ['В появившемся меню выберите «Скопировать» или «Скопировать ссылку»', <ShareSheet key="b" />],
   ['Вернитесь в essola, откройте сканер и нажмите «Вставить ссылку» — остальное сделаем сами', <EssolaScreen key="c" />],
 ];
@@ -121,7 +121,7 @@ export function LinkHelp() {
               <Icon name="close" size={18} color={colors.ink} />
             </Press>
           </View>
-          <Text style={styles.lead}>Скопируйте ссылку на товар из Золотого Яблока или Летуаль — мы сами найдём состав и оценим его.</Text>
+          <Text style={styles.lead}>Скопируйте ссылку на товар из Летуаль — мы сами найдём состав и оценим его.</Text>
           <View style={styles.seg}>
             {(
               [
@@ -147,8 +147,8 @@ export function LinkHelp() {
               </View>
             ))}
             <View style={styles.tip}>
-              <Text style={styles.tipTitle}>Если Золотое Яблоко не открылось</Text>
-              <Text style={styles.tipText}>Сделайте скриншот вкладки «Состав» в приложении магазина и загрузите его в сканере кнопкой галереи — прочитаем по фото.</Text>
+              <Text style={styles.tipTitle}>Товар из другого магазина?</Text>
+              <Text style={styles.tipText}>Сделайте скриншот блока «Состав» на странице товара и загрузите его в сканере кнопкой «Галерея» — прочитаем по фото.</Text>
             </View>
           </ScrollView>
         </View>

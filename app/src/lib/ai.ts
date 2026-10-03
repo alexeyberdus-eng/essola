@@ -110,7 +110,7 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
   return call<{ product: CachedProduct | null; error?: string }>({ mode: 'url', url });
 }
 
-export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:goldapple\.ru|letu\.ru)\/\S+/i;
+export const SHOP_LINK = /https?:\/\/(?:www\.)?letu\.ru\/\S+/i;
 
 /** Saves a composition read from a shop page into the shared base. */
 /** Unknown barcode → product name found on the web (marketplaces, shops, barcode catalogs). */
