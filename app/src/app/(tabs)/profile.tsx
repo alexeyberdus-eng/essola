@@ -5,7 +5,7 @@ import { myId, saveMe } from '../../lib/social';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
-import { RecipeCard } from '../../components/RecipeCard';
+import { RecipeRow } from '../../components/RecipeRow';
 import { ScoreBadge } from '../../components/ScoreBadge';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountUp, FadeIn, Glow } from '../../components/silk';
@@ -153,9 +153,17 @@ export default function ProfileScreen() {
             (favourites.length || myRecipes.length ? (
               <>
                 {myRecipes.length > 0 && <Text style={styles.group}>Мои формулы</Text>}
-                {myRecipes.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i} />)}
+                {myRecipes.length > 0 && (
+                  <View style={styles.compact}>
+                    {myRecipes.map((r, i) => <RecipeRow key={r.id} recipe={r} last={i === myRecipes.length - 1} />)}
+                  </View>
+                )}
                 {favourites.length > 0 && <Text style={styles.group}>Сохранённые</Text>}
-                {favourites.map((r, i) => <RecipeCard key={r.id} recipe={r} index={i + 1} />)}
+                {favourites.length > 0 && (
+                  <View style={styles.compact}>
+                    {favourites.map((r, i) => <RecipeRow key={r.id} recipe={r} last={i === favourites.length - 1} />)}
+                  </View>
+                )}
               </>
             ) : (
               <Empty icon="heart" text="Отмечайте рецепты сердцем или соберите свою формулу в конструкторе — всё будет здесь." cta="К рецептам" onPress={() => router.navigate('/')} />
@@ -298,6 +306,7 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 }
 
 const styles = StyleSheet.create({
+  compact: { paddingHorizontal: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7' },
   importRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC4F7', marginBottom: 10 },
   importText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   socialRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
