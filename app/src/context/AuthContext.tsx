@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import type { SkinType } from '../lib/analyze';
 import { readJSON, remove, writeJSON } from '../lib/storage';
 import { supabase } from '../lib/supabase';
+import { signInWithVk as vkLogin } from '../lib/vk';
 
 export type User = {
   id: string;
@@ -12,7 +13,7 @@ export type User = {
   name: string | null;
   /** Public nickname shown on recipes and comments. */
   nick?: string | null;
-  provider: 'apple' | 'email';
+  provider: 'apple' | 'email' | 'vk';
   since: string;
   skinType: SkinType | null;
   /** Hair condition, several can apply at once (e.g. dry + coloured). */
@@ -26,6 +27,8 @@ type AuthValue = {
   ready: boolean;
   appleAvailable: boolean;
   signInWithApple: () => Promise<void>;
+  /** false when the person closed the VK window */
+  signInWithVk: () => Promise<boolean>;
   requestEmailCode: (email: string) => Promise<{ demo: boolean }>;
   verifyEmailCode: (email: string, code: string, extra?: { name?: string; nick?: string }) => Promise<void>;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'skinType' | 'hair'>>) => Promise<void>;
@@ -116,6 +119,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [saveLocal]);
 
+  const signInWithVk = useCallback(async () => {
+    const vk = await vkLogin();
+    if (!vk) return false;
+    const prev = await readJSON<User | null>(LOCAL_KEY, null);
+    const same = prev?.id === `vk:${vk.id}`;
+    await saveLocal({
+      id: `vk:${vk.id}`,
+      email: vk.email ?? (same ? prev?.email ?? null : null),
+      name: [vk.firstName, vk.lastName].filter(Boolean).join(' ') || (same ? prev?.name ?? null : null),
+      nick: same ? prev?.nick ?? null : null,
+      provider: 'vk',
+      since: same ? prev!.since : new Date().toISOString(),
+      skinType: same ? prev?.skinType ?? null : null,
+      hair: same ? prev?.hair ?? [] : [],
+      local: true,
+    });
+    return true;
+  }, [saveLocal]);
+
   const requestEmailCode = useCallback(async (email: string) => {
     if (!supabase) return { demo: true };
     const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
@@ -172,8 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, appleAvailable, signInWithApple, requestEmailCode, verifyEmailCode, updateProfile, signOut }),
-    [user, ready, appleAvailable, signInWithApple, requestEmailCode, verifyEmailCode, updateProfile, signOut],
+    () => ({ user, ready, appleAvailable, signInWithApple, signInWithVk, requestEmailCode, verifyEmailCode, updateProfile, signOut }),
+    [user, ready, appleAvailable, signInWithApple, signInWithVk, requestEmailCode, verifyEmailCode, updateProfile, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

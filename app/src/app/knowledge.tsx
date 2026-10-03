@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, FlatList, LayoutAnimation, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
+import { Hero } from '../components/Hero';
 import { Icon } from '../components/Icon';
 import { DarkBlock, Glass } from '../components/lab';
 import { Breathe, Card, FadeIn, Glow } from '../components/silk';
@@ -61,6 +62,7 @@ export default function KnowledgeScreen() {
         <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <Text style={styles.h1}>Знания</Text>
       </View>
+      <Hero kicker="Знания essola" title="Статьи и словарь ингредиентов" text="Разбираем, как работает кожа и что делает каждый компонент — простыми словами." tone="mint" style={{ marginTop: 4, marginBottom: 14 }} />
       <View style={styles.seg} onLayout={(e) => setSegW(e.nativeEvent.layout.width)}>
         {(
           [

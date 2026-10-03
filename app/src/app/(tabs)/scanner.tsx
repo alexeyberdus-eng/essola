@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { Glass, LightWave } from '../../components/lab';
@@ -16,7 +16,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiScan, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiLabel, aiScan, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -28,7 +28,7 @@ import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
 const webOcr = !nativeOcr && Platform.OS !== 'web';
 const native = Platform.OS !== 'web';
 
-type Mode = 'barcode' | 'label';
+type Mode = 'barcode' | 'label' | 'front';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
 
 export default function ScannerScreen() {
@@ -60,6 +60,8 @@ export default function ScannerScreen() {
   const [matches, setMatches] = useState<CatalogItem[] | null>(null);
   const [findQ, setFindQ] = useState('');
   const [finding, setFinding] = useState(false);
+  // «Этикетка»: the front of the pack was read, the product is looked up in our base by brand and name.
+  const [front, setFront] = useState<string | null>(null);
   // Close-ups go blurry on phones whose main lens can't focus near: step back and zoom in instead.
   const [zoom, setZoom] = useState(0);
   const [focus, setFocus] = useState<'on' | 'off'>('off');
@@ -70,6 +72,8 @@ export default function ScannerScreen() {
   const [digits, setDigits] = useState('');
   // The scanner is the screen; the history opens on demand below it.
   const [history, setHistory] = useState(false);
+  // On small phones the panel may not fit: then (and only then) it scrolls.
+  const [panelH, setPanelH] = useState({ box: 0, content: 0 });
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const laser = useRef(new Animated.Value(0)).current;
@@ -136,12 +140,40 @@ export default function ScannerScreen() {
     else if (seen !== data) setSeen(data);
   };
 
-  const findByName = async (q: string) => {
+  const findByName = async (q: string, tries: string[] = []) => {
     if (q.trim().length < 2) return;
     setFinding(true);
-    const res = await catalogPage(q.trim(), undefined, 'relevance', 1);
-    setMatches((res?.items ?? []).filter((x) => x.x).slice(0, 5));
+    // The full name first, then shorter variants (a pack rarely matches the shop's title word for word).
+    let items: CatalogItem[] = [];
+    for (const t of [q, ...tries].map((x) => x.trim()).filter((x, i, a) => x.length >= 2 && a.indexOf(x) === i)) {
+      const res = await catalogPage(t, undefined, 'relevance', 1).catch(() => null);
+      items = (res?.items ?? []).filter((x) => x.x).slice(0, 5);
+      if (items.length) break;
+    }
+    setMatches(items);
     setFinding(false);
+  };
+
+  const readFront = async (uri: string) => {
+    setBusy(true);
+    setNotice(null);
+    setMatches(null);
+    try {
+      const r = await aiLabel(await toJpegBase64(uri, 720));
+      if (r.notCosmetic) return finish(`NOT_COSMETIC: ${r.notCosmetic}`);
+      const q = [r.brand, r.name].filter(Boolean).join(' ');
+      if (!q) throw new Error('EMPTY');
+      tap('success');
+      pendingName.current = q;
+      setFront(q);
+      setFindQ(q);
+      const words = r.name.split(/\s+/).filter((w) => !/^\d+([.,]\d+)?(мл|ml|г|g)?$/i.test(w));
+      findByName(q, [[r.brand, ...words.slice(0, 3)].join(' '), [r.brand, ...words.slice(0, 2)].join(' '), words.slice(0, 3).join(' ')]);
+    } catch (e) {
+      setNotice(String(e).includes('EMPTY') ? 'Не разобрали название — снимите лицевую сторону упаковки целиком, при хорошем свете.' : 'Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pickMatch = (item: CatalogItem) => {
@@ -155,6 +187,7 @@ export default function ScannerScreen() {
     }
     setMatches(null);
     setFindQ('');
+    setFront(null);
     finish(text, title, { barcode: code ?? undefined, source: 'база essola' }, true);
   };
 
@@ -281,8 +314,8 @@ export default function ScannerScreen() {
     if (!camera.current || busy) return;
     tap('medium');
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.95 });
-      if (photo?.uri) await readImage(photo.uri);
+      const photo = await camera.current.takePictureAsync({ quality: mode === 'front' ? 0.7 : 0.95 });
+      if (photo?.uri) await (mode === 'front' ? readFront(photo.uri) : readImage(photo.uri));
     } catch {
       setNotice('Камера недоступна. Выберите фото из галереи.');
     }
@@ -290,13 +323,15 @@ export default function ScannerScreen() {
 
   const pick = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true });
-    if (!res.canceled && res.assets[0]) await readImage(res.assets[0].uri);
+    if (!res.canceled && res.assets[0]) await (mode === 'front' ? readFront(res.assets[0].uri) : readImage(res.assets[0].uri));
   };
 
   const switchMode = (m: Mode) => {
     tap();
     setMode(m);
     setNotice(null);
+    setFront(null);
+    setMatches(null);
     if (m === 'barcode') {
       setLookup(null);
       pendingCode.current = null;
@@ -361,6 +396,28 @@ export default function ScannerScreen() {
   const frameH = barcode ? (full ? 150 : 120) : undefined;
   const camH = full ? winH : Math.round(winH * 0.56);
 
+  const findPanel = (
+          <View style={styles.find}>
+            <Text style={styles.findTitle}>{matches?.length ? 'Это одно из этих средств?' : 'Найдите средство в нашей базе'}</Text>
+            <View style={styles.findRow}>
+              <Icon name="search" size={16} color={colors.muted} />
+              <TextInput value={findQ} onChangeText={setFindQ} onSubmitEditing={() => findByName(findQ)} placeholder="Бренд и название, например CeraVe крем" placeholderTextColor={colors.faint} style={styles.findInput} returnKeyType="search" />
+              {finding ? <ActivityIndicator color={colors.violet} /> : <Press onPress={() => findByName(findQ)} accessibilityLabel="Искать"><Text style={styles.clipGo}>Найти</Text></Press>}
+            </View>
+            {matches?.map((m) => (
+              <Press key={m.k} onPress={() => pickMatch(m)} style={styles.match}>
+                <ScoreBadge value={m.s} size={36} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.matchTitle} numberOfLines={2}>{m.t}</Text>
+                  {!!m.b && <Text style={styles.matchBrand}>{m.b}</Text>}
+                </View>
+                <Icon name="arrowRight" size={15} color={colors.muted} />
+              </Press>
+            ))}
+            {matches && !matches.length && !finding && <Text style={styles.sheetText}>Не нашли — уточните название или сфотографируйте состав.</Text>}
+          </View>
+  );
+
   const sheet = (
       <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
         {full && <View style={styles.grab} />}
@@ -382,27 +439,7 @@ export default function ScannerScreen() {
                 <Text style={styles.stepText}>Сфотографируйте состав на упаковке — мы разберём его и запомним за этим штрихкодом.</Text>
               )}
             </View>
-            {lookup.state === 'missing' && aiEnabled && (
-              <View style={styles.find}>
-                <Text style={styles.findTitle}>{matches?.length ? 'Это одно из этих средств?' : 'Найдите средство в нашей базе'}</Text>
-                <View style={styles.findRow}>
-                  <Icon name="search" size={16} color={colors.muted} />
-                  <TextInput value={findQ} onChangeText={setFindQ} onSubmitEditing={() => findByName(findQ)} placeholder="Бренд и название, например CeraVe крем" placeholderTextColor={colors.faint} style={styles.findInput} returnKeyType="search" />
-                  {finding ? <ActivityIndicator color={colors.violet} /> : <Press onPress={() => findByName(findQ)} accessibilityLabel="Искать"><Text style={styles.clipGo}>Найти</Text></Press>}
-                </View>
-                {matches?.map((m) => (
-                  <Press key={m.k} onPress={() => pickMatch(m)} style={styles.match}>
-                    <ScoreBadge value={m.s} size={36} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.matchTitle} numberOfLines={2}>{m.t}</Text>
-                      {!!m.b && <Text style={styles.matchBrand}>{m.b}</Text>}
-                    </View>
-                    <Icon name="arrowRight" size={15} color={colors.muted} />
-                  </Press>
-                ))}
-                {matches && !matches.length && !finding && <Text style={styles.sheetText}>Не нашли — уточните название или сфотографируйте состав.</Text>}
-              </View>
-            )}
+            {lookup.state === 'missing' && aiEnabled && findPanel}
             {lookup.state === 'missing' && (
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                 <Button label="Снять состав" icon="camera" onPress={() => setMode('label')} style={{ flex: 1 }} />
@@ -417,8 +454,21 @@ export default function ScannerScreen() {
           </View>
         ) : busy ? (
           <View style={styles.live}>
-            <Text style={styles.liveText}>{ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
+            <Text style={styles.liveText}>{mode === 'front' ? 'Узнаём средство…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
           </View>
+        ) : mode === 'front' ? (
+          front ? (
+            <>
+              <Text style={styles.sheetTitle}>Узнали: {front}</Text>
+              {findPanel}
+              <Text style={[styles.sheetText, { marginTop: 10 }]}>Нет нужного? Переключитесь на «Состав» и снимите список ингредиентов.</Text>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на лицевую сторону упаковки</Text>
+              <Text style={[styles.sheetText, { textAlign: 'center' }]}>Узнаем средство по этикетке и найдём его состав в нашей базе</Text>
+            </>
+          )
         ) : barcode ? (
           <>
             <Text style={styles.sheetTitle}>Наведите на штрихкод</Text>
@@ -467,7 +517,7 @@ export default function ScannerScreen() {
         {(!lookup || (lookup.state === 'missing' && mode === 'label')) && (
           <>
             <View style={styles.controls}>
-              {mode === 'label' ? (
+              {mode !== 'barcode' ? (
                 <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
                   <View style={styles.shutterIn} />
                 </Press>
@@ -561,6 +611,7 @@ export default function ScannerScreen() {
               [
                 ['barcode', 'Штрихкод'],
                 ['label', 'Состав'],
+                ...(aiEnabled ? ([['front', 'Этикетка']] as const) : []),
               ] as const
             ).map(([k, l]) => (
               <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>
@@ -596,20 +647,46 @@ export default function ScannerScreen() {
       {full ? (
         sheet
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-          {sheet}
-          <View style={styles.history}>
-            <Press haptic={false} onPress={() => { tap(); setHistory(!history); }} style={styles.historyBtn} accessibilityLabel="История сканирований">
-              <Icon name="history" size={18} color={colors.violet} />
-              <Text style={styles.historyTitle}>История сканирований</Text>
-              {scans.length > 0 && <Text style={styles.historyCount}>{scans.length}</Text>}
-              <View style={{ transform: [{ rotate: history ? '180deg' : '0deg' }] }}>
-                <Icon name="chevronDown" size={16} color={colors.muted} />
-              </View>
+        // The panel under the camera stays put; it scrolls only while search results are shown.
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            scrollEnabled={!!lookup || !!front || panelH.content > panelH.box + 2}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            onLayout={(e) => { const box = e.nativeEvent.layout.height; setPanelH((p) => (p.box === box ? p : { ...p, box })); }}
+            onContentSizeChange={(_, content) => setPanelH((p) => (p.content === content ? p : { ...p, content }))}
+          >
+            {sheet}
+          </ScrollView>
+          <Press haptic={false} onPress={() => { tap(); setHistory(true); }} style={[styles.historyBtn, styles.historyBar, { marginBottom: insets.bottom + 10 }]} accessibilityLabel="История сканирований">
+            <Icon name="history" size={18} color={colors.violet} />
+            <Text style={styles.historyTitle}>История сканирований</Text>
+            {scans.length > 0 && <Text style={styles.historyCount}>{scans.length}</Text>}
+            <Icon name="arrowRight" size={15} color={colors.muted} />
+          </Press>
+        </View>
+      )}
+      <Modal visible={history} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setHistory(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <View style={styles.histHead}>
+            <Text style={styles.histTitle}>История сканирований</Text>
+            <Press onPress={() => setHistory(false)} style={styles.histClose} accessibilityLabel="Закрыть">
+              <Icon name="close" size={18} color={colors.ink} />
             </Press>
-            {!history ? null : scans.length ? (
-              scans.slice(0, 30).map((sc) => (
-                <Press key={sc.id} haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.hRow}>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 30 }}>
+            {scans.length ? (
+              scans.slice(0, 60).map((sc) => (
+                <Press
+                  key={sc.id}
+                  haptic={false}
+                  onPress={() => {
+                    setHistory(false);
+                    router.push(`/analysis/${sc.id}`);
+                  }}
+                  style={[styles.hRow, { marginTop: 8 }]}
+                >
                   <ScoreBadge value={sc.overall} size={44} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.hName} numberOfLines={1}>{sc.title}</Text>
@@ -619,11 +696,11 @@ export default function ScannerScreen() {
                 </Press>
               ))
             ) : (
-              <Text style={styles.sheetText}>Здесь появятся проверенные средства.</Text>
+              <Text style={[styles.sheetText, { marginTop: 20 }]}>Здесь появятся проверенные средства.</Text>
             )}
-          </View>
-        </ScrollView>
-      )}
+          </ScrollView>
+        </View>
+      </Modal>
       <ShopPage
         url={shop}
         onClose={() => {
@@ -699,6 +776,10 @@ const ZOOMS: [number, string][] = [
   [0.4, '3×'],
 ];
 const styles = StyleSheet.create({
+  historyBar: { marginHorizontal: space.gutter, marginTop: 6, paddingHorizontal: 14, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1' },
+  histHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingTop: 18, paddingBottom: 10 },
+  histTitle: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.6, color: colors.ink },
+  histClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
   reading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   readingBox: { width: 104, height: 104, alignItems: 'center', justifyContent: 'center' },
   readingRing: { position: 'absolute', width: 104, height: 104, borderRadius: 52, borderWidth: 3, borderColor: 'rgba(63,75,201,0.12)', borderTopColor: colors.violet, borderRightColor: '#C9B4FF' },
@@ -728,7 +809,7 @@ const styles = StyleSheet.create({
   camTop: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   camBtn: { width: 42, height: 42, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   modes: { borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
-  mode: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 11 },
+  mode: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 11 },
   modeOn: { backgroundColor: '#FBF8F2' },
   modeText: { fontFamily: fonts.semibold, fontSize: 13, color: 'rgba(255,255,255,0.8)' },
   code: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.55)' },

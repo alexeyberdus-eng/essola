@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { Hint } from '../../components/Hint';
-import { useMemo, useRef, useState } from 'react';
+import { Hero } from '../../components/Hero';
+import { startTransition, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
@@ -15,7 +15,6 @@ import { recipeMeta } from '../../data/community';
 import { useExtraRecipes } from '../../lib/editorial';
 import { useNotices } from '../../lib/notices';
 import { Stories } from '../../components/Stories';
-import { setDraft } from '../../lib/builder';
 import { CATEGORIES, Category, LEVELS, Recipe, RECIPES } from '../../data/recipes';
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
@@ -58,10 +57,15 @@ export default function FeedScreen() {
       if (!q) return true;
       return [r.title, r.subtitle, r.category, ...r.ingredients.map((i) => i.name)].some((t) => t.toLowerCase().includes(q));
     });
-    if (sort === 'new') l = [...l].sort((a, b) => recipeMeta(a).postedAgo - recipeMeta(b).postedAgo);
-    if (sort === 'hot') l = [...l].sort((a, b) => count(b.id) - count(a.id));
+    // Sort keys are computed once per recipe, not inside every comparison.
+    const by = (key: (r: Recipe) => number) => {
+      const k = new Map(l.map((r) => [r.id, key(r)]));
+      return [...l].sort((a, b) => k.get(a.id)! - k.get(b.id)!);
+    };
+    if (sort === 'new') l = by((r) => recipeMeta(r).postedAgo);
+    if (sort === 'hot') l = by((r) => -count(r.id));
     if (sort === 'easy') l = [...l].sort((a, b) => a.level - b.level || a.minutes - b.minutes);
-    if (sort === 'for-you') l = [...l].sort((a, b) => likeCount(b.id) - likeCount(a.id));
+    if (sort === 'for-you') l = by((r) => -likeCount(r.id));
     return l;
   }, [sort, cat, q, liked, likeCount, count, extra, skin, level, time]);
 
@@ -85,12 +89,6 @@ export default function FeedScreen() {
               </View>
             )}
           </View>
-          <Press onPress={() => {
-            setDraft(null);
-            router.push('/create');
-          }} style={styles.add} accessibilityLabel="Свой рецепт">
-            <Icon name="plus" size={20} color="#fff" strokeWidth={1.9} />
-          </Press>
         </View>
       </View>
       <Stories />
@@ -100,7 +98,7 @@ export default function FeedScreen() {
           <Text style={{ color: colors.muted, fontFamily: fonts.regular }}>сварим?</Text>
         </Text>
       </View>
-      <Hint id="home" title="Добро пожаловать в essola lab" text="Здесь рецепты домашней косметики. «Подбор» найдёт рецепты и средства под ваши цели, «Знания» — статьи и база ингредиентов." />
+      <Hero kicker="Лента essola lab" title="Рецепты домашней косметики от технологов" text="Кремы, сыворотки и маски с точными граммами. «Подбор» найдёт рецепты и средства под ваши цели." style={{ marginTop: 12 }} />
       <View style={styles.modes}>
         <View style={[styles.mode, styles.modeOn]}>
           <Icon name="flask" size={18} color="#fff" />
@@ -147,13 +145,13 @@ export default function FeedScreen() {
             ['hot', 'Обсуждают'],
           ] as const
         ).map(([k, l]) => (
-          <Press key={k} haptic={false} onPress={() => { tap(); setSort(k); }} style={[styles.sortChip, sort === k && styles.sortChipOn]}>
+          <Press key={k} haptic={false} onPress={() => { tap(); startTransition(() => setSort(k)); }} style={[styles.sortChip, sort === k && styles.sortChipOn]}>
             <Text style={[styles.sortText, sort === k && styles.sortOn]}>{l}</Text>
           </Press>
         ))}
         <Zone
           value={cat}
-          onChange={setCat}
+          onChange={(c) => startTransition(() => setCat(c))}
           options={[['all', 'Все'], ...CATEGORIES.map((c) => [c, c] as const)]}
         />
       </View>
@@ -170,7 +168,10 @@ export default function FeedScreen() {
         contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        initialNumToRender={5}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={7}
+        removeClippedSubviews
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         renderItem={({ item, index }: { item: Recipe; index: number }) => (

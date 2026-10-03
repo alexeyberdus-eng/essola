@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -44,7 +45,7 @@ function actives(recipe: Recipe) {
 }
 
 /** Recipe in the feed: type and time, title, short description, key actives, likes and comments. */
-export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: number }) {
+export const RecipeCard = memo(function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: number }) {
   const { count } = useCommunity();
   const author = recipe.own ? 'Вы' : recipe.author ? `@${recipe.author.nick}` : recipeMeta(recipe).author.name;
   const top = actives(recipe);
@@ -116,7 +117,7 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: Recipe; index?: numb
       </LinearGradient>
     </Press>
   );
-}
+});
 
 const styles = StyleSheet.create({
   about: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2, marginTop: 10 },

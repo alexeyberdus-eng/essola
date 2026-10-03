@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Hero } from '../../components/Hero';
 import { Icon } from '../../components/Icon';
 import { Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
@@ -180,7 +181,7 @@ export default function BuilderScreen() {
           <Text style={styles.h1}>Конструктор</Text>
           {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
         </View>
-        <Text style={styles.intro}>Соберите своё средство из {INGREDIENTS.length}+ ингредиентов: мы посчитаем граммы, опишем эффект, а технолог essola lab подскажет, что улучшить.</Text>
+        <Hero kicker="Конструктор essola" title="Соберите своё средство" text={`${INGREDIENTS.length}+ ингредиентов: посчитаем граммы, опишем эффект, а технолог подскажет, что улучшить.`} tone="rose" style={{ marginTop: 6 }} />
 
         {(
           <View style={[styles.batch, { marginTop: 14 }]}>
@@ -480,7 +481,12 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
             {(r.reduce ?? []).map((x) => {
               const row = rowFor(items, x.name);
               // No number from the technologist: one tap takes a third off.
-              const to = pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
+              let to = pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
+              // The model sometimes answers with a typical share from other recipes ("water → 85%") when the point
+              // is to make room for its additions: then the room is counted from this formula instead.
+              const room = adds.reduce((sum, a) => sum + (a.row ? 0 : a.to ?? 0), 0);
+              const meansLess = /уменьш|убав|меньше|сниз|за сч[её]т|освобод|место|компенс|баланс|100/i.test(x.why ?? '');
+              if (row && to !== null && to > row.pct && (meansLess || to - row.pct > 30)) to = room > 0 && row.pct - room > 0.1 ? Math.round((row.pct - room) * 10) / 10 : null;
               const can = row && to !== null && Math.abs(row.pct - to) > 0.01;
               const up = can && to! > row!.pct;
               return (
@@ -495,7 +501,7 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
                     </View>
                   )}
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewName}>{`${x.name}${x.to ? ` → ${x.to}` : ''}`}</Text>
+                    <Text style={styles.reviewName}>{row && to !== null ? `${x.name} · ${pctText(row.pct)} → ${pctText(to)}` : x.name}</Text>
                     {!!x.why && <Text style={styles.reviewNote}>{x.why}</Text>}
                   </View>
                 </View>

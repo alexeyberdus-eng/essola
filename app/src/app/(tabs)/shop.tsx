@@ -1,10 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode, useMemo, useState } from 'react';
 import { ProductBase } from '../../components/ProductBase';
 import { FlatList, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ProductArt } from '../../components/ProductArt';
+import { Hero } from '../../components/Hero';
 import { Icon } from '../../components/Icon';
 import { Brand, FadeIn, Glow } from '../../components/silk';
 import { Press, Seg, tap } from '../../components/ui';
@@ -48,13 +48,7 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
       {toggle}
-      <View style={styles.hero}>
-        <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <View style={styles.heroCircle} />
-        <Text style={styles.heroKicker}>Магазин Essola</Text>
-        <Text style={styles.heroTitle}>Всё для домашней лаборатории</Text>
-        <Text style={styles.heroText}>Масла, гидролаты и глины для рецептов из ленты. Покупка на Wildberries и Ozon.</Text>
-      </View>
+      <Hero kicker="Магазин Essola" title="Всё для домашней лаборатории" text="Масла, гидролаты и глины для рецептов из ленты. Покупка на Wildberries и Ozon." />
       <View style={styles.search}>
         <Icon name="search" size={18} color={colors.muted} />
         <TextInput value={q} onChangeText={setQ} placeholder="Масло, гидролат, глина…" placeholderTextColor={colors.faint} style={styles.input} />
@@ -88,7 +82,8 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
 }
 
 function ProductCard({ p }: { p: ShopItem }) {
-  const v = p.variants[0];
+  const [pick, setPick] = useState(0);
+  const v = p.variants[pick] ?? p.variants[0];
   const open = (url: string | null) => {
     if (!url) return;
     tap();
@@ -96,7 +91,7 @@ function ProductCard({ p }: { p: ShopItem }) {
   };
   return (
     <Press haptic={false} onPress={() => router.push(`/product/${v.id}` as never)} style={styles.card}>
-      <ProductArt p={{ ...v, volume: p.variants.map((x) => x.volume.replace(' мл', '')).join(' / ') + ' мл' }} />
+      <ProductArt p={v} />
       <Text style={styles.cat}>{p.category}</Text>
       <Text style={styles.title} numberOfLines={2}>
         {p.title}
@@ -104,6 +99,15 @@ function ProductCard({ p }: { p: ShopItem }) {
       <Text style={styles.desc} numberOfLines={3}>
         {p.desc}
       </Text>
+      {p.variants.length > 1 && (
+        <View style={styles.vols}>
+          {p.variants.map((x, i) => (
+            <Press key={x.id} haptic={false} onPress={() => { tap(); setPick(i); }} style={[styles.vol, i === pick && styles.volOn]} accessibilityLabel={`Объём ${x.volume}`}>
+              <Text style={[styles.volText, i === pick && styles.volTextOn]}>{x.volume}</Text>
+            </Press>
+          ))}
+        </View>
+      )}
       <View style={styles.buttons}>
         {v.wb && (
           <Press onPress={() => open(v.wb)} style={[styles.btn, styles.wb]} accessibilityLabel="Купить на Wildberries">
@@ -126,11 +130,6 @@ const styles = StyleSheet.create({
   tgOn: { backgroundColor: colors.ink },
   tgText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
   tgTextOn: { fontFamily: fonts.semibold, color: '#fff' },
-  hero: { marginTop: 16, borderRadius: 24, padding: 18, overflow: 'hidden' },
-  heroCircle: { position: 'absolute', right: -40, top: -50, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.15)' },
-  heroKicker: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' },
-  heroTitle: { fontFamily: fonts.display, fontSize: 21, lineHeight: 25, letterSpacing: -0.8, color: '#fff', marginTop: 8, maxWidth: 260 },
-  heroText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.9)', marginTop: 6 },
   search: { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   card: { flex: 1, borderRadius: 20, backgroundColor: '#fff', padding: 10, borderWidth: 1, borderColor: colors.line, ...shadow },
@@ -139,6 +138,11 @@ const styles = StyleSheet.create({
   cat: { fontFamily: fonts.semibold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.violet, marginTop: 10 },
   title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink, marginTop: 3 },
   desc: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 4, minHeight: 48 },
+  vols: { flexDirection: 'row', gap: 4, marginTop: 10, padding: 3, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1' },
+  vol: { flex: 1, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  volOn: { backgroundColor: colors.ink },
+  volText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.muted },
+  volTextOn: { color: '#fff' },
   buttons: { flexDirection: 'row', gap: 6, marginTop: 10 },
   btn: { flex: 1, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   wb: { backgroundColor: '#CB11AB' },

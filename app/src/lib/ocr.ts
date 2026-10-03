@@ -17,11 +17,11 @@ export function registerWebOcr(engine: WebEngine | null) {
   webEngine = engine;
 }
 
-export async function toJpegBase64(uri: string) {
+export async function toJpegBase64(uri: string, width?: number) {
   const ctx = ImageManipulator.manipulate(uri);
-  ctx.resize({ width: aiEnabled ? 1280 : 2200 }); // small print needs pixels; the AI copes with less and uploads faster
+  ctx.resize({ width: width ?? (aiEnabled ? 1280 : 2200) }); // small print needs pixels; the AI copes with less and uploads faster
   const image = await ctx.renderAsync();
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: aiEnabled ? 0.7 : cloudKey ? 0.75 : 0.9, base64: true });
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: width ? 0.6 : aiEnabled ? 0.7 : cloudKey ? 0.75 : 0.9, base64: true });
   return `data:image/jpeg;base64,${saved.base64}`;
 }
 

@@ -20,12 +20,13 @@ const REVIEW = `Ты косметолог-технолог. Дана форму�
 - ингредиент | новая доля | почему, до 12 слов
 x ингредиент | почему, до 12 слов
 ! предупреждение, до 12 слов
-Строк «+» — 2–4 (обязательно, называй конкретные ингредиенты), «-», «x», «!» — 0–2. В «+» только ингредиенты, которых НЕТ в формуле (сверяй INCI и русские названия, синонимы тоже). Если уже имеющегося компонента мало или много — пиши строку «-» с новой долей (она может быть и больше текущей). Учитывай «Тип»: для чего средство и задачу. Сумма формулы должна остаться 100%: если что-то добавляешь, обязательно добавь строку «-», за счёт чего (обычно воды или базового масла) и до какой доли.
+Строк «+» — 2–4 (обязательно, называй конкретные ингредиенты), «-», «x», «!» — 0–2. В «+» только ингредиенты, которых НЕТ в формуле (сверяй INCI и русские названия, синонимы тоже). Если уже имеющегося компонента мало или много — пиши строку «-» с новой долей (она может быть и больше текущей). Учитывай «Тип»: для чего средство и задачу. Сумма формулы должна остаться 100%: если что-то добавляешь, обязательно добавь строку «-», за счёт чего (компонента с самой большой долей в ЭТОЙ формуле) и до какой доли. Новую долю считай от текущей доли в формуле: например, было Aqua 12%, добавляешь 2% — пиши «- Aqua | 10%». Никогда не пиши типичную долю из других рецептов, только пересчёт этой формулы.
 Пример:
 В: Получится лёгкий увлажняющий тоник, но кислоты многовато для ежедневного ухода. Смягчите формулу пантенолом и добавьте увлажнитель.
 + Panthenol | 1% | смягчит действие кислоты и успокоит кожу
 + Sodium Hyaluronate | 0,2% | дополнительное увлажнение без липкости
 - Lactic Acid | 5% | 8% может раздражать при ежедневном использовании /no_think`;
+const LABEL = `На фото лицевая сторона упаковки косметического средства. Ответь ОДНОЙ строкой: бренд | название средства как на упаковке (с линейкой и объёмом, если видно) | тип по-русски (крем, шампунь, сыворотка…). Без пояснений. Если на фото не косметика — ответь «НЕ КОСМЕТИКА: что это». /no_think`;
 const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
 {"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
 Максимум 5 товаров, по убыванию match. /no_think`;
@@ -241,6 +242,20 @@ async function withCompositions(items, iam) {
 
 module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
+  if (event.httpMethod === 'GET') {
+    // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
+    const q = event.queryStringParameters || {};
+    const back = (() => {
+      try {
+        return Buffer.from(String(q.state || '').split('.')[1] || '', 'base64url').toString();
+      } catch {
+        return '';
+      }
+    })();
+    if (!/^(exps?|essola):\/\/[^\s"'<>]*$/.test(back)) return reply(400, { error: 'bad_state' });
+    const params = new URLSearchParams(Object.fromEntries(['code', 'state', 'device_id', 'error', 'error_description'].filter((k) => q[k]).map((k) => [k, String(q[k])])));
+    return { statusCode: 302, headers: { Location: `${back}${back.includes('?') ? '&' : '?'}${params}` }, body: '' };
+  }
   const h = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
   if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY) return reply(401, { error: 'unauthorized' });
   try {
@@ -694,6 +709,32 @@ module.exports.handler = async (event, context) => {
       const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Тип: ${req.kind}. ` : ''}Состав: ${list}` }], 600);
       if (out && out.lead) await cachePut(dk, iam, out, true);
       return reply(200, out);
+    }
+    if (req.mode === 'label') {
+      // Front of the pack → brand and name only: a small photo and a one-line answer keep it cheap.
+      const image = String(req.image || '');
+      if (!image || image.length > 3_000_000) return reply(400, { error: 'bad_image' });
+      const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
+      const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
+      const msg = [{ role: 'user', content: [{ type: 'text', text: LABEL }, { type: 'image_url', image_url: { url } }] }];
+      let t = null, last;
+      for (const m of models) {
+        try {
+          const noThink = { chat_template_kwargs: { enable_thinking: false } };
+          t = await chat(m, msg, 80, true, noThink).catch((e) => (/ 400:/.test(String(e.message)) ? chat(m, msg, 80, true) : Promise.reject(e)));
+          break;
+        } catch (e) {
+          last = e;
+          if (!/ (400|403|404):/.test(String(e.message))) throw e;
+        }
+      }
+      if (t === null) throw last;
+      t = t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      const nc = t.match(/НЕ\s*КОСМЕТИКА\s*:?\s*([^\n]{0,60})/i);
+      if (nc) return reply(200, { notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
+      const [brand = '', name = '', kind = ''] = t.split('\n')[0].split('|').map((x) => x.replace(/^["«]|["»]$/g, '').trim());
+      console.log('label:', brand, '|', name);
+      return reply(200, { brand: brand.slice(0, 60), name: name.slice(0, 120), kind: kind.slice(0, 40), _usage: lastUsage });
     }
     const image = String(req.image || '');
     console.log('scan request, image chars:', image.length);

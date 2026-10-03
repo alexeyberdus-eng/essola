@@ -17,6 +17,7 @@ import { useProfile } from '../lib/profile';
 import type { Profile } from '../lib/profile';
 import { CatalogItem, matchProducts } from '../lib/ai';
 import { FREE_TAGS, GOAL_TAGS, productTags } from '../lib/tags';
+import { Hero } from '../components/Hero';
 import { Icon } from '../components/Icon';
 import { RECIPE_INCI } from '../lib/wiki';
 import { colors, fonts, space } from '../theme';
@@ -102,6 +103,9 @@ export default function Match() {
     return { cats: cats.length ? cats : area.cats.map((c) => c[0]), goals: [...g].join(''), free: [...f].join(''), sort };
   }, [area, cats, pg, free, useMe, profile, sort]);
   const qKey = JSON.stringify(query);
+  // The search runs only on the button: filters can be changed freely without a request per tap.
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const stale = runKey?.split('#')[0] !== qKey;
 
   // Server pages from `from`: when the catalog has no tags yet, the phone tags each composition itself and keeps
   // reading pages until enough products fit.
@@ -132,7 +136,7 @@ export default function Match() {
   };
 
   useEffect(() => {
-    if (what !== 'products') return;
+    if (what !== 'products' || !runKey) return;
     let alive = true;
     setBusy(true);
     setFound(null);
@@ -142,9 +146,9 @@ export default function Match() {
     return () => {
       alive = false;
     };
-    // qKey captures the query
+    // runKey captures the query at the moment of the tap
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qKey, what]);
+  }, [runKey, what]);
 
   const more = async () => {
     if (!found || busy || found.page * 40 >= found.total) return;
@@ -202,8 +206,7 @@ export default function Match() {
         <View style={styles.top}>
           <IconButton icon="arrowLeft" label="Назад" onPress={() => router.back()} />
         </View>
-        <Text style={styles.h1}>Подбор под ваши цели</Text>
-        <Text style={styles.sub}>Средства из нашей базы с оценкой состава или рецепты, которые можно сварить дома.</Text>
+        <Hero kicker="Подбор essola" title="Подбор под ваши цели" text="Средства из нашей базы с оценкой состава или рецепты, которые можно сварить дома." tone="sky" style={{ marginTop: 4 }} />
 
         <View style={styles.switch}>
           {(
@@ -280,9 +283,22 @@ export default function Match() {
               ))}
             </View>
 
-            <Text style={[styles.h2, { marginTop: 22 }]}>
-              {busy && !found?.items.length ? 'Подбираем…' : found?.items.length ? (found.exact ? `Нашли ${found.total.toLocaleString('ru-RU')}` : `Подобрали ${found.items.length}`) : 'Ничего не нашли — уберите часть фильтров'}
-            </Text>
+            <Press
+              onPress={() => {
+                if (busy) return;
+                setRunKey(stale ? qKey : `${qKey}#${Date.now()}`);
+              }}
+              style={[styles.go, busy && { opacity: 0.7 }]}
+            >
+              {busy && !found ? <ActivityIndicator color="#fff" /> : <Text style={styles.goText}>{found && !stale ? 'Подобрать заново' : 'Подобрать'}</Text>}
+            </Press>
+            {runKey && !stale && (busy || found) ? (
+              <Text style={[styles.h2, { marginTop: 22 }]}>
+                {busy && !found?.items.length ? 'Подбираем…' : found?.items.length ? (found.exact ? `Нашли ${found.total.toLocaleString('ru-RU')}` : `Подобрали ${found.items.length}`) : 'Ничего не нашли — уберите часть фильтров'}
+              </Text>
+            ) : found && stale ? (
+              <Text style={styles.staleNote}>Фильтры изменились — нажмите «Подобрать», чтобы обновить список</Text>
+            ) : null}
             {scored.map(({ x, score, overall, me, fits }) => (
               <Press key={x.k} haptic={false} onPress={() => openProduct(x, overall)} style={styles.prod}>
                 {x.i ? <Image source={{ uri: x.i }} style={styles.prodImg} contentFit="cover" cachePolicy="memory-disk" /> : <View style={styles.prodImg} />}
@@ -370,6 +386,9 @@ const styles = StyleSheet.create({
   prodBrand: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.violet, textTransform: 'uppercase' },
   prodTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink },
   meta: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
+  go: { height: 54, marginTop: 22, borderRadius: 18, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  goText: { fontFamily: fonts.semibold, fontSize: 16, color: '#fff' },
+  staleNote: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, marginTop: 14, marginBottom: 4 },
   more: { height: 46, marginTop: 12, borderRadius: 16, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
   moreText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.violet },
   why: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.good, marginTop: 10, marginBottom: 6 },

@@ -27,6 +27,8 @@ function TabBar({ state, navigation }: BarProps) {
   const current = state.routes[state.index]?.name;
   const [width, setWidth] = useState(0);
   const slot = width / ORDER.length;
+  // The capsule covers the whole slot so long labels like «Конструктор» sit inside it.
+  const capW = Math.max(58, slot - 2);
   const idx = Math.max(0, ORDER.indexOf(current));
   const x = useRef(new Animated.Value(0)).current;
   const stretch = useRef(new Animated.Value(1)).current;
@@ -34,7 +36,7 @@ function TabBar({ state, navigation }: BarProps) {
 
   useEffect(() => {
     if (!slot || current === 'scanner') return;
-    const to = idx * slot + (slot - 58) / 2;
+    const to = idx * slot + (slot - capW) / 2;
     if (first.current) {
       x.setValue(to);
       first.current = false;
@@ -44,11 +46,11 @@ function TabBar({ state, navigation }: BarProps) {
     Animated.parallel([
       Animated.spring(x, { toValue: to, speed: 14, bounciness: 9, useNativeDriver: native }),
       Animated.sequence([
-        Animated.timing(stretch, { toValue: 1.45, duration: 120, useNativeDriver: native }),
+        Animated.timing(stretch, { toValue: 1.2, duration: 120, useNativeDriver: native }),
         Animated.spring(stretch, { toValue: 1, speed: 10, bounciness: 14, useNativeDriver: native }),
       ]),
     ]).start();
-  }, [idx, slot, current, x, stretch]);
+  }, [idx, slot, capW, current, x, stretch]);
 
   if (current === 'scanner') return null; // full-screen camera has its own close button
 
@@ -58,9 +60,7 @@ function TabBar({ state, navigation }: BarProps) {
         <View style={styles.bar}>
           <View style={styles.row} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
             {!!slot && (
-              <Animated.View style={[styles.capsule, { transform: [{ translateX: x }, { scaleX: stretch }] }]}>
-                
-              </Animated.View>
+              <Animated.View style={[styles.capsule, { width: capW, transform: [{ translateX: x }, { scaleX: stretch }] }]} />
             )}
             {ORDER.map((name) => {
               const route = state.routes.find((r) => r.name === name);
@@ -90,7 +90,7 @@ function TabBar({ state, navigation }: BarProps) {
               return (
                 <Press key={route.key} haptic={false} onPress={() => { tap(); navigation.navigate(name); }} style={styles.slot} accessibilityLabel={tab.label}>
                   <View style={styles.item}>
-                    <Icon name={tab.icon} size={21} color={on ? colors.ink : '#9A9DB0'} strokeWidth={on ? 1.9 : 1.5} />
+                    <Icon name={tab.icon} size={22} color={on ? colors.violet : '#9A9DB0'} strokeWidth={on ? 2 : 1.5} />
                     <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
                       {tab.label}
                     </Text>
@@ -133,16 +133,17 @@ const styles = StyleSheet.create({
   slot: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%' },
   item: { alignItems: 'center', gap: 3 },
   label: { fontFamily: fonts.medium, fontSize: 9.5, color: '#9A9DB0' },
-  labelOn: { color: colors.ink, fontFamily: fonts.semibold },
+  labelOn: { color: colors.violet, fontFamily: fonts.semibold },
   capsule: {
     position: 'absolute',
     left: 0,
-    top: 8,
-    width: 58,
-    height: 56,
-    borderRadius: 20,
+    top: 5,
+    height: 60,
+    borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: 'rgba(21,23,43,0.05)',
+    backgroundColor: '#E2E6FF',
+    borderWidth: 1,
+    borderColor: 'rgba(63,75,201,0.22)',
   },
   fab: {
     width: 56,

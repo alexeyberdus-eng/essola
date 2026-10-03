@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Hint } from './Hint';
+import { Hero } from './Hero';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Keyboard, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -216,7 +216,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
       {toggle}
-      <Hint id="base" title="База средств" text="Ищите кремы, шампуни и сыворотки по названию. Оценка состава считается сразу, а с заполненной анкетой — персонально для вас." />
+      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Почти 100 000 кремов, шампуней, сывороток и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
       <View style={styles.search}>
         <Icon name="search" size={18} color={colors.muted} />
         <TextInput

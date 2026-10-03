@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../components/Icon';
 import { Button, Hairline, Press, T, tap, Wordmark } from '../components/ui';
+import { vkEnabled } from '../lib/vk';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius, space } from '../theme';
 
@@ -24,7 +25,7 @@ function makeNick() {
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { appleAvailable, signInWithApple, requestEmailCode, verifyEmailCode } = useAuth();
+  const { appleAvailable, signInWithApple, signInWithVk, requestEmailCode, verifyEmailCode } = useAuth();
   const [email, setEmail] = useState('');
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
@@ -94,7 +95,21 @@ export default function AuthScreen() {
           />
         )}
 
-        {Platform.OS === 'ios' && appleAvailable && (
+        {vkEnabled && (
+          <Press
+            onPress={() => run(async () => {
+              if (await signInWithVk()) done();
+            })}
+            disabled={busy}
+            style={[styles.vk, Platform.OS === 'ios' && appleAvailable && { marginTop: 10 }]}
+            accessibilityLabel="Войти через VK ID"
+          >
+            <Text style={styles.vkLogo}>VK</Text>
+            <Text style={styles.vkText}>Войти через VK ID</Text>
+          </Press>
+        )}
+
+        {((Platform.OS === 'ios' && appleAvailable) || vkEnabled) && (
           <View style={styles.or}>
             <Hairline style={{ flex: 1 }} />
             <T v="label">или по почте</T>
@@ -207,6 +222,9 @@ const styles = StyleSheet.create({
   perks: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: colors.honeySoft },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   apple: { height: 54, width: '100%' },
+  vk: { height: 54, borderRadius: 14, backgroundColor: '#0077FF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  vkLogo: { fontFamily: fonts.bold, fontSize: 15, color: '#0077FF', backgroundColor: '#fff', borderRadius: 7, overflow: 'hidden', paddingHorizontal: 5, paddingVertical: 1 },
+  vkText: { fontFamily: fonts.semibold, fontSize: 17, color: '#fff' },
   or: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   field: {
     height: 54,

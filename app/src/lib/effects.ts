@@ -37,6 +37,8 @@ export function specialKind(items: Ingredient[]): { type: string; use: string[] 
   const top = items.slice(0, 4).map((i) => i.inci.toLowerCase());
   const all = items.map((i) => i.inci.toLowerCase());
   const any = (re: RegExp, list = all) => list.some((x) => re.test(x));
+  if (any(/toluamide|deet|дэта|icaridin|picaridin|икаридин|ir ?3535|butylacetylaminopropionate|menthane-3,8-diol|^pmd$|citriodiol|permethrin|cypermethrin|перметрин|циперметрин/))
+    return { type: 'Средство от комаров и клещей', use: ['На открытые участки кожи или одежду — по инструкции, не на лицо и ранки', 'Детям — только средства с пометкой «для детей»', 'Вечером смыть с кожи водой с мылом'] };
   if (any(/^acetone$|^ethyl acetate$|^butyl acetate$|propylene carbonate|methyl ethyl ketone|dimethyl glutarate|dimethyl succinate/, top.slice(0, 3)) && !any(/nitrocellulose|tosylamide|trimellitic/))
     return { type: 'Жидкость для снятия лака', use: ['Ногти: ватным диском, затем вымыть руки и нанести крем', 'Пользуйтесь в проветриваемом помещении'] };
   if (any(/nitrocellulose|tosylamide|trimellitic anhydride/))
