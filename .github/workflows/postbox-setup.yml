@@ -3,6 +3,8 @@ name: Postbox (sign-in emails) setup
 # One-off: registers essola.ru in Yandex Cloud Postbox with a fresh DKIM key, lets the function's service account
 # send mail, and prints the DNS records to add at the registrar. Run again only to rotate the key.
 on:
+  push:
+    paths: ['.github/workflows/postbox-setup.yml']
   workflow_dispatch:
     inputs:
       domain:
@@ -18,7 +20,7 @@ jobs:
     env:
       YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
       YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
-      DOMAIN: ${{ inputs.domain }}
+      DOMAIN: ${{ inputs.domain || 'essola.ru' }}
     steps:
       - name: Install yc CLI
         run: |
