@@ -37,12 +37,25 @@ function categoryOf(tags: string) {
   return 'other';
 }
 
-function add(out: Map<string, Item>, code: string, title: string, brand: string, image: string, text: string, tags: string, pop: number) {
+const why: Record<string, number> = { noTitle: 0, noText: 0, unreadable: 0, few: 0, dup: 0, rescued: 0 };
+/** `texts`: the list in every language the dump has; the first one our analyzer reads well is kept. */
+function add(out: Map<string, Item>, code: string, title: string, brand: string, image: string, texts: string | string[], tags: string, pop: number) {
   title = title.trim();
-  text = text.trim();
-  if (!code || !title || text.length < 20 || out.has(code)) return;
-  const a = analyze(text);
-  if (a.unreadable || a.items.length < 4) return;
+  const list = (Array.isArray(texts) ? texts : [texts]).map((t) => t.trim()).filter((t) => t.length >= 20);
+  if (!code || !title) return void why.noTitle++;
+  if (out.has(code)) return void why.dup++;
+  if (!list.length) return void why.noText++;
+  let text = '';
+  let a: ReturnType<typeof analyze> | null = null;
+  for (const [i, t] of list.entries()) {
+    const r = analyze(t);
+    if (!r.unreadable && r.items.length >= 4) {
+      [text, a] = [t, r];
+      if (i > 0) why.rescued++;
+      break;
+    }
+  }
+  if (!a) return void (analyze(list[0]).unreadable ? why.unreadable++ : why.few++);
   out.set(code, { k: code, t: title.slice(0, 120), b: brand.split(',')[0].trim().slice(0, 60), i: image, x: text.slice(0, 1800), c: categoryOf(tags), s: a.scores.overall, n: a.items.length, p: pop });
 }
 
@@ -52,11 +65,14 @@ async function main() {
   if (!res.ok || !res.body) throw new Error(`dump ${res.status}`);
   const lines = createInterface({ input: Readable.fromWeb(res.body as never).pipe(createGunzip()), crlfDelay: Infinity });
   let head: Record<string, number> | null = null;
+  let langCols: string[] = [];
   let rows = 0;
   for await (const line of lines) {
     const f = line.split('\t');
     if (!head) {
       head = Object.fromEntries(f.map((h, i) => [h, i]));
+      langCols = f.filter((h) => /^ingredients_text_[a-z]{2}$/.test(h) && h !== 'ingredients_text_en');
+      console.log('ingredient languages:', langCols.join(' ') || 'none');
       console.log('columns:', f.length, ['code', 'product_name', 'brands', 'ingredients_text', 'categories_tags', 'image_small_url', 'unique_scans_n', 'popularity_key'].map((c) => `${c}:${c in head!}`).join(' '));
       continue;
     }
@@ -64,10 +80,13 @@ async function main() {
     const g = (c: string) => (head![c] === undefined ? '' : f[head![c]] ?? '');
     const code = g('code');
     const image = g('image_small_url') || g('image_url') || '';
-    add(out, code, g('product_name'), g('brands'), image.replace(/\.(200|400)\.jpg$/, '.100.jpg'), g('ingredients_text'), `${g('categories_tags')} ${g('categories')} ${g('main_category')}`, Number(g('unique_scans_n') || g('popularity_key') || 0));
+    // The list as written on the pack first, then its English and other translations the community added.
+    const texts = [g('ingredients_text'), g('ingredients_text_en'), ...langCols.map((c) => f[head![c]] ?? '')];
+    const name = g('product_name') || g('product_name_en') || g('generic_name') || g('abbreviated_product_name');
+    add(out, code, name, g('brands'), image.replace(/\.(200|400)\.jpg$/, '.100.jpg'), texts, `${g('categories_tags')} ${g('categories')} ${g('main_category')}`, Number(g('unique_scans_n') || g('popularity_key') || 0));
     if (rows % 20000 === 0) console.log('rows', rows, 'kept', out.size);
   }
-  console.log('dump rows', rows, 'kept', out.size);
+  console.log('dump rows', rows, 'kept', out.size, JSON.stringify(why));
 
   // Products users resolved from shop links.
   const shopFile = process.argv[3];
