@@ -314,6 +314,7 @@ async function cacheDel(key, iam) {
   await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'DELETE', headers: { 'X-YaCloud-SubjectToken': iam } }).catch(() => {});
 }
 
+const mailReady = { ok: false, at: 0 };
 let appleKeys = null;
 let appleKeysAt = 0;
 /** Sign in with Apple: the identity token is a JWT signed by Apple; checks signature, issuer, audience and expiry. */
@@ -440,6 +441,17 @@ module.exports.handler = async (event, context) => {
       const v = await verifyVk(req.token).catch(() => null);
       if (!v) return reply(401, { error: 'bad_token' });
       return signIn('vk', v.id, v);
+    }
+    if (req.mode === 'auth.config') {
+      // Email sign-in is offered once the sender domain is confirmed in Postbox (its DNS records are in place).
+      const now = Date.now();
+      if (!mailReady.at || now - mailReady.at > (mailReady.ok ? 6 * 3600e3 : 5 * 60e3)) {
+        const r = await fetch(`https://postbox.cloud.yandex.net/v2/email/identities/${(process.env.MAIL_FROM || 'noreply@essola.ru').split('@')[1]}`, { headers: { 'X-YaCloud-SubjectToken': iam }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+        const j = r && r.ok ? await r.json().catch(() => ({})) : {};
+        mailReady.ok = !!j.VerifiedForSendingStatus;
+        mailReady.at = now;
+      }
+      return reply(200, { email: mailReady.ok });
     }
     if (req.mode === 'auth.email.start') {
       const email = String(req.email || '').trim().toLowerCase();

@@ -1,10 +1,11 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../components/Icon';
 import { Button, Hairline, Press, T, tap, Wordmark } from '../components/ui';
+import { cloud } from '../lib/cloud';
 import { vkEnabled } from '../lib/vk';
 import { useAuth } from '../context/AuthContext';
 import { colors, fonts, radius, space } from '../theme';
@@ -33,6 +34,13 @@ export default function AuthScreen() {
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code' | 'nick'>('email');
   const [demo, setDemo] = useState(false);
+  // Email sign-in shows up once the server can send the codes.
+  const [emailOn, setEmailOn] = useState(false);
+  useEffect(() => {
+    cloud<{ email: boolean }>('auth.config', {}, 6000)
+      .then((r) => setEmailOn(r.email))
+      .catch(() => {});
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +126,7 @@ export default function AuthScreen() {
           </Press>
         )}
 
-        {step !== 'nick' && ((Platform.OS === 'ios' && appleAvailable) || vkEnabled) && (
+        {step !== 'nick' && emailOn && ((Platform.OS === 'ios' && appleAvailable) || vkEnabled) && (
           <View style={styles.or}>
             <Hairline style={{ flex: 1 }} />
             <T v="label">или по почте</T>
@@ -149,7 +157,7 @@ export default function AuthScreen() {
               }
             />
           </View>
-        ) : step === 'email' ? (
+        ) : step === 'email' && !emailOn ? null : step === 'email' ? (
           <View style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={[styles.field, { flex: 1 }]}>
