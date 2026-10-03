@@ -10,7 +10,7 @@ import { Card, FadeIn, Glow } from '../../components/silk';
 import { CompositionSummary } from '../../components/Summary';
 import { makeSteps } from '../../lib/process';
 import type { Summary } from '../../lib/effects';
-import { aiEnabled, aiReview, Review } from '../../lib/ai';
+import { aiEnabled, aiReview, isLimit, Review } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_ICON, FN_LABEL, INGREDIENTS } from '../../data/ingredients';
@@ -43,7 +43,7 @@ export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<Kind>('cream');
   const [items, setItems] = useState<Item[]>([]);
-  const [review, setReview] = useState<{ sig: string; data?: Review; busy?: boolean; error?: boolean } | null>(null);
+  const [review, setReview] = useState<{ sig: string; data?: Review; busy?: boolean; error?: boolean; limit?: boolean } | null>(null);
   const [volume, setVolume] = useState(50);
   const [q, setQ] = useState('');
   const [area, setArea] = useState<string>(AREAS[0]);
@@ -92,8 +92,8 @@ export default function BuilderScreen() {
     try {
       const data = await aiReview(formula, purpose, list.filter((c) => !c.ok).map((c) => c.text));
       setReview({ sig, data });
-    } catch {
-      setReview({ sig, error: true });
+    } catch (e) {
+      setReview({ sig, error: true, limit: isLimit(e) });
     }
   };
   const layers = phaseSums(items);
@@ -360,7 +360,7 @@ export default function BuilderScreen() {
                 <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : `Оценка технолога · ${area.toLowerCase()}`}</Text>
               </Press>
             )}
-            {shown?.error && <Text style={styles.reviewErr}>Не получилось связаться. Проверьте интернет и нажмите ещё раз.</Text>}
+            {shown?.error && <Text style={styles.reviewErr}>{shown.limit ? 'На сегодня лимит советов технолога исчерпан — завтра он обновится.' : 'Не получилось связаться. Проверьте интернет и нажмите ещё раз.'}</Text>}
           </View>
         )}
 

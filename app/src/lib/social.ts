@@ -1,4 +1,5 @@
 import type { Recipe } from '../data/recipes';
+import { getSession } from './cloud';
 import { readJSON, writeJSON } from './storage';
 
 // Community features live on our Yandex Cloud function next to the product base.
@@ -7,7 +8,9 @@ const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const socialEnabled = !!url;
 
 async function call<T>(body: object): Promise<T> {
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify(body) });
+  // The session lets the server recognise the admin (official @essola posts, stories, recipe tables).
+  const session = (await getSession()) ?? undefined;
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ session, ...body }) });
   if (!res.ok) throw new Error(`SOCIAL_${res.status}`);
   return (await res.json()) as T;
 }
@@ -78,7 +81,7 @@ export type ForumAuthor = { id: string; nick: string };
 export type TopicRow = { id: string; title: string; cat: string; author: ForumAuthor; at: string; last: string; replies: number; likes?: number; preview: string };
 export type ForumPost = { id: string; parent?: string | null; author: ForumAuthor; text: string; at: string; likes?: string[] };
 export type Topic = { id: string; title: string; text: string; cat: string; author: ForumAuthor; at: string; likes?: string[]; posts: ForumPost[] };
-/** Admin posting as the official @essola account (checked on the server by the admin's email). */
+/** Admin posting as the official @essola account (the server checks the signed-in account). */
 export type AsOfficial = { email: string } | null;
 export const FORUM_CATS = ['Общее', 'Рецепты', 'Уход за кожей', 'Волосы', 'Ингредиенты', 'Покупки'];
 

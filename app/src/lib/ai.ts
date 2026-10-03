@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { getSession } from './cloud';
 import type { Summary } from './effects';
+import { myId } from './social';
 import { readJSON, writeJSON } from './storage';
 
 // Our Yandex Cloud function (server/yandex-scan). Without it the app uses its local engines.
@@ -7,8 +9,14 @@ const url = process.env.EXPO_PUBLIC_SCAN_URL;
 const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
+/** The server counts paid requests per account (or per phone when signed out): 50 a day of each kind. */
+export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом.';
+export const isLimit = (e: unknown) => String(e).includes('LIMIT');
+
 async function call<T>(body: object): Promise<T> {
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify(body) });
+  const who = { session: (await getSession()) ?? undefined, device: await myId() };
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }) });
+  if (res.status === 429) throw new Error('LIMIT');
   if (!res.ok) throw new Error(`AI_${res.status}`);
   return (await res.json()) as T;
 }
@@ -20,13 +28,13 @@ export async function aiScan(dataUrl: string, barcode?: string | null, title?: s
 }
 
 /** Front of the pack (data URL) → brand and name, to find the product in our base. One short answer, few tokens. */
-export async function aiLabel(dataUrl: string): Promise<{ brand: string; name: string; kind: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[] }> {
-  const r = await call<{ brand?: string; name?: string; kind?: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[] }>({ mode: 'label', image: dataUrl });
-  return { brand: r.brand ?? '', name: r.name ?? '', kind: r.kind ?? '', notCosmetic: r.notCosmetic, item: r.item, ingredients: r.ingredients };
+export async function aiLabel(dataUrl: string): Promise<{ brand: string; name: string; kind: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {
+  const r = await call<{ brand?: string; name?: string; kind?: string; notCosmetic?: string; item?: CatalogItem; ingredients?: string[]; limited?: boolean }>({ mode: 'label', image: dataUrl });
+  return { brand: r.brand ?? '', name: r.name ?? '', kind: r.kind ?? '', notCosmetic: r.notCosmetic, item: r.item, ingredients: r.ingredients, limited: r.limited };
 }
 
 /** «Честный знак»: GTIN from the DataMatrix code → the National Catalog card (composition if filled in), else our base or the web. */
-export async function nkLookup(gtin: string): Promise<{ found: boolean; title?: string; brand?: string; ingredients?: string[]; item?: CatalogItem; reason?: string }> {
+export async function nkLookup(gtin: string): Promise<{ found: boolean; title?: string; brand?: string; ingredients?: string[]; item?: CatalogItem; reason?: string; limited?: boolean }> {
   return call({ mode: 'nk', gtin });
 }
 
@@ -98,11 +106,6 @@ export type Review = {
 };
 /** Technologist's advice on a builder formula ("Aqua 70%", …). */
 export const aiReview = (items: string[], kind: string, notes: string[]) => cached<Review>('review5', { mode: 'review', items, kind, notes });
-
-export type Analog = { title: string; url: string; match: number; common: string[]; note: string };
-/** Gold Apple products with a similar composition, with an estimated match %. */
-export const aiAnalogs = async (ingredients: string[], keys: string[], kind: string) =>
-  (await cached<{ items?: Analog[] }>('analogs', { mode: 'analogs', ingredients, keys, kind })).items ?? [];
 
 export type CachedProduct = { title?: string | null; ingredients: string[]; source?: string; image?: string | null; url?: string };
 

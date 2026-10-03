@@ -20,6 +20,8 @@ jobs:
       # «Честный знак» / Национальный каталог: the participant's API key (НК → профиль → Данные участника).
       NK_API_KEY: ${{ secrets.NK_API_KEY }}
       VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
+      # Password of the web admin panel (<function url>?admin): any long phrase you invent.
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Skip until Yandex secrets are set
@@ -38,7 +40,9 @@ jobs:
           yc serverless function get --name essola-scan >/dev/null 2>&1 || yc serverless function create --name essola-scan
           yc serverless function allow-unauthenticated-invoke essola-scan || echo "::warning::Make the function public in the console (needs admin role)"
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
-          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json)
+          # The admin panel reads recipe tables with the same parser as the app.
+          npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
+          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js)
           BUCKET="essola-products-$YC_FOLDER_ID"
           set +e
           yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3
@@ -48,6 +52,7 @@ jobs:
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           [ -n "$NK_API_KEY" ] && ENVV="$ENVV,NK_API_KEY=$NK_API_KEY"
           [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
+          [ -n "$ADMIN_TOKEN" ] && ENVV="$ENVV,ADMIN_TOKEN=$ADMIN_TOKEN"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
           V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 2048m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.
@@ -78,9 +83,11 @@ jobs:
                    '{"mode":"nk","gtin":"04607043450067"}' \
                    '{"mode":"catalog","sort":"best","size":2}' \
                    '{"mode":"catalog","sort":"best","size":2,"page":2}' \
-                   '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
+                   '{"mode":"admin.check","admin":"wrong-password-smoke"}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done
+          echo "Admin panel: https://functions.yandexcloud.net/$ID?admin"; curl -s -o /dev/null -w 'panel HTTP %{http_code}\n' "https://functions.yandexcloud.net/$ID?admin"
+          [ -z "$ADMIN_TOKEN" ] && echo "::warning::Add the ADMIN_TOKEN secret to open the admin panel"
           echo "OBF search:"; curl -s -m 20 -A "Essola/1.0" "https://world.openbeautyfacts.org/cgi/search.pl?search_terms=cerave&search_simple=1&action=process&json=1&page_size=3&fields=code,product_name,brands,ingredients_text" | head -c 600; echo
           printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
           curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \

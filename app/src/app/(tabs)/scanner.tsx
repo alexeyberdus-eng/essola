@@ -15,7 +15,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiLabel, aiScan, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiLabel, aiScan, isLimit, LIMIT_NOTE, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -31,6 +31,9 @@ const LINK_NOTICE = 'Скопируйте ссылку на товар в при
 
 type Mode = 'barcode' | 'label' | 'front' | 'cz';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
+
+/** Where a product card from our bases came from. */
+const sourceOf = (k?: string) => (k?.startsWith('letu:') ? 'Летуаль' : k?.startsWith('inci:') ? 'База essola' : 'Open Beauty Facts');
 
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
@@ -161,12 +164,13 @@ export default function ScannerScreen() {
       const name = [r.brand, r.title].filter(Boolean).join(' ') || undefined;
       if (r.item?.x) {
         const a = analyze(r.item.x);
-        const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: 'Летуаль', image: r.item.i || null, url: r.item.u });
+        const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: sourceOf(r.item.k), image: r.item.i || null, url: r.item.u });
         router.push(`/analysis/${scan.id}`);
       } else if (r.ingredients && r.ingredients.length >= 3) finish(`Состав: ${r.ingredients.join(', ')}`, name, { barcode: gtin.replace(/^0/, ''), source: 'Честный знак' }, true);
+      else if (r.limited) setNotice(LIMIT_NOTE);
       else setNotice(name ? `Нашли «${name}», но состав не указан. Переключитесь на «Состав» и сфотографируйте его на упаковке.` : 'Не нашли средство по этому коду. Переключитесь на «Этикетка» или «Состав».');
-    } catch {
-      setNotice('Не получилось проверить код — проверьте интернет и попробуйте ещё раз.');
+    } catch (e) {
+      setNotice(isLimit(e) ? LIMIT_NOTE : 'Не получилось проверить код — проверьте интернет и попробуйте ещё раз.');
     } finally {
       setBusy(false);
       setTimeout(() => (czBusy.current = false), 1500);
@@ -190,14 +194,15 @@ export default function ScannerScreen() {
         }
         tap('success');
         const a = analyze(r.item.x);
-        const scan = saveScan({ title, text: r.item.x, overall: a.scores.overall, source: 'Летуаль', image: r.item.i || null, url: r.item.u });
+        const scan = saveScan({ title, text: r.item.x, overall: a.scores.overall, source: sourceOf(r.item.k), image: r.item.i || null, url: r.item.u });
         router.push(`/analysis/${scan.id}`);
         return;
       }
       if (r.ingredients?.length) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, undefined, true);
+      if (r.limited) return setNotice(LIMIT_NOTE);
       setNotice(name ? `Узнали «${name}», но состав не нашли. Переключитесь на «Состав» и сфотографируйте список ингредиентов на упаковке.` : 'Не разобрали название — снимите лицевую сторону упаковки целиком, при хорошем свете.');
-    } catch {
-      setNotice('Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз.');
+    } catch (e) {
+      setNotice(isLimit(e) ? LIMIT_NOTE : 'Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
@@ -308,7 +313,9 @@ export default function ScannerScreen() {
         finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);
       } catch (e) {
         setNotice(
-          String(e).includes('EMPTY')
+          isLimit(e)
+            ? LIMIT_NOTE
+            : String(e).includes('EMPTY')
             ? 'Не нашли на фото список ингредиентов. Снимите блок «Состав» крупнее и ровнее.'
             : `Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз. (${String(e).slice(0, 60)})`,
         );

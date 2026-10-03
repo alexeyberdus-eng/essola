@@ -26,15 +26,13 @@ x ингредиент | почему, до 12 слов
 + Sodium Hyaluronate | 0,2% | дополнительное увлажнение без липкости
 - Lactic Acid | 5% | 8% может раздражать при ежедневном использовании /no_think`;
 const LABEL = `На фото лицевая сторона упаковки косметического средства. Ответь ОДНОЙ строкой: бренд | название средства как на упаковке (с линейкой, без объёма) | тип по-русски (крем, шампунь, сыворотка…). Если бренда не видно, но ты узнаёшь средство по названию и дизайну, назови бренд (например, Egg Mellow — Too Cool For School). Без пояснений. Если на фото не косметика — ответь «НЕ КОСМЕТИКА: что это». /no_think`;
-const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
-{"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
-Максимум 5 товаров, по убыванию match. /no_think`;
 const SEARCH_URL = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
 
 const strip = (x) => x.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 
 /** Yandex web search limited to one shop; returns [{url,title,text}]. */
 async function search(queryText, iam) {
+  track('search');
   const body = JSON.stringify({
     query: { searchType: 'SEARCH_TYPE_RU', queryText },
     groupSpec: { groupMode: 'GROUP_MODE_FLAT', groupsOnPage: '10', docsInGroup: '1' },
@@ -184,7 +182,64 @@ async function fromShopPage(url) {
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json' };
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
 
+// The admin panel (GET ?admin): one page, with the app's CSV parser bundled in at deploy time.
+let adminPage;
+const ADMIN_PAGE_OF = () => {
+  if (adminPage) return adminPage;
+  const fs = require('fs');
+  const read = (f) => {
+    try {
+      return fs.readFileSync(`${__dirname}/${f}`, 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  adminPage = read('admin.html').replace('/*CSV*/', () => read('admin-csv.js').replace(/<\/script/gi, '<\\/script')).replace('/*APP_KEY*/', () => String(process.env.APP_KEY || '').replace(/[^a-z0-9]/gi, ''));
+  return adminPage;
+};
+
+/** Keys under a prefix in the bucket (up to 1000). */
+async function cacheList(prefix, iam) {
+  if (!BUCKET || !iam) return [];
+  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}?list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`, { headers: { 'X-YaCloud-SubjectToken': iam } }).catch(() => null);
+  if (!res || !res.ok) return [];
+  return [...(await res.text()).matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+}
+
+// Admins are recognised by the SHA-256 of their account email (the address itself is not in the code).
+const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32c'];
+
 let lastUsage;
+// ---- Spending: every model call and web search is counted per day and kind of request; each function instance
+// writes its own file (stats/<day>/<instance>.json), the admin panel adds them up. Prices are per 1000 tokens, ₽.
+const PRICE = { lite: 0.2, pro: 0.8, vision: 0.5, search: 0.48 };
+const INSTANCE = crypto.randomBytes(5).toString('hex');
+let curMode = 'other';
+const stats = {};
+let statsDirty = false;
+let statsSaved = 0;
+const day = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); // Moscow date
+function track(kind, tokens = 0) {
+  const d = (stats[day()] ??= {});
+  const m = (d[curMode] ??= { calls: 0, tokens: 0, rub: 0, search: 0 });
+  if (kind === 'search') {
+    m.search++;
+    m.rub += PRICE.search;
+  } else {
+    m.calls++;
+    m.tokens += tokens;
+    m.rub += (tokens / 1000) * PRICE[kind];
+  }
+  statsDirty = true;
+}
+async function flushStats(iam, force = false) {
+  if (!statsDirty || (!force && Date.now() - statsSaved < 30e3)) return;
+  statsDirty = false;
+  statsSaved = Date.now();
+  for (const [d, v] of Object.entries(stats)) await cachePut(`stats/${d}/${INSTANCE}.json`, iam, v, true);
+}
+const kindOf = (model) => (/lite/.test(model) ? 'lite' : /yandexgpt/.test(model) ? 'pro' : 'vision');
+
 async function chat(model, messages, maxTokens, raw = false, extra = {}) {
   const res = await fetch(LLM_URL, {
     method: 'POST',
@@ -194,6 +249,7 @@ async function chat(model, messages, maxTokens, raw = false, extra = {}) {
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
   lastUsage = json?.usage;
+  track(kindOf(model), Number(json?.usage?.total_tokens) || 0);
   const msg = json?.choices?.[0]?.message ?? {};
   const text = (msg.content || msg.reasoning_content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
   console.log('model reply', json?.choices?.[0]?.finish_reason, JSON.stringify(json?.usage), text.slice(0, 300));
@@ -248,7 +304,7 @@ const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/
 
 /** Brand + name read from the pack → the product in our Letual base (titles there are Russian, packs often English,
  * so a small text model picks among the brand's products), or a composition found on the web. */
-async function findByLabel(brand, name, kind, iam, model) {
+async function findByLabel(brand, name, kind, iam, model, canWeb = async () => true) {
   const b = norm(brand).replace(/ /g, '');
   const base = await loadLetu(iam);
   const ours = b.length >= 2 ? base.filter((x) => { const xb = norm(x.b).replace(/ /g, ''); return xb && (xb === b || (b.length >= 4 && (xb.includes(b) || b.includes(xb)))); }) : [];
@@ -273,6 +329,7 @@ async function findByLabel(brand, name, kind, iam, model) {
   const ck = `label/${crypto.createHash('sha1').update(norm(`${brand} ${name}`)).digest('hex')}.json`;
   const hit = await cacheGet(ck, iam);
   if (hit && hit.ingredients) return hit;
+  if (!(await canWeb())) return { limited: true };
   const queries = [`${brand} ${name} ingredients`, `${brand} ${name} состав`, `${brand} ${name} site:incidecoder.com`];
   const docs = (await Promise.all(queries.map((q) => search(q, iam).catch(() => [])))).flat();
   // Marketplaces render their pages with scripts (nothing to read) and some shops block robots: skip them.
@@ -367,9 +424,25 @@ async function sendCode(email, code, iam) {
   }
 }
 
+// Every request is counted under its mode; the spending is written out after the answer is ready.
 module.exports.handler = async (event, context) => {
+  curMode = 'other';
+  if (event.httpMethod === 'POST') {
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
+      curMode = String(JSON.parse(raw).mode || 'scan').replace(/[^a-z.]/gi, '').slice(0, 30) || 'scan';
+    } catch {}
+  }
+  const res = await handle(event, context);
+  await flushStats(context?.token?.access_token).catch(() => {});
+  return res;
+};
+
+async function handle(event, context) {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
+    const q0 = event.queryStringParameters || {};
+    if (q0.admin !== undefined) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }, body: ADMIN_PAGE_OF() };
     // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
     // The app registered its return address under the state beforehand (mode "vk.start").
     const q = event.queryStringParameters || {};
@@ -413,11 +486,48 @@ module.exports.handler = async (event, context) => {
       return reply(400, { error: 'rude' });
     }
     // ---- Accounts ----
+    let sessionMemo;
     const sessionUid = async () => {
+      if (sessionMemo !== undefined) return sessionMemo;
       const t = String(req.session || '');
+      sessionMemo = null;
       if (t.length < 20) return null;
       const ses = await get(`sessions/${sha(t)}.json`, null);
-      return ses && Date.now() - ses.at < 365 * 86400e3 ? ses.uid : null;
+      return (sessionMemo = ses && Date.now() - ses.at < 365 * 86400e3 ? ses.uid : null);
+    };
+    // ---- Daily limits on what costs money (model calls, web search): per account, else per device,
+    // plus a looser one per network address so a reinstalled app doesn't reset them.
+    const LIMIT = Number(process.env.DAILY_LIMIT) || 50;
+    const ip = String(event.requestContext?.identity?.sourceIp || h['x-forwarded-for'] || '').split(',')[0].trim();
+    const allow = async (what, n = LIMIT) => {
+      if (await adminOk()) return true;
+      const me = await sessionUid();
+      const who = me ? `u:${me}` : uid(req.device) ? `d:${uid(req.device)}` : null;
+      const checks = [who && [who, n], ip && [`ip:${ip}`, n * 4]].filter(Boolean);
+      const files = await Promise.all(checks.map(([w]) => get(`limits/${day()}/${sha(w)}.json`, {})));
+      if (checks.some(([, max], i) => (files[i][what] || 0) >= max)) {
+        console.log('limit reached:', what, who || 'ip');
+        return false;
+      }
+      await Promise.all(checks.map(([w], i) => put(`limits/${day()}/${sha(w)}.json`, { ...files[i], [what]: (files[i][what] || 0) + 1 })));
+      return true;
+    };
+    // Admin: the session of an account whose email hash is listed, or the panel's token.
+    let adminMemo;
+    const adminOk = async () => {
+      if (adminMemo !== undefined) return adminMemo;
+      const token = String(req.admin || '');
+      if (token && process.env.ADMIN_TOKEN) {
+        // Wrong passwords are counted per address: after 20 a day the panel stays closed until tomorrow.
+        const fk = `limits/${day()}/adminfail-${sha(ip)}.json`;
+        const fails = (await get(fk, { n: 0 })).n;
+        if (fails >= 20) return (adminMemo = false);
+        if (crypto.timingSafeEqual(Buffer.from(sha(token)), Buffer.from(sha(process.env.ADMIN_TOKEN)))) return (adminMemo = true);
+        await put(fk, { n: fails + 1 });
+      }
+      const me = await sessionUid();
+      const acc = me ? await get(`accounts/${me}.json`, null) : null;
+      return (adminMemo = !!acc?.email && ADMINS.includes(sha(String(acc.email).trim().toLowerCase())));
     };
     const signIn = async (provider, ext, info) => {
       const link = `accounts/by/${sha(`${provider}:${ext}`)}.json`;
@@ -599,14 +709,41 @@ module.exports.handler = async (event, context) => {
       await put(`users/${me}/following.json`, mine);
       return reply(200, { followers: list.length, following: !!req.on });
     }
+    // ---- Admin panel: spending, reports ----
+    if (req.mode === 'admin.check' || req.mode === 'admin.stats' || req.mode === 'admin.reports' || req.mode === 'editorial.remove') {
+      if (!(await adminOk())) return reply(403, { error: 'not_admin' });
+      if (req.mode === 'admin.check') return reply(200, { ok: true });
+      if (req.mode === 'admin.reports') return reply(200, { items: (await get('reports.json', [])).slice(0, 300) });
+      if (req.mode === 'editorial.remove') {
+        const next = (await get('editorial.json', [])).filter((r) => r.id !== String(req.id || ''));
+        await put('editorial.json', next);
+        return reply(200, { count: next.length });
+      }
+      // Spending of every function instance, added up per day and kind of request.
+      await flushStats(iam, true);
+      const n = Math.min(Math.max(Number(req.days) || 30, 1), 120);
+      const days = [...Array(n)].map((_, i) => new Date(Date.now() + 3 * 3600e3 - (n - 1 - i) * 86400e3).toISOString().slice(0, 10));
+      const out = await Promise.all(
+        days.map(async (d) => {
+          const files = await cacheList(`stats/${d}/`, iam);
+          const parts = await Promise.all(files.map((k) => cacheGet(k, iam)));
+          const modes = {};
+          for (const p of parts) for (const [m, v] of Object.entries(p || {})) {
+            const t = (modes[m] ??= { calls: 0, tokens: 0, rub: 0, search: 0 });
+            for (const f of ['calls', 'tokens', 'rub', 'search']) t[f] += Number(v[f]) || 0;
+          }
+          return { day: d, modes, rub: Object.values(modes).reduce((a, v) => a + v.rub, 0) };
+        }),
+      );
+      const [letuList, obf] = await Promise.all([loadLetu(iam), loadCatalog(iam)]);
+      return reply(200, { days: out, base: { total: letuList.length + obf.length, letu: letuList.length, obf: obf.length } });
+    }
     // Recipes the admin imported from a table, shown to everyone next to the built-in editorial ones.
     if (req.mode === 'editorial.list') {
       return reply(200, { items: await get('editorial.json', []) });
     }
     if (req.mode === 'editorial.add') {
-      const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32c'];
-      const who = crypto.createHash('sha256').update(String(req.email || '').trim().toLowerCase()).digest('hex');
-      if (!ADMINS.includes(who)) return reply(403, { error: 'not_admin' });
+      if (!(await adminOk())) return reply(403, { error: 'not_admin' });
       const incoming = (Array.isArray(req.recipes) ? req.recipes : []).filter((r) => r && r.id && r.title && Array.isArray(r.ingredients)).slice(0, 500);
       const list = await get('editorial.json', []);
       const ids = new Set(incoming.map((r) => r.id));
@@ -616,12 +753,11 @@ module.exports.handler = async (event, context) => {
     }
     // Forum: an index of topics (newest activity first) plus one file per topic with its replies.
     // ---- Forum: topics, threaded replies, likes, the official @essola account and notifications ----
-    const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32c'];
-    const isAdmin = () => ADMINS.includes(crypto.createHash('sha256').update(String(req.email || '').trim().toLowerCase()).digest('hex'));
+    const official = req.official ? await adminOk() : false;
     const ESSOLA = { id: 'essola', nick: 'essola' };
     // Who is writing: the admin may post as @essola; nobody else may take that name.
     const authorOf = (me) => {
-      if (req.official && isAdmin()) return ESSOLA;
+      if (official) return ESSOLA;
       const nick = clean(req.nick, 24) || 'гость';
       return { id: me, nick: /^essola/i.test(nick) ? `${nick}_` : nick };
     };
@@ -714,7 +850,7 @@ module.exports.handler = async (event, context) => {
       return reply(200, { items: await get('stories.json', []) });
     }
     if (req.mode === 'stories.add') {
-      if (!isAdmin()) return reply(403, { error: 'not_admin' });
+      if (!(await adminOk())) return reply(403, { error: 'not_admin' });
       const img = String(req.image || '');
       if (!/^[A-Za-z0-9+/=]+$/.test(img) || img.length > 900000) return reply(400, { error: 'bad_image' });
       const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -724,7 +860,7 @@ module.exports.handler = async (event, context) => {
       return reply(200, { item });
     }
     if (req.mode === 'stories.remove') {
-      if (!isAdmin()) return reply(403, { error: 'not_admin' });
+      if (!(await adminOk())) return reply(403, { error: 'not_admin' });
       await put('stories.json', (await get('stories.json', [])).filter((x) => x.id !== clean(req.sid, 20)));
       return reply(200, { ok: true });
     }
@@ -859,6 +995,15 @@ module.exports.handler = async (event, context) => {
       const ck = `nk/${gtin}.json`;
       const hit = await cacheGet(ck, iam);
       if (hit) return reply(200, hit);
+      // Our own bases first: a composition someone already matched to this code, then Open Beauty Facts.
+      const ean = gtin.replace(/^0/, '');
+      const codes = [...new Set([ean, gtin, gtin.replace(/^0+/, '')])];
+      for (const c of codes) {
+        const mine = await cacheGet(keyFor({ barcode: c }), iam);
+        if (mine?.ingredients?.length >= 3) return reply(200, { found: true, gtin, title: mine.title || '', brand: '', ingredients: mine.ingredients, source: 'essola' });
+      }
+      const obfHit = (await loadCatalog(iam)).find((x) => codes.includes(String(x.k)));
+      if (obfHit?.x) return reply(200, { found: true, gtin, item: (({ g, ...x }) => x)(obfHit), title: obfHit.t, brand: obfHit.b, ingredients: [] });
       if (!process.env.NK_API_KEY) return reply(200, { found: false, reason: 'no_key' });
       const nkUrl = `https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`;
       // The catalog sometimes drops a connection (one quick retry) and can hang on unknown codes: then we move on.
@@ -877,14 +1022,14 @@ module.exports.handler = async (event, context) => {
       // Not every maker fills in the composition: then the name goes on to our base and the web.
       let out = { found: !!card, gtin, title, brand, ingredients };
       // Not in the catalog (an ordinary barcode of an unmarked product): its name from the web, by the code.
+      const webOk = async () => allow('web');
       if (!card) {
-        const ean = gtin.replace(/^0/, '');
-        const docs = await search(ean, iam).catch(() => []);
+        const docs = (await webOk()) ? await search(ean, iam).catch(() => []) : [];
         const named = docs.map((d) => d.title.replace(/\s*[|—–-]\s*(купить|цена|отзывы|интернет-магазин|ozon|озон|wildberries|вайлдберриз|яндекс маркет|золотое яблоко|летуаль).*$/i, '').replace(new RegExp(ean, 'g'), '').trim()).find((t) => t.length > 5 && !/штрих|barcode|ean|gtin|код товара/i.test(t));
         if (named) out = { ...out, title: named };
       }
       if (out.ingredients.length < 3 && out.title) {
-        const more = await findByLabel(out.brand, out.title, '', iam, textModel).catch(() => ({}));
+        const more = await findByLabel(out.brand, out.title, '', iam, textModel, webOk).catch(() => ({}));
         out = { ...out, ...more };
       }
       if (card || out.item || out.ingredients.length >= 3) await cachePut(ck, iam, out, true).catch(() => {});
@@ -896,6 +1041,7 @@ module.exports.handler = async (event, context) => {
       if (code.length < 8) return reply(400, { error: 'bad_barcode' });
       const cached = await cacheGet(`bcweb/${code}.json`, iam);
       if (cached) return reply(200, cached);
+      if (!(await allow('web'))) return reply(429, { error: 'limit' });
       const docs = await search(`${code}`, iam).catch(() => []);
       const clean = (t) =>
         t
@@ -934,6 +1080,7 @@ module.exports.handler = async (event, context) => {
       const key = keyFor({ url: req.url });
       const cached = await cacheGet(key, iam);
       if (cached?.ingredients?.length) return reply(200, { product: cached, cached: true });
+      if (!(await allow('web'))) return reply(429, { error: 'limit' });
       const page = await fromShopPage(req.url);
       if (page.error || !page.composition) return reply(200, { product: null, error: page.error || 'no_composition', title: page.title || null });
       let ingredients = page.composition.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
@@ -952,6 +1099,11 @@ module.exports.handler = async (event, context) => {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
       const notes = (req.notes || []).slice(0, 6).join('; ');
+      // The same formula gets the same answer for everyone, without a new model call.
+      const rk = `review/${sha(`${req.kind || ''}|${list}|${notes}`)}.json`;
+      const cachedReview = await cacheGet(rk, iam);
+      if (cachedReview && cachedReview.verdict !== undefined) return reply(200, cachedReview);
+      if (!(await allow('review'))) return reply(429, { error: 'limit' });
       const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}` }], 500, true);
       const out = { add: [], reduce: [], remove: [], warn: [] };
       for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
@@ -962,29 +1114,8 @@ module.exports.handler = async (event, context) => {
         else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
         else if (line[0] === '!' && head) out.warn.push(head);
       }
+      await cachePut(rk, iam, out, true);
       return reply(200, { ...out, _usage: lastUsage });
-    }
-    if (req.mode === 'analogs') {
-      const list = (req.ingredients || []).slice(0, 25).join(', ');
-      const keys = (req.keys || []).slice(0, 3).join(' ');
-      if (!list) return reply(400, { error: 'empty' });
-      const docs = (await search(`${req.kind || 'косметика'} ${keys} site:goldapple.ru`, context?.token?.access_token))
-        .filter((d) => /goldapple\.ru\/\d/.test(d.url) && d.title)
-        .slice(0, 8);
-      console.log('analogs docs:', docs.length);
-      if (!docs.length) return reply(200, { items: [] });
-      // Without the product's own ingredient list in the snippet a match can only be partial.
-      const lower = (req.ingredients || []).map((i) => String(i).toLowerCase());
-      const seen = (d) => !!d && lower.filter((i) => `${d.title} ${d.text}`.toLowerCase().includes(i)).length >= Math.min(5, lower.length);
-      const found = docs.map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n');
-      const out = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${ANALOGS}\n\nСостав пользователя: ${list}\nТовары:\n${found}` }], 1000);
-      const items = (Array.isArray(out.items) ? out.items : [])
-        .map((x) => ({ ...docs[(x.n | 0) - 1], match: Math.max(0, Math.min(seen(docs[(x.n | 0) - 1]) ? 100 : 75, x.match | 0)), common: Array.isArray(x.common) ? x.common.slice(0, 4) : [], note: x.note || '' }))
-        .filter((x) => x.url && x.match >= 20)
-        .sort((a, b) => b.match - a.match)
-        .slice(0, 5)
-        .map(({ text, ...x }) => x);
-      return reply(200, { items, _usage: lastUsage });
     }
     if (req.mode === 'describe') {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
@@ -993,6 +1124,7 @@ module.exports.handler = async (event, context) => {
       const dk = `desc2/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
       if (hit && hit.lead) return reply(200, hit);
+      if (!(await allow('describe', LIMIT * 4))) return reply(429, { error: 'limit' });
       const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 650);
       if (out && out.lead) await cachePut(dk, iam, out, true);
       return reply(200, out);
@@ -1001,6 +1133,7 @@ module.exports.handler = async (event, context) => {
       // Front of the pack → brand and name only: a small photo and a one-line answer keep it cheap.
       const image = String(req.image || '');
       if (!image || image.length > 3_000_000) return reply(400, { error: 'bad_image' });
+      if (!(await allow('photo'))) return reply(429, { error: 'limit' });
       const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
       const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
       const msg = [{ role: 'user', content: [{ type: 'text', text: LABEL }, { type: 'image_url', image_url: { url } }] }];
@@ -1021,12 +1154,13 @@ module.exports.handler = async (event, context) => {
       if (nc) return reply(200, { notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
       const [brand = '', name = '', kind = ''] = t.split('\n')[0].split('|').map((x) => x.replace(/^["«]|["»]$/g, '').trim());
       console.log('label:', brand, '|', name);
-      const found = await findByLabel(brand, name, kind, iam, textModel);
+      const found = await findByLabel(brand, name, kind, iam, textModel, () => allow('web'));
       return reply(200, { brand: brand.slice(0, 60), name: name.slice(0, 120), kind: kind.slice(0, 40), ...found, _usage: lastUsage });
     }
     const image = String(req.image || '');
     console.log('scan request, image chars:', image.length);
     if (!image || image.length > 12_000_000) return reply(400, { error: 'bad_image' });
+    if (!(await allow('photo'))) return reply(429, { error: 'limit' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
     // Vision models differ per account; try the configured one first, then known multimodal ids.
     const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
@@ -1058,4 +1192,4 @@ module.exports.handler = async (event, context) => {
     console.error(e);
     return reply(500, { error: 'failed', detail: String(e && e.message || e).slice(0, 400) });
   }
-};
+}
