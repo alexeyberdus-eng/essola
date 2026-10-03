@@ -102,7 +102,8 @@ export async function pageBase(q: string, tag: string | undefined, page: number,
   if (c && (c.total > 0 || page > 1)) {
     const list = c.items.map((x) => {
       const letu = x.k.startsWith('letu:');
-      return { key: letu ? x.k : `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: letu ? 'Летуаль' : 'Open Beauty Facts', barcode: letu ? undefined : x.k, url: x.u, none: !!x.z };
+      const inci = x.k.startsWith('inci:');
+      return { key: letu || inci ? x.k : `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: letu ? 'Летуаль' : inci ? 'База essola' : 'Open Beauty Facts', barcode: letu || inci ? undefined : x.k, url: x.u || undefined, none: !!x.z };
     });
     return { list, sorted: true };
   }

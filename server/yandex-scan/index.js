@@ -219,25 +219,29 @@ async function loadCatalog(iam) {
 // Letual catalog (collected weekly by CI with Letual's permission): compact cards in memory,
 // compositions in sharded files loaded only for the cards being shown.
 let letu = null, letuAt = 0;
+// Our product base: Letual first (Russian shelf), then INKEEDecoder (collected with the owner's permission).
+// Both use the same card layout; their compositions sit in letu/x/… and inci/x/… by key hash.
 async function loadLetu(iam) {
   if (letu && Date.now() - letuAt < 6 * 3600e3) return letu;
-  const data = await cacheGet('letu/index.json', iam);
-  if (Array.isArray(data)) [letu, letuAt] = [data, Date.now()];
+  const [data, inci] = await Promise.all([cacheGet('letu/index.json', iam), cacheGet('inci/index.json', iam)]);
+  if (Array.isArray(data)) [letu, letuAt] = [[...data, ...(Array.isArray(inci) ? inci : [])], Date.now()];
   return letu || [];
 }
 const shards = new Map();
 const sortedMemo = new Map();
 async function letuShard(h, iam) {
   if (shards.has(h)) return shards.get(h);
-  const data = (await cacheGet(`letu/x/${h}.json`, iam)) || {};
+  const [src, hash] = h.includes('/') ? h.split('/') : ['letu', h];
+  const data = (await cacheGet(`${src}/x/${hash}.json`, iam)) || {};
   if (shards.size > 1500) shards.delete(shards.keys().next().value);
   shards.set(h, data);
   return data;
 }
 async function withCompositions(items, iam) {
-  const need = [...new Set(items.filter((x) => !x.x && !x.z && x.k.startsWith('letu:')).map((x) => crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)))];
+  const shardKey = (k) => `${k.startsWith('inci:') ? 'inci' : 'letu'}/${crypto.createHash('sha1').update(k).digest('hex').slice(0, 3)}`;
+  const need = [...new Set(items.filter((x) => !x.x && !x.z && /^(letu|inci):/.test(x.k)).map((x) => shardKey(x.k)))];
   const loaded = Object.fromEntries(await Promise.all(need.map(async (h) => [h, await letuShard(h, iam)])));
-  return items.map((x) => (x.x || x.z ? x : { ...x, x: loaded[crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)]?.[x.k] || '' }));
+  return items.map((x) => (x.x || x.z || !/^(letu|inci):/.test(x.k) ? x : { ...x, x: loaded[shardKey(x.k)]?.[x.k] || '' }));
 }
 
 const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();

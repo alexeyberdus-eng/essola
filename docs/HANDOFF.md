@@ -139,3 +139,9 @@ npx expo export --platform web --output-dir /tmp/web   # проверка, чт�
 - Сканер → режим «Честный знак»: DataMatrix → GTIN (после «01») → серверный режим `nk` → официальный API НК `GET /v3/product?gtin=…&apikey=…`
   (апи.национальный-каталог.рф). Ключ участника (ИП владельца) — в GitHub Secrets `NK_API_KEY`, в код не попадает.
 - Если в карточке нет состава — поиск по названию в базе Летуаль и в интернете (`findByLabel`). Ответы кэшируются в бакете (`nk/<gtin>.json`).
+
+## 12. INKEEDecoder (incidecoder.com) — с разрешения владельца сайта
+
+- Workflow `.github/workflows/inci.yml` (запуск при изменении файла или вручную): `pages` → `list` (5 роботов по диапазонам страниц `/products/all?offset=N`) → `fetch` (10 роботов, по 2 запроса с паузами) → `build` (`app/scripts/build-inci.ts`).
+- Результат в бакете: `inci/index.json` + `inci/x/<hhh>.json`, ключи `inci:<slug>`. Сервер (`loadLetu`) объединяет их с базой Летуаль.
+- Повторный запуск дособирает только новые средства (уже собранные пропускаются).
