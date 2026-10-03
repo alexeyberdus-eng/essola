@@ -31,7 +31,7 @@ export default function CreateRecipe() {
   const [rows, setRows] = useState<Row[]>(() =>
     draft ? draft.items.map((i) => ({ name: i.name, amount: `${grams(i.pct, draft.volume)} г` })) : [{ name: '', amount: '' }],
   );
-  const [steps, setSteps] = useState<string[]>(['']);
+  const [steps, setSteps] = useState<string[]>(draft?.steps?.length ? draft.steps : ['']);
   const [tip, setTip] = useState('');
   const [shelf, setShelf] = useState(draft?.items.some((i) => i.phase === 'water') ? '2 месяца с консервантом' : '6 месяцев');
 

@@ -6,6 +6,8 @@ import { Icon } from '../../components/Icon';
 import { Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { CompositionSummary } from '../../components/Summary';
+import { makeSteps } from '../../lib/process';
+import type { Summary } from '../../lib/effects';
 import { aiEnabled, aiReview, Review } from '../../lib/ai';
 import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
@@ -45,6 +47,7 @@ export default function BuilderScreen() {
   const [area, setArea] = useState<string>(AREAS[0]);
   const [goal, setGoal] = useState<string | null>(null);
   const [drop, setDrop] = useState(0);
+  const [showSteps, setShowSteps] = useState(false);
   const [dropColor, setDropColor] = useState<string>(colors.sageDeep);
 
   const sum = total(items);
@@ -120,6 +123,21 @@ export default function BuilderScreen() {
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
   };
+  // Keeps the formula at 100%: whatever goes over is taken from the water (or the base with the largest share).
+  const fit = (list: Item[], keep: string) => {
+    let over = Math.round((total(list) - 100) * 10) / 10;
+    if (over <= 0) return list;
+    const donors = [...list].filter((i) => i.key !== keep && (i.phase === 'water' || i.phase === 'oil')).sort((a, b) => Number(b.phase === 'water') - Number(a.phase === 'water') || b.pct - a.pct);
+    const next = list.map((i) => ({ ...i }));
+    for (const d of donors) {
+      if (over <= 0) break;
+      const row = next.find((i) => i.key === d.key)!;
+      const take = Math.min(over, Math.max(0, row.pct - 1));
+      row.pct = Math.round((row.pct - take) * 10) / 10;
+      over = Math.round((over - take) * 10) / 10;
+    }
+    return next;
+  };
   // "+" next to a technologist suggestion: add it straight into the formula at the suggested share.
   const addSuggested = (name: string, pct?: string) => {
     const hit = identify(name.replace(/\(.*?\)/g, '').split(/[,/]| или /)[0].trim());
@@ -128,14 +146,14 @@ export default function BuilderScreen() {
     if (v > 0 && v < 100) item.pct = v;
     tap('medium');
     animate();
-    setItems((prev) => [...prev, item]);
+    setItems((prev) => fit([...prev, item], item.key));
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
   };
   // "−/+" next to a technologist's "change share" line: set that ingredient to the suggested share.
   const setSuggestedPct = (key: string, to: number) => {
     tap('medium');
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, pct: to } : i)));
+    setItems((prev) => fit(prev.map((i) => (i.key === key ? { ...i, pct: to } : i)), key));
   };
   const fillWater = () => {
     tap('success');
@@ -148,8 +166,9 @@ export default function BuilderScreen() {
     setDropColor(PHASE_COLOR.water);
     setDrop((d) => d + 1);
   };
+  const steps = useMemo(() => makeSteps(kind, items, volume), [kind, items, volume]);
   const save = () => {
-    setDraft({ kind, volume, items });
+    setDraft({ kind, volume, items, steps });
     router.push('/create');
   };
 
@@ -277,11 +296,18 @@ export default function BuilderScreen() {
               <Text style={[styles.statN, Math.abs(sum - 100) > 0.5 && { color: colors.warn }]}>{pctText(sum)}</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statL}>Прогноз</Text>
+              <Text style={styles.statL}>Оценка</Text>
               <Text style={[styles.statN, { color: scoreColor(score) }]}>{score}</Text>
             </View>
-            <View style={styles.stat}>
-              <Text style={styles.statL}>Партия, г</Text>
+          </View>
+        )}
+        {items.length > 0 && (
+          <View style={styles.batch}>
+            <Text style={styles.batchLabel} numberOfLines={1}>Объём партии</Text>
+            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.max(10, v - 10)); }} style={styles.batchBtn} accessibilityLabel="Меньше на 10 г">
+              <Icon name="minus" size={16} color={colors.ink} strokeWidth={2.2} />
+            </Press>
+            <View style={styles.batchBox}>
               <TextInput
                 value={String(volume)}
                 onChangeText={(t) => {
@@ -289,9 +315,15 @@ export default function BuilderScreen() {
                   if (v > 0 && v <= 5000) setVolume(v);
                 }}
                 keyboardType="number-pad"
+                selectTextOnFocus
                 style={styles.volInput}
+                accessibilityLabel="Объём партии в граммах"
               />
+              <Text style={styles.batchUnit}>г</Text>
             </View>
+            <Press haptic={false} onPress={() => { tap(); setVolume((v) => Math.min(5000, v + 10)); }} style={styles.batchBtn} accessibilityLabel="Больше на 10 г">
+              <Icon name="plus" size={16} color={colors.ink} strokeWidth={2.2} />
+            </Press>
           </View>
         )}
         {items.length > 0 && (
@@ -315,7 +347,7 @@ export default function BuilderScreen() {
           </View>
         )}
 
-        {items.length > 0 && <CompositionSummary s={summary} title="Что даст эта формула" />}
+        {items.length > 0 && !shown?.data && <CompositionSummary s={summary} title="Что даст эта формула" />}
 
         {items.length === 1 && aiEnabled && <Text style={styles.minHint}>Добавьте минимум 2 ингредиента — и технолог сможет оценить формулу.</Text>}
 
@@ -323,7 +355,7 @@ export default function BuilderScreen() {
           <View style={{ marginTop: 12 }}>
             {shown?.data ? (
               <>
-                <ReviewCard r={shown.data} items={items} onAdd={addSuggested} onSetPct={setSuggestedPct} />
+                <ReviewCard r={shown.data} items={items} summary={summary} onAdd={addSuggested} onSetPct={setSuggestedPct} onRemove={remove} />
                 {stale && (
                   <Press onPress={askReview} style={styles.refresh}>
                     <Icon name="spark" size={15} color={colors.violet} />
@@ -338,6 +370,35 @@ export default function BuilderScreen() {
               </Press>
             )}
             {shown?.error && <Text style={styles.reviewErr}>Не получилось связаться. Проверьте интернет и нажмите ещё раз.</Text>}
+          </View>
+        )}
+
+        {items.length > 1 && (
+          <View style={{ marginTop: 12 }}>
+            <Press onPress={() => { tap(); setShowSteps(!showSteps); }} style={styles.stepsBtn}>
+              <View style={styles.stepsIcon}>
+                <Icon name="play" size={15} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepsTitle}>Как приготовить</Text>
+                <Text style={styles.stepsSub}>Порядок фаз, температура и граммы для {volume} г</Text>
+              </View>
+              <View style={{ transform: [{ rotate: showSteps ? '180deg' : '0deg' }] }}>
+                <Icon name="chevronDown" size={18} color={colors.muted} />
+              </View>
+            </Press>
+            {showSteps && (
+              <Card style={styles.stepsCard}>
+                {steps.map((t, i) => (
+                  <View key={i} style={styles.stepRow}>
+                    <View style={styles.stepNum}>
+                      <Text style={styles.stepNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.stepText}>{t}</Text>
+                  </View>
+                ))}
+              </Card>
+            )}
           </View>
         )}
       </ScrollView>
@@ -365,7 +426,7 @@ const pctOf = (t?: string) => {
 };
 
 /** The technologist's verdict; every line has a big button on the left that applies it to the formula. */
-function ReviewCard({ r, items, onAdd, onSetPct }: { r: Review; items: Item[]; onAdd: (name: string, pct?: string) => void; onSetPct: (key: string, to: number) => void }) {
+function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Review; items: Item[]; summary: Summary; onAdd: (name: string, pct?: string) => void; onSetPct: (key: string, to: number) => void; onRemove: (key: string) => void }) {
   const adds = (r.add ?? []).map((x) => {
     const row = rowFor(items, x.name);
     const to = pctOf(x.pct);
@@ -376,6 +437,16 @@ function ReviewCard({ r, items, onAdd, onSetPct }: { r: Review; items: Item[]; o
       <Card style={styles.review}>
         <Text style={styles.reviewKicker}>Оценка технолога</Text>
         {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
+        {summary.effects.length > 0 && (
+          <View style={styles.effects}>
+            {summary.effects.map((e) => (
+              <View key={e.title} style={styles.effect}>
+                <Icon name={e.icon} size={13} color={colors.violet} />
+                <Text style={styles.effectText}>{e.title}</Text>
+              </View>
+            ))}
+          </View>
+        )}
         {adds.length > 0 && (
           <View style={{ gap: 10 }}>
             <Text style={styles.reviewGroup}>Добавить</Text>
@@ -408,7 +479,8 @@ function ReviewCard({ r, items, onAdd, onSetPct }: { r: Review; items: Item[]; o
             <Text style={styles.reviewGroup}>Изменить долю</Text>
             {(r.reduce ?? []).map((x) => {
               const row = rowFor(items, x.name);
-              const to = pctOf(x.to);
+              // No number from the technologist: one tap takes a third off.
+              const to = pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
               const can = row && to !== null && Math.abs(row.pct - to) > 0.01;
               const up = can && to! > row!.pct;
               return (
@@ -434,17 +506,26 @@ function ReviewCard({ r, items, onAdd, onSetPct }: { r: Review; items: Item[]; o
         {(r.remove ?? []).length > 0 && (
           <View style={{ gap: 10 }}>
             <Text style={styles.reviewGroup}>Убрать</Text>
-            {(r.remove ?? []).map((x) => (
+            {(r.remove ?? []).map((x) => {
+              const row = rowFor(items, x.name);
+              return (
               <View key={x.name} style={styles.reviewRow}>
-                <View style={styles.reviewIcon}>
-                  <Icon name="close" size={16} color={colors.violet} strokeWidth={2.2} />
-                </View>
+                {row ? (
+                  <Press onPress={() => onRemove(row.key)} style={[styles.addSug, { backgroundColor: colors.bad }]} accessibilityLabel="Убрать из формулы">
+                    <Icon name="close" size={18} color="#fff" strokeWidth={2.6} />
+                  </Press>
+                ) : (
+                  <View style={[styles.reviewIcon, { backgroundColor: '#E5F5EC' }]}>
+                    <Icon name="check" size={18} color={colors.good} strokeWidth={2.4} />
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.reviewName}>{x.name}</Text>
-                  {!!x.why && <Text style={styles.reviewNote}>{x.why}</Text>}
+                  <Text style={styles.reviewNote}>{row ? x.why ?? '' : 'Уже убрано'}</Text>
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
         {(r.warn ?? []).map((w) => (
@@ -552,7 +633,24 @@ const styles = StyleSheet.create({
   stat: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fff' },
   statL: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted },
   statN: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 1 },
-  volInput: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, padding: 0, marginTop: 1 },
+  volInput: { width: 52, fontFamily: fonts.display, fontSize: 18, color: colors.ink, padding: 0, textAlign: 'right' },
+  batch: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, padding: 8, paddingLeft: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E0F2' },
+  batchLabel: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  batchBtn: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
+  batchBox: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 40, width: 92, paddingHorizontal: 10, borderRadius: 13, borderWidth: 1.5, borderColor: colors.violet, backgroundColor: '#fff', justifyContent: 'center' },
+  batchUnit: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
+  effects: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  effect: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: colors.tint },
+  effectText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.violet },
+  stepsBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E0F2', shadowColor: '#2B2F7A', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  stepsIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  stepsTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
+  stepsSub: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 1 },
+  stepsCard: { marginTop: 8, padding: 16, gap: 12 },
+  stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  stepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  stepNumText: { fontFamily: fonts.semibold, fontSize: 12, color: '#fff' },
+  stepText: { flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 10, height: 42, borderRadius: 14, backgroundColor: colors.tint },
   refreshText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   minHint: { marginTop: 12, fontFamily: fonts.medium, fontSize: 13.5, color: colors.warn, textAlign: 'center' },

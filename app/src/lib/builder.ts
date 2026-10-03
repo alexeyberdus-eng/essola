@@ -139,7 +139,7 @@ export const grams = (pct: number, volume: number) => ((pct * volume) / 100).toF
 export const pctText = (p: number) => `${String(Math.round(p * 10) / 10).replace('.', ',')}%`;
 
 /* Draft handed from the constructor to the recipe template screen. */
-export type Draft = { kind: Kind; volume: number; items: Item[] };
+export type Draft = { kind: Kind; volume: number; items: Item[]; steps?: string[] };
 let draft: Draft | null = null;
 export const setDraft = (d: Draft | null) => {
   draft = d;
