@@ -3,39 +3,69 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import Svg, { Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { Accelerometer } from 'expo-sensors';
 import { colors, fonts, shadow } from '../theme';
 
 const native = Platform.OS !== 'web';
 
 /** White page with a soft lavender glow in the top corner. */
 const AURORA: { c: string; o: number; x: `${number}%`; y: number; r: number; dx: number; dy: number; t: number }[] = [
-  { c: '#FFBEA0', o: 0.74, x: '62%', y: -90, r: 190, dx: -26, dy: 30, t: 21000 },
-  { c: '#A0C8FF', o: 0.61, x: '-28%', y: 150, r: 200, dx: 30, dy: -24, t: 26000 },
-  { c: '#CDB4FF', o: 0.57, x: '58%', y: 420, r: 200, dx: -34, dy: 26, t: 23000 },
-  { c: '#AAEBD7', o: 0.61, x: '-20%', y: 680, r: 180, dx: 28, dy: -30, t: 29000 },
+  { c: '#FFBEA0', o: 0.74, x: '62%', y: -90, r: 190, dx: -60, dy: 70, t: 7000 },
+  { c: '#A0C8FF', o: 0.61, x: '-28%', y: 150, r: 200, dx: 70, dy: -55, t: 8500 },
+  { c: '#CDB4FF', o: 0.57, x: '58%', y: 420, r: 200, dx: -75, dy: 60, t: 7800 },
+  { c: '#AAEBD7', o: 0.61, x: '-20%', y: 680, r: 180, dx: 65, dy: -70, t: 9200 },
 ];
+
+// Phone tilt shared by every glow: one accelerometer subscription while any glow is on screen.
+const tilt = new Animated.ValueXY({ x: 0, y: 0 });
+let tiltUsers = 0;
+let tiltSub: { remove: () => void } | null = null;
+function useTilt() {
+  useEffect(() => {
+    if (!native) return;
+    tiltUsers++;
+    if (!tiltSub) {
+      Accelerometer.setUpdateInterval(60);
+      tiltSub = Accelerometer.addListener(({ x, y }) => {
+        Animated.spring(tilt, { toValue: { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) }, speed: 6, bounciness: 2, useNativeDriver: true }).start();
+      });
+    }
+    return () => {
+      tiltUsers--;
+      if (!tiltUsers && tiltSub) {
+        tiltSub.remove();
+        tiltSub = null;
+      }
+    };
+  }, []);
+}
 
 /** White page with a soft "aurora": four blurred colour washes drifting very slowly. */
 export function Glow(_: { height?: number; flask?: boolean }) {
+  useTilt();
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {AURORA.map((b, i) => (
-        <Drift key={i} {...b} />
+        <Drift key={i} {...b} i={i} />
       ))}
     </View>
   );
 }
 
-function Drift({ c, o, x, y, r, dx, dy, t }: (typeof AURORA)[number]) {
+function Drift({ c, o, x, y, r, dx, dy, t, i }: (typeof AURORA)[number] & { i: number }) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([Animated.timing(v, { toValue: 1, duration: t, useNativeDriver: native }), Animated.timing(v, { toValue: 0, duration: t, useNativeDriver: native })]));
     loop.start();
     return () => loop.stop();
   }, [v, t]);
+  // Each wash shifts with the tilt by a different depth, so the layers slide past each other.
+  const depth = 40 + i * 22;
   const move = { transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) }] };
+  const lean = { transform: [{ translateX: tilt.x.interpolate({ inputRange: [-1, 1], outputRange: [depth, -depth] }) }, { translateY: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: [-depth, depth] }) }] };
   return (
-    <Animated.View style={[{ position: 'absolute', left: x, top: y, width: r * 2, height: r * 2 }, move]}>
+    <Animated.View style={[{ position: 'absolute', left: x, top: y, width: r * 2, height: r * 2 }, lean]}>
+    <Animated.View style={[StyleSheet.absoluteFill, move]}>
       <Svg width="100%" height="100%">
         <Defs>
           <RadialGradient id={`au${c}`} cx="50%" cy="50%" r="50%">
@@ -45,6 +75,7 @@ function Drift({ c, o, x, y, r, dx, dy, t }: (typeof AURORA)[number]) {
         </Defs>
         <Rect width="100%" height="100%" fill={`url(#au${c})`} />
       </Svg>
+    </Animated.View>
     </Animated.View>
   );
 }
