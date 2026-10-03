@@ -68,6 +68,8 @@ export default function ScannerScreen() {
     setTimeout(() => setFocus('off'), 250);
   };
   const [digits, setDigits] = useState('');
+  // The scanner is the screen; the history opens on demand below it.
+  const [history, setHistory] = useState(false);
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const laser = useRef(new Animated.Value(0)).current;
@@ -357,7 +359,7 @@ export default function ScannerScreen() {
   const barcode = mode === 'barcode';
   const frameTop = insets.top + (full ? (barcode ? 190 : 100) : barcode ? 96 : 66);
   const frameH = barcode ? (full ? 150 : 120) : undefined;
-  const camH = full ? winH : Math.round(winH * 0.52);
+  const camH = full ? winH : Math.round(winH * 0.56);
 
   const sheet = (
       <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
@@ -433,9 +435,9 @@ export default function ScannerScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.sheetTitle}>Наведите на «Состав» или «Ingredients»</Text>
-            <Text style={styles.sheetText}>
-              {ocr.state === 'loading' && webOcr ? `Готовлю распознавание ${Math.round(ocr.progress * 100)}% · ` : ''}Читаем русский и латиницу. Снимайте только блок состава, крупно и ровно.
+            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на блок «Состав»</Text>
+            <Text style={[styles.sheetText, { textAlign: 'center' }]}>
+              {ocr.state === 'loading' && webOcr ? `Готовлю распознавание ${Math.round(ocr.progress * 100)}% · ` : ''}Крупно и ровно — оценим за пару секунд
             </Text>
           </>
         )}
@@ -477,16 +479,16 @@ export default function ScannerScreen() {
             </View>
             <View style={styles.actions}>
               <Press onPress={pick} style={styles.action}>
-                <Icon name="image" size={20} color={colors.violet} />
+                <View style={styles.actionIcon}><Icon name="image" size={19} color={colors.violet} /></View>
                 <Text style={styles.actionText}>Галерея</Text>
               </Press>
               <Press onPress={() => setManual(true)} style={styles.action}>
-                <Icon name="text" size={20} color={colors.violet} />
+                <View style={styles.actionIcon}><Icon name="text" size={19} color={colors.violet} /></View>
                 <Text style={styles.actionText}>Вставить текст</Text>
               </Press>
               {aiEnabled && !lookup && (
                 <Press onPress={pasteLink} style={styles.action}>
-                  <Icon name="external" size={20} color={colors.violet} />
+                  <View style={styles.actionIcon}><Icon name="external" size={19} color={colors.violet} /></View>
                   <Text style={styles.actionText}>Ссылка Летуаль</Text>
                 </Press>
               )}
@@ -597,8 +599,15 @@ export default function ScannerScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           {sheet}
           <View style={styles.history}>
-            <Text style={styles.historyTitle}>История сканирований</Text>
-            {scans.length ? (
+            <Press haptic={false} onPress={() => { tap(); setHistory(!history); }} style={styles.historyBtn} accessibilityLabel="История сканирований">
+              <Icon name="history" size={18} color={colors.violet} />
+              <Text style={styles.historyTitle}>История сканирований</Text>
+              {scans.length > 0 && <Text style={styles.historyCount}>{scans.length}</Text>}
+              <View style={{ transform: [{ rotate: history ? '180deg' : '0deg' }] }}>
+                <Icon name="chevronDown" size={16} color={colors.muted} />
+              </View>
+            </Press>
+            {!history ? null : scans.length ? (
               scans.slice(0, 30).map((sc) => (
                 <Press key={sc.id} haptic={false} onPress={() => router.push(`/analysis/${sc.id}`)} style={styles.hRow}>
                   <ScoreBadge value={sc.overall} size={44} />
@@ -746,8 +755,10 @@ const styles = StyleSheet.create({
   expand: { position: 'absolute', right: 14, bottom: 14, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.5)' },
   expandText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
   sheetInline: { paddingHorizontal: space.gutter, paddingTop: 16 },
-  history: { paddingHorizontal: space.gutter, marginTop: 24, gap: 8 },
-  historyTitle: { fontFamily: fonts.display, fontSize: 18, letterSpacing: -0.4, color: colors.ink, marginBottom: 2 },
+  historyBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, paddingHorizontal: 16, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E6E2F3' },
+  historyCount: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.violet, backgroundColor: colors.tint, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
+  history: { paddingHorizontal: space.gutter, marginTop: 18, gap: 8 },
+  historyTitle: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   hRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7', shadowColor: '#15172B', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   hScore: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   hScoreText: { fontFamily: fonts.monoMedium, fontSize: 13.5, color: '#fff' },
@@ -767,7 +778,8 @@ const styles = StyleSheet.create({
   zoomOn: { backgroundColor: '#FBF8F2' },
   zoomText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16 },
-  action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 72, paddingHorizontal: 6, paddingVertical: 10, borderRadius: 18, backgroundColor: '#F4F5FC', borderWidth: 1, borderColor: '#E6E8F6' },
+  action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 82, paddingHorizontal: 6, paddingVertical: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E0F2', shadowColor: '#2B2F7A', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  actionIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontFamily: fonts.semibold, fontSize: 12.5, lineHeight: 16, color: colors.ink, textAlign: 'center' },
   find: { marginTop: 14, padding: 12, borderRadius: 18, backgroundColor: '#F6F7FD', gap: 8 },
   findTitle: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
