@@ -7,6 +7,7 @@ import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { analyze } from '../src/lib/analyze';
 import { signature } from '../src/lib/signature';
+import { productTags } from '../src/lib/tags';
 
 const BASE = 'https://www.letu.ru';
 const CATS: [string, RegExp][] = [
@@ -44,7 +45,7 @@ const comp: Record<string, string> = {};
 for (const f of readdirSync(tabsDir).filter((f) => /^tabs-\d+\.json$/.test(f))) Object.assign(comp, JSON.parse(readFileSync(`${tabsDir}/${f}`, 'utf8')));
 console.log('cards', cards.length, 'with composition', Object.keys(comp).length);
 
-const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number; g?: string; z?: 1 }[] = [];
+const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number; g?: string; z?: 1; m?: string; r?: number }[] = [];
 const shards: Record<string, Record<string, string>> = {};
 for (const c of cards) {
   const text = comp[c.id];
@@ -52,7 +53,7 @@ for (const c of cards) {
   const a = analyze(text);
   if (a.unreadable || a.items.length < 3) continue;
   const k = `letu:${c.id}`;
-  index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: a.scores.overall, n: a.items.length, p: c.n });
+  index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: a.scores.overall, n: a.items.length, p: c.n, r: Math.round((c.r || 0) * 10) / 10 });
   (shards[shardOf(k)] ??= {})[k] = text.slice(0, 3000);
 }
 // Keep what is already in the base: earlier sections and products not collected this time.
@@ -86,6 +87,17 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
   }
   console.log('kept from the existing base', kept);
 }
+// Ratings and review counts change: take fresh ones from this run's list for every card.
+{
+  const fresh = new Map(cards.map((c) => [`letu:${c.id}`, c]));
+  for (const x of index) {
+    const c = fresh.get(x.k);
+    if (c) {
+      x.p = c.n;
+      x.r = Math.round((c.r || 0) * 10) / 10;
+    }
+  }
+}
 // Products whose composition Letual doesn't publish (or we couldn't read): still listed with name, photo and link,
 // marked z:1 so the app shows "состав недоступен". A later run that finds the composition replaces the card.
 {
@@ -95,7 +107,7 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
     const k = `letu:${c.id}`;
     if (have.has(k)) continue;
     have.add(k);
-    index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: 0, n: 0, p: c.n, z: 1 });
+    index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: 0, n: 0, p: c.n, z: 1, r: Math.round((c.r || 0) * 10) / 10 });
     none++;
   }
   console.log('without composition (listed with a link)', none);
@@ -107,7 +119,9 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
   for (const x of index) {
     const t = texts[x.k];
     if (!t) continue;
-    x.g = signature(analyze(t));
+    const an = analyze(t);
+    x.g = signature(an);
+    x.m = productTags(an);
     if (x.g) withSig++;
   }
   console.log('fingerprints', withSig);
