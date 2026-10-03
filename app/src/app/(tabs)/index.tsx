@@ -31,7 +31,6 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const { liked, likeCount } = useLibrary();
   const { count } = useCommunity();
-  const { myRecipes } = useUserContent();
   const extra = useExtraRecipes();
   const [sort, setSort] = useState<Sort>('for-you');
   const [cat, setCat] = useState<'all' | 'mine' | Category>('all');
@@ -45,7 +44,8 @@ export default function FeedScreen() {
   const q = query.trim().toLowerCase();
   const filters = (skin ? 1 : 0) + (level ? 1 : 0) + (time ? 1 : 0);
   const list = useMemo(() => {
-    const all: Recipe[] = cat === 'mine' ? myRecipes : [...myRecipes, ...extra, ...RECIPES];
+    // The feed is essola's own recipes only; the user's recipes live in the profile.
+    const all: Recipe[] = [...extra, ...RECIPES];
     let l = all.filter((r) => {
       if (sort === 'saved' && !liked.has(r.id)) return false;
       if (cat !== 'all' && cat !== 'mine' && r.category !== cat) return false;
@@ -55,12 +55,12 @@ export default function FeedScreen() {
       if (!q) return true;
       return [r.title, r.subtitle, r.category, ...r.ingredients.map((i) => i.name)].some((t) => t.toLowerCase().includes(q));
     });
-    if (sort === 'new') l = [...l].sort((a, b) => (b.own ? 1 : 0) - (a.own ? 1 : 0) || recipeMeta(a).postedAgo - recipeMeta(b).postedAgo);
+    if (sort === 'new') l = [...l].sort((a, b) => recipeMeta(a).postedAgo - recipeMeta(b).postedAgo);
     if (sort === 'hot') l = [...l].sort((a, b) => count(b.id) - count(a.id));
     if (sort === 'easy') l = [...l].sort((a, b) => a.level - b.level || a.minutes - b.minutes);
     if (sort === 'for-you') l = [...l].sort((a, b) => likeCount(b.id) - likeCount(a.id));
     return l;
-  }, [sort, cat, q, liked, likeCount, count, myRecipes, extra, skin, level, time]);
+  }, [sort, cat, q, liked, likeCount, count, extra, skin, level, time]);
 
   const togglePanel = () => {
     tap();
@@ -142,7 +142,7 @@ export default function FeedScreen() {
         <Zone
           value={cat}
           onChange={setCat}
-          options={[['all', 'Все'], ...(myRecipes.length ? ([['mine', 'Мои']] as const) : []), ...CATEGORIES.map((c) => [c, c] as const)]}
+          options={[['all', 'Все'], ...CATEGORIES.map((c) => [c, c] as const)]}
         />
       </View>
     </View>

@@ -1,5 +1,4 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { RECIPES } from '../data/recipes';
 import { readJSON, writeJSON } from '../lib/storage';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -18,7 +17,8 @@ type LibraryValue = {
 };
 
 const LibraryContext = createContext<LibraryValue | null>(null);
-const BASE = Object.fromEntries(RECIPES.map((r) => [r.id, r.baseLikes]));
+// Like counters show real likes only (no starting numbers).
+const BASE: Record<string, number> = {};
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();

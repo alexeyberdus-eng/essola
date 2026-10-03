@@ -118,6 +118,34 @@ export default function RecipeScreen() {
           </View>
         )}
 
+        <View style={styles.sectionHead}>
+          <T v="label">Формула{pct ? ' · 100%' : ''}</T>
+          <Press onPress={share} haptic={false} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={styles.link}>Поделиться</Text>
+            <Icon name="arrowRight" size={13} color={colors.sageDeep} />
+          </Press>
+        </View>
+        {recipe.ingredients.map((ing, i) => (
+          <View key={ing.name} style={styles.ingRow}>
+            <Text style={styles.ingIdx}>{String(i + 1).padStart(2, '0')}</Text>
+            <Text style={styles.ingName}>{ing.name}</Text>
+            <Text style={styles.ingAmount}>{ing.amount}</Text>
+            {pct && <Text style={styles.ingPct}>{formatPercent(pct[i])}</Text>}
+          </View>
+        ))}
+
+        <View style={styles.sectionHead}>
+          <T v="label">Процесс · {recipe.steps.length} {plural(recipe.steps.length, 'шаг', 'шага', 'шагов')}</T>
+        </View>
+        {recipe.steps.map((step, i) => (
+          <View key={i} style={styles.step}>
+            <View style={styles.stepNum}>
+              <Text style={styles.stepNumText}>{i + 1}</Text>
+            </View>
+            <T style={{ flex: 1, fontSize: 14.5, lineHeight: 21 }}>{step}</T>
+          </View>
+        ))}
+
         <Text style={styles.storyH}>Как работает формула</Text>
         {story.parts.map((p) => (
           <View key={p.name} style={styles.part}>
@@ -162,34 +190,6 @@ export default function RecipeScreen() {
             </View>
           ))}
         </View>
-
-        <View style={styles.sectionHead}>
-          <T v="label">Формула{pct ? ' · 100%' : ''}</T>
-          <Press onPress={share} haptic={false} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={styles.link}>Поделиться</Text>
-            <Icon name="arrowRight" size={13} color={colors.sageDeep} />
-          </Press>
-        </View>
-        {recipe.ingredients.map((ing, i) => (
-          <View key={ing.name} style={styles.ingRow}>
-            <Text style={styles.ingIdx}>{String(i + 1).padStart(2, '0')}</Text>
-            <Text style={styles.ingName}>{ing.name}</Text>
-            <Text style={styles.ingAmount}>{ing.amount}</Text>
-            {pct && <Text style={styles.ingPct}>{formatPercent(pct[i])}</Text>}
-          </View>
-        ))}
-
-        <View style={styles.sectionHead}>
-          <T v="label">Процесс · {recipe.steps.length} {plural(recipe.steps.length, 'шаг', 'шага', 'шагов')}</T>
-        </View>
-        {recipe.steps.map((step, i) => (
-          <View key={i} style={styles.step}>
-            <View style={styles.stepNum}>
-              <Text style={styles.stepNumText}>{i + 1}</Text>
-            </View>
-            <T style={{ flex: 1, fontSize: 14.5, lineHeight: 21 }}>{step}</T>
-          </View>
-        ))}
 
         <View style={[styles.about, { backgroundColor: '#F7F4FF' }]}>
           <Text style={styles.aboutTitle}>Технология: на что обратить внимание</Text>

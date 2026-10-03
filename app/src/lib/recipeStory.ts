@@ -248,7 +248,7 @@ export function recipeStory(r: Recipe): Story {
     'Перед первым применением сделайте тест на сгибе локтя и подождите сутки.',
   ];
 
-  const lead = r.about || `${KIND_LEAD[kind]} ${r.subtitle ? `«${r.title}» — ${r.subtitle.toLowerCase()}.` : ''}`.trim();
+  const lead = r.about || KIND_LEAD[kind];
   const story = { lead, parts, pairs, balance, technology: TECHNOLOGY[kind], equipment: EQUIPMENT[kind], storage };
   cache.set(r.id, story);
   return story;
