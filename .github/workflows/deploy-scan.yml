@@ -19,6 +19,7 @@ jobs:
       VLM_MODEL: ${{ secrets.YC_VLM_MODEL }}
       # «Честный знак» / Национальный каталог: the participant's API key (НК → профиль → Данные участника).
       NK_API_KEY: ${{ secrets.NK_API_KEY }}
+      VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Skip until Yandex secrets are set
@@ -46,6 +47,7 @@ jobs:
           ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           [ -n "$NK_API_KEY" ] && ENVV="$ENVV,NK_API_KEY=$NK_API_KEY"
+          [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
           V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 2048m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.

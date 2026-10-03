@@ -1,0 +1,46 @@
+name: Postbox (sign-in emails) setup
+
+# One-off: registers essola.ru in Yandex Cloud Postbox with a fresh DKIM key, lets the function's service account
+# send mail, and prints the DNS records to add at the registrar. Run again only to rotate the key.
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Sender domain'
+        default: 'essola.ru'
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      DOMAIN: ${{ inputs.domain }}
+    steps:
+      - name: Install yc CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          echo "$HOME/yc/bin" >> "$GITHUB_PATH"
+      - name: Register the domain and print DNS records
+        run: |
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          yc config set folder-id "$YC_FOLDER_ID"
+          SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
+          # The function runs as this service account: it needs the right to send.
+          yc resource-manager folder add-access-binding "$YC_FOLDER_ID" --role postbox.sender --service-account-id "$SA_ID" \
+            || echo "::warning::Could not grant postbox.sender (needs the admin role) — grant it in the console"
+          umask 077
+          openssl genrsa -out "$RUNNER_TEMP/dkim.pem" 2048 2>/dev/null
+          yc postbox address create --help | head -40 || true
+          yc postbox address create --address "$DOMAIN" --selector postbox --private-key-file "$RUNNER_TEMP/dkim.pem" \
+            || echo "::warning::Address not created (it may already exist)"
+          yc postbox address list || true
+          PUB=$(openssl rsa -in "$RUNNER_TEMP/dkim.pem" -pubout -outform der 2>/dev/null | base64 -w0)
+          rm -f "$RUNNER_TEMP/dkim.pem"
+          echo "================ DNS records for $DOMAIN ================"
+          echo "1) TXT   name: postbox._domainkey   value: v=DKIM1;h=sha256;k=rsa;p=$PUB"
+          echo "2) TXT   name: @                    value: v=spf1 include:_spf.postbox.cloud.yandex.net ~all"
+          echo "========================================================="

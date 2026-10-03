@@ -304,6 +304,64 @@ async function ensureUser(get, put, id, nick) {
   if (!(await get(`users/${id}.json`, null))) await put(`users/${id}.json`, { id, nick: String(nick).slice(0, 24) });
 }
 
+
+// ---- Accounts (Yandex Cloud only: personal data stays in Russia) ----
+// accounts/<uid>.json — the account; accounts/by/<sha(provider:id)>.json — sign-in → uid; sessions/<sha(token)>.json;
+// accounts/<uid>/data.json — the person's data synced from their phones (scans, shelf, likes, questionnaire…).
+const sha = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
+async function cacheDel(key, iam) {
+  if (!BUCKET || !key || !iam) return;
+  await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'DELETE', headers: { 'X-YaCloud-SubjectToken': iam } }).catch(() => {});
+}
+
+let appleKeys = null;
+let appleKeysAt = 0;
+/** Sign in with Apple: the identity token is a JWT signed by Apple; checks signature, issuer, audience and expiry. */
+async function verifyApple(token) {
+  const [h, p, sig] = String(token || '').split('.');
+  if (!h || !p || !sig) throw new Error('bad_token');
+  const head = JSON.parse(Buffer.from(h, 'base64url').toString());
+  const body = JSON.parse(Buffer.from(p, 'base64url').toString());
+  if (!appleKeys || Date.now() - appleKeysAt > 6 * 3600e3) {
+    appleKeys = (await (await fetch('https://appleid.apple.com/auth/keys', { signal: AbortSignal.timeout(8000) })).json()).keys;
+    appleKeysAt = Date.now();
+  }
+  const jwk = appleKeys.find((k) => k.kid === head.kid);
+  if (!jwk) throw new Error('unknown_key');
+  const ok = crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), crypto.createPublicKey({ key: jwk, format: 'jwk' }), Buffer.from(sig, 'base64url'));
+  // The app's bundle id in a real build; Expo Go signs in as its own app while testing.
+  if (!ok || body.iss !== 'https://appleid.apple.com' || !['com.essola.lab', 'host.exp.Exponent'].includes(body.aud) || body.exp * 1000 < Date.now()) throw new Error('bad_token');
+  return { id: body.sub, email: body.email || null };
+}
+
+/** VK ID: the access token is checked by asking VK who it belongs to. */
+async function verifyVk(accessToken) {
+  const res = await fetch('https://id.vk.com/oauth2/user_info', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: process.env.VK_CLIENT_ID || '', access_token: String(accessToken || '') }), signal: AbortSignal.timeout(8000) });
+  const j = await res.json().catch(() => ({}));
+  const u = j.user;
+  if (!u || !u.user_id) throw new Error('bad_token');
+  return { id: String(u.user_id), email: u.email || null, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || null };
+}
+
+/** The sign-in code by email, through Yandex Cloud Postbox (the function's service account sends it). */
+async function sendCode(email, code, iam) {
+  const html = `<div style="font-family:Arial,sans-serif;font-size:16px;color:#15172B"><p>Ваш код для входа в <b>essola lab</b>:</p><p style="font-size:32px;letter-spacing:6px;font-weight:bold;color:#7C66EE">${code}</p><p style="color:#7D8096">Код действует 10 минут. Если вы не запрашивали вход, просто удалите это письмо.</p></div>`;
+  const res = await fetch('https://postbox.cloud.yandex.net/v2/email/outbound-emails', {
+    method: 'POST',
+    headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      FromEmailAddress: `essola lab <${process.env.MAIL_FROM || 'noreply@essola.ru'}>`,
+      Destination: { ToAddresses: [email] },
+      Content: { Simple: { Subject: { Data: `Код входа: ${code}`, Charset: 'UTF-8' }, Body: { Text: { Data: `Ваш код для входа в essola lab: ${code}. Код действует 10 минут.`, Charset: 'UTF-8' }, Html: { Data: html, Charset: 'UTF-8' } } } },
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    console.log('postbox', res.status, (await res.text()).slice(0, 300));
+    throw new Error('mail_failed');
+  }
+}
+
 module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
@@ -348,6 +406,95 @@ module.exports.handler = async (event, context) => {
     const rude = (t) => RUDE.test(String(t || '').toLowerCase());
     if (['forum.create', 'forum.reply', 'social.comment', 'user.save'].includes(req.mode) && (rude(req.text) || rude(req.title) || rude(req.nick))) {
       return reply(400, { error: 'rude' });
+    }
+    // ---- Accounts ----
+    const sessionUid = async () => {
+      const t = String(req.session || '');
+      if (t.length < 20) return null;
+      const ses = await get(`sessions/${sha(t)}.json`, null);
+      return ses && Date.now() - ses.at < 365 * 86400e3 ? ses.uid : null;
+    };
+    const signIn = async (provider, ext, info) => {
+      const link = `accounts/by/${sha(`${provider}:${ext}`)}.json`;
+      const known = await get(link, null);
+      let acc = known?.uid ? await get(`accounts/${known.uid}.json`, null) : null;
+      if (!acc) {
+        acc = { uid: `a${crypto.randomBytes(9).toString('hex')}`, provider, email: info.email || null, name: info.name || null, nick: null, links: [link], sessions: [], createdAt: new Date().toISOString() };
+        await put(link, { uid: acc.uid });
+      }
+      if (!acc.email && info.email) acc.email = info.email;
+      if (!acc.name && info.name) acc.name = info.name;
+      const token = crypto.randomBytes(32).toString('base64url');
+      acc.sessions = [...(acc.sessions || []), sha(token)].slice(-20);
+      await put(`sessions/${sha(token)}.json`, { uid: acc.uid, at: Date.now() });
+      await put(`accounts/${acc.uid}.json`, acc);
+      const { links, sessions, ...pub } = acc;
+      return reply(200, { session: token, account: pub, isNew: !known });
+    };
+    if (req.mode === 'auth.apple') {
+      const a = await verifyApple(req.token).catch(() => null);
+      if (!a) return reply(401, { error: 'bad_token' });
+      return signIn('apple', a.id, { email: a.email, name: clean(req.name, 80) || null });
+    }
+    if (req.mode === 'auth.vk') {
+      const v = await verifyVk(req.token).catch(() => null);
+      if (!v) return reply(401, { error: 'bad_token' });
+      return signIn('vk', v.id, v);
+    }
+    if (req.mode === 'auth.email.start') {
+      const email = String(req.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) return reply(400, { error: 'bad_email' });
+      const ck = `codes/${sha(email)}.json`;
+      const prev = await get(ck, null);
+      if (prev && Date.now() - prev.sentAt < 60e3) return reply(429, { error: 'too_often' });
+      const code = String(crypto.randomInt(100000, 1000000));
+      await put(ck, { hash: sha(`${email}:${code}`), exp: Date.now() + 10 * 60e3, tries: 0, sentAt: Date.now() });
+      const sent = await sendCode(email, code, iam).then(() => true, () => false);
+      return sent ? reply(200, { ok: true }) : reply(503, { error: 'mail_unavailable' });
+    }
+    if (req.mode === 'auth.email.verify') {
+      const email = String(req.email || '').trim().toLowerCase();
+      const ck = `codes/${sha(email)}.json`;
+      const c = await get(ck, null);
+      if (!c || c.exp < Date.now() || c.tries >= 5) return reply(400, { error: 'expired' });
+      if (c.hash !== sha(`${email}:${String(req.code || '').trim()}`)) {
+        await put(ck, { ...c, tries: c.tries + 1 });
+        return reply(400, { error: 'wrong_code' });
+      }
+      await cacheDel(ck, iam);
+      return signIn('email', email, { email, name: clean(req.name, 80) || null });
+    }
+    if (req.mode === 'me.get' || req.mode === 'me.save' || req.mode === 'data.get' || req.mode === 'data.put' || req.mode === 'account.delete' || req.mode === 'auth.logout') {
+      const me = await sessionUid();
+      if (!me) return reply(401, { error: 'no_session' });
+      const acc = await get(`accounts/${me}.json`, null);
+      if (!acc) return reply(401, { error: 'no_account' });
+      if (req.mode === 'me.get') {
+        const { links, sessions, ...pub } = acc;
+        return reply(200, { account: pub });
+      }
+      if (req.mode === 'me.save') {
+        for (const k of ['name', 'nick', 'skinType']) if (k in (req.patch || {})) acc[k] = clean(req.patch[k], 80) || null;
+        if (Array.isArray(req.patch?.hair)) acc.hair = req.patch.hair.slice(0, 10).map((x) => clean(x, 20));
+        if (acc.nick && rude(acc.nick)) return reply(400, { error: 'rude' });
+        await put(`accounts/${me}.json`, acc);
+        const { links, sessions, ...pub } = acc;
+        return reply(200, { account: pub });
+      }
+      if (req.mode === 'data.get') return reply(200, { data: await get(`accounts/${me}/data.json`, {}) });
+      if (req.mode === 'data.put') {
+        const raw = JSON.stringify(req.data || {});
+        if (raw.length > 3_000_000) return reply(413, { error: 'too_big' });
+        await put(`accounts/${me}/data.json`, req.data || {});
+        return reply(200, { ok: true });
+      }
+      if (req.mode === 'auth.logout') {
+        await cacheDel(`sessions/${sha(String(req.session))}.json`, iam);
+        return reply(200, { ok: true });
+      }
+      // account.delete: the sign-in links, sessions, synced data and the account itself.
+      await Promise.all([...(acc.links || []).map((k) => cacheDel(k, iam)), ...(acc.sessions || []).map((h) => cacheDel(`sessions/${h}.json`, iam)), cacheDel(`accounts/${me}/data.json`, iam), cacheDel(`accounts/${me}.json`, iam)]);
+      return reply(200, { ok: true });
     }
     // ---- Reports, account deletion (App Store rules for apps with user content) ----
     if (req.mode === 'report') {
