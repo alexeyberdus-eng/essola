@@ -20,19 +20,16 @@ jobs:
           done
           echo "=== product list page"; curl -sL -m 20 -A "$UA" https://incidecoder.com/products/all | grep -oE 'href="/(products|brands)/[^"]+"' | sort -u | head -40
           echo "=== brands page"; curl -sL -m 20 -A "$UA" https://incidecoder.com/brands | grep -oE 'href="/brands/[^"]+"' | sort -u | wc -l
+          echo "=== paging"
+          for o in 1 100 1000 5000 10000 20000; do printf "offset %s: " $o; curl -sL -m 20 -A "$UA" "https://incidecoder.com/products/all?offset=$o" | grep -oE 'href="/products/[a-z0-9-]+"' | grep -vE '/(new|create|all)"' | wc -l; done
           echo "=== a product page"
-          P=$(curl -sL -m 20 -A "$UA" https://incidecoder.com/products/all | grep -oE 'href="/products/[a-z0-9-]+"' | head -1 | cut -d'"' -f2)
-          echo "page: $P"
+          P=/products/ootd-cica-soothing-mask
           curl -sL -m 20 -A "$UA" "https://incidecoder.com$P" > p.html; wc -c p.html
-          grep -oE 'id="[a-z0-9_-]+"' p.html | sort -u | head -40
-          grep -oE '<script type="application/ld\+json">[^<]{0,1500}' p.html | head -3
-          grep -o 'ingredlist[^>]*>' p.html | head -5
           python3 - <<'PY'
           import re
           h=open('p.html',encoding='utf8',errors='ignore').read()
-          i=h.find('showmore-section-ingredlist-short')
-          print('ingredlist at', i)
-          print(re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' | ',h[i:i+2500]))[:1500])
-          for k in ['product-title','product-brand-title','product-main-image','og:image']:
-              j=h.find(k); print(k, j, re.sub(r'\s+',' ',h[j:j+300]) if j>=0 else '')
+          ids=sorted(set(re.findall(r'id="([a-zA-Z0-9_-]+)"',h)))
+          print('ids:', ids[:80])
+          for k in ['ingredlist','product-title','product-brand','og:image','og:title','ld+json','Ingredients']:
+              j=h.find(k); print('##',k, j, re.sub(r'\s+',' ',h[max(0,j-200):j+600]) if j>=0 else '')
           PY
