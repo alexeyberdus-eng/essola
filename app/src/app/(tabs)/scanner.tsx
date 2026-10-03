@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { Glass, LightWave } from '../../components/lab';
@@ -16,7 +16,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiScan, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiScan, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -60,6 +60,14 @@ export default function ScannerScreen() {
   const [matches, setMatches] = useState<CatalogItem[] | null>(null);
   const [findQ, setFindQ] = useState('');
   const [finding, setFinding] = useState(false);
+  // Close-ups go blurry on phones whose main lens can't focus near: step back and zoom in instead.
+  const [zoom, setZoom] = useState(0);
+  const [focus, setFocus] = useState<'on' | 'off'>('off');
+  const refocus = () => {
+    setFocus('on');
+    setTimeout(() => setFocus('off'), 250);
+  };
+  const [digits, setDigits] = useState('');
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const laser = useRef(new Animated.Value(0)).current;
@@ -174,6 +182,15 @@ export default function ScannerScreen() {
       if (res.name) {
         setFindQ(res.name);
         findByName(res.name);
+      } else {
+        // Not in the open databases: look the code up on the web (marketplaces, shops, barcode catalogs).
+        barcodeWeb(data).then((w) => {
+          if (!w?.name) return;
+          pendingName.current = w.name;
+          setLookup((l) => (l && l.code === data ? { ...l, name: w.name } : l));
+          setFindQ(w.name);
+          findByName(w.name);
+        });
       }
     }
     setTimeout(() => (scanning.current = false), 800);
@@ -403,7 +420,16 @@ export default function ScannerScreen() {
         ) : barcode ? (
           <>
             <Text style={styles.sheetTitle}>Наведите на штрихкод</Text>
-            <Text style={styles.sheetText}>Найдём состав в открытых базах, разберём его и подберём аналоги. Нет штрихкода — переключитесь на «Состав».</Text>
+            <Text style={styles.sheetText}>Держите телефон в 15–20 см и приблизьте кнопкой «2×», если полоски расплываются. Ищем в открытых базах, нашей базе и интернет-магазинах.</Text>
+            <View style={[styles.findRow, { marginTop: 12 }]}>
+              <Icon name="barcode" size={16} color={colors.muted} />
+              <TextInput value={digits} onChangeText={(t) => setDigits(t.replace(/\D/g, '').slice(0, 14))} onSubmitEditing={() => digits.length >= 8 && lookupCode(digits)} placeholder="Или введите цифры под штрихкодом" placeholderTextColor={colors.faint} keyboardType="number-pad" returnKeyType="search" style={styles.findInput} />
+              {digits.length >= 8 && (
+                <Press onPress={() => lookupCode(digits)} accessibilityLabel="Найти по цифрам">
+                  <Text style={styles.clipGo}>Найти</Text>
+                </Press>
+              )}
+            </View>
           </>
         ) : (
           <>
@@ -483,6 +509,8 @@ export default function ScannerScreen() {
             style={StyleSheet.absoluteFill}
             facing="back"
             enableTorch={torch}
+            zoom={zoom}
+            autofocus={focus}
             onCameraReady={() => setReady(true)}
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'itf14'] }}
             onBarcodeScanned={!lookup && !busy ? onBarcode : undefined}
@@ -497,6 +525,16 @@ export default function ScannerScreen() {
         </View>
       )}
 
+      {permission?.granted && <Pressable onPress={refocus} style={StyleSheet.absoluteFill} accessibilityLabel="Навести фокус" />}
+      {permission?.granted && (
+        <View style={[styles.zoom, { bottom: full ? undefined : 14, top: full ? insets.top + 62 : undefined }]}>
+          {ZOOMS.map(([z, l]) => (
+            <Press key={l} haptic={false} onPress={() => { tap(); setZoom(z); refocus(); }} style={[styles.zoomBtn, zoom === z && styles.zoomOn]}>
+              <Text style={[styles.zoomText, zoom === z && { color: colors.olive }]}>{l}</Text>
+            </Press>
+          ))}
+        </View>
+      )}
       {permission?.granted && (
         <View pointerEvents="none" style={[styles.frame, { top: frameTop }, frameH ? { height: frameH } : { bottom: full ? 330 : 64 }]}>
           <Breathe amount={0.025} style={StyleSheet.absoluteFill}>
@@ -645,6 +683,12 @@ function Step({ ok, text }: { ok?: boolean; text: string }) {
 }
 
 const C = 30;
+/** expo-camera zoom is exponential in the lens's max zoom (~16× on the main iPhone lens): these give ~2× and ~3×. */
+const ZOOMS: [number, string][] = [
+  [0, '1×'],
+  [0.25, '2×'],
+  [0.4, '3×'],
+];
 const styles = StyleSheet.create({
   reading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   readingBox: { width: 104, height: 104, alignItems: 'center', justifyContent: 'center' },
@@ -718,6 +762,10 @@ const styles = StyleSheet.create({
   steps: { marginTop: 12, gap: 7 },
   stepText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
   stepNow: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
+  zoom: { position: 'absolute', left: 14, flexDirection: 'row', gap: 4, padding: 3, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.45)' },
+  zoomBtn: { minWidth: 34, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  zoomOn: { backgroundColor: '#FBF8F2' },
+  zoomText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16 },
   action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 72, paddingHorizontal: 6, paddingVertical: 10, borderRadius: 18, backgroundColor: '#F4F5FC', borderWidth: 1, borderColor: '#E6E8F6' },
   actionText: { fontFamily: fonts.semibold, fontSize: 12.5, lineHeight: 16, color: colors.ink, textAlign: 'center' },

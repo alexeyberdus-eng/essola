@@ -113,6 +113,15 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
 export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:goldapple\.ru|letu\.ru)\/\S+/i;
 
 /** Saves a composition read from a shop page into the shared base. */
+/** Unknown barcode → product name found on the web (marketplaces, shops, barcode catalogs). */
+export async function barcodeWeb(barcode: string): Promise<{ name: string | null; titles: string[] } | null> {
+  if (!aiEnabled) return null;
+  try {
+    return await call<{ name: string | null; titles: string[] }>({ mode: 'barcode.web', barcode });
+  } catch {
+    return null;
+  }
+}
 /** Links a scanned barcode to a composition so the next scan of it, by anyone, is instant. */
 export const saveBarcode = (barcode: string, title: string, ingredients: string[]) => (aiEnabled ? call({ mode: 'barcode.save', barcode, title, ingredients }).catch(() => {}) : Promise.resolve());
 export const saveProduct = (url: string, title: string, ingredients: string[]) => call({ mode: 'save', url, title, ingredients }).catch(() => {});

@@ -451,6 +451,25 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'search') {
       return reply(200, { items: await search(req.q, iam) });
     }
+    if (req.mode === 'barcode.web') {
+      // Unknown barcode: search the web (marketplaces, shops, barcode catalogs) for the product name.
+      const code = String(req.barcode || '').replace(/\D/g, '');
+      if (code.length < 8) return reply(400, { error: 'bad_barcode' });
+      const cached = await cacheGet(`bcweb/${code}.json`, iam);
+      if (cached) return reply(200, cached);
+      const docs = await search(`${code}`, iam).catch(() => []);
+      const clean = (t) =>
+        t
+          .replace(/\s*[|—–-]\s*(купить|цена|отзывы|интернет-магазин|ozon|озон|wildberries|вайлдберриз|яндекс маркет|золотое яблоко|летуаль|магнит косметик|подружка|рив гош).*$/i, '')
+          .replace(/^(купить|отзывы о|отзывы на)\s+/i, '')
+          .replace(new RegExp(code, 'g'), '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      const titles = docs.map((d) => clean(d.title)).filter((t) => t.length > 5 && !/штрих|barcode|ean|gtin|код товара/i.test(t)).slice(0, 6);
+      const out = { name: titles[0] || null, titles, shops: docs.slice(0, 5).map((d) => ({ url: d.url, title: d.title })) };
+      if (out.name) await cachePut(`bcweb/${code}.json`, iam, out).catch(() => {});
+      return reply(200, out);
+    }
     if (req.mode === 'barcode.save') {
       // A barcode someone matched to a composition (photo or a product from our base): remembered for everyone.
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
