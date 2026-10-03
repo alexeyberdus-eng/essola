@@ -26,7 +26,7 @@
 
 | Workflow | Файл | Когда запускается | Что делает |
 |---|---|---|---|
-| EAS Update | `.github/workflows/*eas*` | при каждом пуше в ветку | публикует обновление приложения для Expo Go |
+| EAS Update | `.github/workflows/eas-update.yml` | при каждом пуше в ветку | публикует обновление приложения для Expo Go |
 | Deploy AI scan function | `.github/workflows/deploy-scan.yml` | при изменении `server/` | выкатывает облачную функцию + смоук-тесты |
 | **Letual catalog** | `.github/workflows/letu.yml` | вручную или по расписанию (вс 01:23 UTC) | собирает базу Летуаль |
 
