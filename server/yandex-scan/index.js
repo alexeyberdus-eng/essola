@@ -479,18 +479,21 @@ module.exports.handler = async (event, context) => {
       const cats = new Set((req.cats || []).map(String));
       const goals = String(req.goals || '').replace(/[^A-Z]/g, '');
       const free = String(req.free || '').replace(/[^a-z]/g, '');
-      let list = (await loadLetu(iam)).filter((x) => !x.z && x.m && (!cats.size || cats.has(x.c)));
-      if (goals) list = list.filter((x) => [...goals].some((g) => x.m.includes(g)));
-      if (free) list = list.filter((x) => [...free].every((f) => x.m.includes(f)));
+      const base = await loadLetu(iam);
+      // Before the catalog has been rebuilt with tags, filter by category only and let the app check the compositions.
+      const tagged = base.some((x) => x.m);
+      let list = base.filter((x) => !x.z && (!tagged || x.m) && (!cats.size || cats.has(x.c)));
+      if (tagged && goals) list = list.filter((x) => [...goals].some((g) => x.m.includes(g)));
+      if (tagged && free) list = list.filter((x) => [...free].every((f) => x.m.includes(f)));
       // How many of the chosen goals a product covers comes first, then the chosen order.
-      const cover = (x) => (goals ? [...goals].filter((g) => x.m.includes(g)).length : 0);
+      const cover = (x) => (goals && x.m ? [...goals].filter((g) => x.m.includes(g)).length : 0);
       if (req.sort === 'rating') list = [...list].sort((a, b) => cover(b) - cover(a) || (b.r || 0) - (a.r || 0) || b.p - a.p);
       else if (req.sort === 'popular') list = [...list].sort((a, b) => cover(b) - cover(a) || b.p - a.p);
       else list = [...list].sort((a, b) => cover(b) - cover(a) || b.s - a.s || b.p - a.p);
       const size = Math.min(Number(req.size) || 30, 40);
       const page = Math.max(Number(req.page) || 1, 1);
       const items = await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam);
-      return reply(200, { items, total: list.length });
+      return reply(200, { items, total: list.length, untagged: !tagged });
     }
     if (req.mode === 'similar') {
       // Analogs by composition from our Letual base: overlap of the composition fingerprints

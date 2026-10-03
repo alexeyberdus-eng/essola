@@ -138,10 +138,10 @@ export async function searchProducts(q: string): Promise<CachedProduct[]> {
 
 export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string; /** composition not published */ z?: 1; /** goal and free-from tags, see lib/tags.ts */ m?: string; /** Letual rating 0–5 */ r?: number; p?: number };
 /** «Подбор средств»: products from our base by category, goals (any) and free-from tags (all). */
-export async function matchProducts(opts: { cats: string[]; goals: string; free: string; sort: 'score' | 'rating' | 'popular'; page: number }): Promise<{ items: CatalogItem[]; total: number } | null> {
+export async function matchProducts(opts: { cats: string[]; goals: string; free: string; sort: 'score' | 'rating' | 'popular'; page: number }): Promise<{ items: CatalogItem[]; total: number; untagged?: boolean } | null> {
   if (!aiEnabled) return null;
   try {
-    return await call<{ items: CatalogItem[]; total: number }>({ mode: 'match', ...opts, size: 30 });
+    return await call<{ items: CatalogItem[]; total: number; untagged?: boolean }>({ mode: 'match', ...opts, size: 40 });
   } catch {
     return null;
   }

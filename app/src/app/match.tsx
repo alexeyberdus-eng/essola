@@ -16,7 +16,7 @@ import { Category, RECIPES } from '../data/recipes';
 import { useProfile } from '../lib/profile';
 import type { Profile } from '../lib/profile';
 import { CatalogItem, matchProducts } from '../lib/ai';
-import { FREE_TAGS, GOAL_TAGS } from '../lib/tags';
+import { FREE_TAGS, GOAL_TAGS, productTags } from '../lib/tags';
 import { Icon } from '../components/Icon';
 import { RECIPE_INCI } from '../lib/wiki';
 import { colors, fonts, space } from '../theme';
@@ -85,7 +85,7 @@ export default function Match() {
   const [free, setFree] = useState<string[]>([]);
   const [useMe, setUseMe] = useState(profile.done);
   const [sort, setSort] = useState<(typeof SORTS)[number][0]>('score');
-  const [found, setFound] = useState<{ items: CatalogItem[]; total: number; page: number } | null>(null);
+  const [found, setFound] = useState<{ items: CatalogItem[]; total: number; page: number; exact: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   // Recipes
   const [zone, setZone] = useState<Category>('Лицо');
@@ -103,12 +103,41 @@ export default function Match() {
   }, [area, cats, pg, free, useMe, profile, sort]);
   const qKey = JSON.stringify(query);
 
+  // Server pages from `from`: when the catalog has no tags yet, the phone tags each composition itself and keeps
+  // reading pages until enough products fit.
+  const fetchFrom = async (from: number) => {
+    let page = from;
+    const items: CatalogItem[] = [];
+    let total = 0;
+    let exact = true;
+    for (let i = 0; i < 6; i++) {
+      const r = await matchProducts({ ...query, page });
+      if (!r) break;
+      total = r.total;
+      if (!r.untagged) {
+        items.push(...r.items);
+        break;
+      }
+      exact = false;
+      for (const x of r.items) {
+        const m = productTags(analyze(x.x));
+        const okGoals = !query.goals || [...query.goals].some((g) => m.includes(g));
+        const okFree = [...query.free].every((f) => m.includes(f));
+        if (okGoals && okFree) items.push({ ...x, m });
+      }
+      if (items.length >= 20 || page * 40 >= r.total) break;
+      page++;
+    }
+    return { items, total, page, exact };
+  };
+
   useEffect(() => {
     if (what !== 'products') return;
     let alive = true;
     setBusy(true);
-    matchProducts({ ...query, page: 1 })
-      .then((r) => alive && setFound(r ? { ...r, page: 1 } : { items: [], total: 0, page: 1 }))
+    setFound(null);
+    fetchFrom(1)
+      .then((r) => alive && setFound(r))
       .finally(() => alive && setBusy(false));
     return () => {
       alive = false;
@@ -118,10 +147,10 @@ export default function Match() {
   }, [qKey, what]);
 
   const more = async () => {
-    if (!found || busy || found.items.length >= found.total) return;
+    if (!found || busy || found.page * 40 >= found.total) return;
     setBusy(true);
-    const r = await matchProducts({ ...query, page: found.page + 1 });
-    if (r) setFound({ items: [...found.items, ...r.items], total: r.total, page: found.page + 1 });
+    const r = await fetchFrom(found.page + 1);
+    setFound({ items: [...found.items, ...r.items], total: r.total, page: r.page, exact: found.exact && r.exact });
     setBusy(false);
   };
 
@@ -252,7 +281,7 @@ export default function Match() {
             </View>
 
             <Text style={[styles.h2, { marginTop: 22 }]}>
-              {busy && !found?.items.length ? 'Подбираем…' : found?.total ? `Нашли ${found.total.toLocaleString('ru-RU')}` : 'Ничего не нашли — уберите часть фильтров'}
+              {busy && !found?.items.length ? 'Подбираем…' : found?.items.length ? (found.exact ? `Нашли ${found.total.toLocaleString('ru-RU')}` : `Подобрали ${found.items.length}`) : 'Ничего не нашли — уберите часть фильтров'}
             </Text>
             {scored.map(({ x, score, overall, me, fits }) => (
               <Press key={x.k} haptic={false} onPress={() => openProduct(x, overall)} style={styles.prod}>
@@ -267,7 +296,7 @@ export default function Match() {
                 <ScoreBadge value={score} size={44} />
               </Press>
             ))}
-            {!!found && found.items.length < found.total && (
+            {!!found && found.page * 40 < found.total && (
               <Press onPress={more} style={styles.more}>
                 {busy ? <ActivityIndicator color={colors.violet} /> : <Text style={styles.moreText}>Показать ещё</Text>}
               </Press>
