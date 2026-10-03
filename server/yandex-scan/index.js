@@ -244,14 +244,14 @@ module.exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
     // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
+    // The app registered its return address under the state beforehand (mode "vk.start").
     const q = event.queryStringParameters || {};
-    const back = (() => {
-      try {
-        return Buffer.from(String(q.state || '').split('.')[1] || '', 'base64url').toString();
-      } catch {
-        return '';
-      }
-    })();
+    // Some flows put the answer after "#": a tiny page moves it into the query and comes back.
+    if (!q.state) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<script>if(location.hash.length>1)location.replace(location.pathname+"?"+location.hash.slice(1));else document.write("Вход отменён. Вернитесь в приложение.")</script>' };
+    console.log('vk bounce keys:', Object.keys(q).join(','), 'state:', String(q.state || '').slice(0, 12));
+    const state = String(q.state || '').replace(/[^A-Za-z0-9_-]/g, '');
+    const saved = state.length >= 16 ? await cacheGet(`vk/${state}.json`, context?.token?.access_token) : null;
+    const back = String(saved?.back || '');
     if (!/^(exps?|essola):\/\/[^\s"'<>]*$/.test(back)) return reply(400, { error: 'bad_state' });
     const params = new URLSearchParams(Object.fromEntries(['code', 'state', 'device_id', 'error', 'error_description'].filter((k) => q[k]).map((k) => [k, String(q[k])])));
     return { statusCode: 302, headers: { Location: `${back}${back.includes('?') ? '&' : '?'}${params}` }, body: '' };
@@ -263,6 +263,13 @@ module.exports.handler = async (event, context) => {
     const req = JSON.parse(raw);
     const textModel = process.env.TEXT_MODEL || 'yandexgpt-lite/latest';
     const iam = context?.token?.access_token;
+    if (req.mode === 'vk.start') {
+      const state = String(req.state || '');
+      const back = String(req.back || '');
+      if (!/^[A-Za-z0-9_-]{16,128}$/.test(state) || !/^(exps?|essola):\/\/[^\s"'<>]*$/.test(back)) return reply(400, { error: 'bad_request' });
+      await cachePut(`vk/${state}.json`, iam, { back, at: Date.now() }, true);
+      return reply(200, { ok: true });
+    }
     if (req.mode === 'product') {
       const product = await cacheGet(keyFor(req), iam);
       return reply(200, { product });

@@ -26,8 +26,10 @@ export async function signInWithVk(): Promise<VkUser | null> {
   const verifier = randomString();
   const challenge = b64url(await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, { encoding: Crypto.CryptoEncoding.BASE64 }));
   const back = Linking.createURL('vk');
-  // The state carries where to return; the function only redirects to app links (exp://, essola://).
-  const state = `${randomString().slice(0, 16)}.${b64url(btoa(back))}`;
+  // The function keeps where to return under this state (it only redirects to app links: exp://, essola://).
+  const state = randomString().slice(0, 40);
+  const reg = await fetch(bounce!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': process.env.EXPO_PUBLIC_SCAN_KEY ?? '' }, body: JSON.stringify({ mode: 'vk.start', state, back }) }).catch(() => null);
+  if (!reg?.ok) throw new Error('Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.');
   const redirect = bounce!;
   const auth = `https://id.vk.com/authorize?${new URLSearchParams({
     response_type: 'code',
