@@ -127,7 +127,7 @@ export async function searchProducts(q: string): Promise<CachedProduct[]> {
   }
 }
 
-export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string };
+export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string; /** composition not published */ z?: 1 };
 export type SimilarItem = CatalogItem & { match: number; common: string[] };
 /** Products from our base with the most similar composition fingerprint (see lib/signature.ts). */
 export async function catalogSimilar(g: string): Promise<SimilarItem[] | null> {

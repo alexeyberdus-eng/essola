@@ -58,7 +58,12 @@ async function roots() {
   const menu = await req(`${BASE}/api/content-delivery/v1/public/header/top-menu?pushSite=storeMobileRU`);
   // Sections already in the base are skipped (comma-separated SKIP_SECTIONS), so a run only adds new ones.
   const skip = new Set((process.env.SKIP_SECTIONS || '').split(',').map((x) => x.trim()).filter(Boolean));
-  const found = [...new Set([...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]))].filter((p) => !skip.has(p));
+  if (!menu) console.error('top menu unavailable, trying the category tree');
+  // Second source: the catalog's own category tree (top-level nodes) from the filters endpoint.
+  const tree = menu ? null : await filters('/browse');
+  const fromTree = (tree?.categories || []).map((n) => `/browse${n.path || ''}`).filter((p) => /^\/browse\/[a-z0-9-]+$/.test(p));
+  if (!menu) console.error('category tree:', fromTree.length ? fromTree.join(' ') : 'unavailable');
+  const found = [...new Set([...[...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]), ...fromTree, ...ROOTS])].filter((p) => !skip.has(p));
   const checked = [];
   for (const path of found) {
     const total = (await search(path, 1, SIZE))?.totalProducts ?? 0;

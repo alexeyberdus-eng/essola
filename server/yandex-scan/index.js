@@ -234,9 +234,9 @@ async function letuShard(h, iam) {
   return data;
 }
 async function withCompositions(items, iam) {
-  const need = [...new Set(items.filter((x) => !x.x && x.k.startsWith('letu:')).map((x) => crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)))];
+  const need = [...new Set(items.filter((x) => !x.x && !x.z && x.k.startsWith('letu:')).map((x) => crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)))];
   const loaded = Object.fromEntries(await Promise.all(need.map(async (h) => [h, await letuShard(h, iam)])));
-  return items.map((x) => (x.x ? x : { ...x, x: loaded[crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)]?.[x.k] || '' }));
+  return items.map((x) => (x.x || x.z ? x : { ...x, x: loaded[crypto.createHash('sha1').update(x.k).digest('hex').slice(0, 3)]?.[x.k] || '' }));
 }
 
 module.exports.handler = async (event, context) => {
@@ -381,8 +381,9 @@ module.exports.handler = async (event, context) => {
       let list = all;
       if (req.cat) list = list.filter((x) => x.c === req.cat);
       if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
-      if (req.sort === 'best') list = [...list].sort((a, b) => b.s - a.s);
-      else if (req.sort === 'worst') list = [...list].sort((a, b) => a.s - b.s);
+      // Products without a published composition (z) have no score: they go last when sorting by score.
+      if (req.sort === 'best') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || b.s - a.s);
+      else if (req.sort === 'worst') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || a.s - b.s);
       const size = Math.min(Number(req.size) || 40, 40);
       const page = Math.max(Number(req.page) || 1, 1);
       return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam), total: list.length });

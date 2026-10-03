@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { Hint } from './Hint';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Keyboard, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../context/LibraryContext';
 import { catalogPage, searchProducts } from '../lib/ai';
@@ -15,7 +15,7 @@ import { ScoreBadge } from './ScoreBadge';
 import { Brand, Glow } from './silk';
 import { Press, tap } from './ui';
 
-export type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string; url?: string };
+export type Found = { key: string; title: string; brand?: string; image?: string | null; text: string; source: string; barcode?: string; url?: string; /** the shop doesn't publish the composition */ none?: boolean };
 type Sort = 'popular' | 'best' | 'worst';
 
 const OBF = 'https://world.openbeautyfacts.org/cgi/search.pl';
@@ -100,7 +100,7 @@ export async function pageBase(q: string, tag: string | undefined, page: number,
   if (c && (c.total > 0 || page > 1)) {
     const list = c.items.map((x) => {
       const letu = x.k.startsWith('letu:');
-      return { key: letu ? x.k : `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: letu ? 'Летуаль' : 'Open Beauty Facts', barcode: letu ? undefined : x.k, url: x.u };
+      return { key: letu ? x.k : `obf:${x.k}`, title: x.t, brand: x.b || undefined, image: x.i || null, text: x.x, source: letu ? 'Летуаль' : 'Open Beauty Facts', barcode: letu ? undefined : x.k, url: x.u, none: !!x.z };
     });
     return { list, sorted: true };
   }
@@ -163,6 +163,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const scored = useMemo(() => {
     const list = items
       .map((p) => {
+        if (p.none) return { p, overall: 0, score: 0, me: null, n: 0, ok: true };
         const a = analyze(p.text);
         const me = personalize(a, profile);
         return { p, overall: a.scores.overall, score: me?.score ?? a.scores.overall, me, n: a.items.length, ok: !a.unreadable };
@@ -178,6 +179,14 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
 
   const open = (p: Found, overall: number) => {
     tap();
+    if (p.none) {
+      Alert.alert(p.title, 'Магазин не публикует состав этого средства. Его можно посмотреть на упаковке и отсканировать — оценка появится сразу.', [
+        { text: 'Сканировать состав', onPress: () => router.navigate('/scanner') },
+        ...(p.url ? [{ text: 'Открыть в Летуаль', onPress: () => Linking.openURL(p.url!).catch(() => {}) }] : []),
+        { text: 'Закрыть', style: 'cancel' as const },
+      ]);
+      return;
+    }
     const scan = saveScan({ title: [p.brand, p.title].filter(Boolean).join(' · '), text: p.text, overall, barcode: p.barcode, source: p.source, image: p.image, url: p.url });
     router.push(`/analysis/${scan.id}`);
   };
@@ -265,10 +274,16 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
                 {p.title}
               </Text>
               <Text style={styles.meta} numberOfLines={1}>
-                {n} ингр.{me ? ` · ${me.label.toLowerCase()}` : ''}
+                {p.none ? 'Состав недоступен' : `${n} ингр.${me ? ` · ${me.label.toLowerCase()}` : ''}`}
               </Text>
             </View>
-            <ScoreBadge value={score} size={46} />
+            {p.none ? (
+              <View style={styles.noScore}>
+                <Text style={styles.noScoreText}>—</Text>
+              </View>
+            ) : (
+              <ScoreBadge value={score} size={46} />
+            )}
           </Press>
         )}
       />
@@ -277,6 +292,8 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  noScore: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#F1F2F7', alignItems: 'center', justifyContent: 'center' },
+  noScoreText: { fontFamily: fonts.semibold, fontSize: 16, color: colors.muted },
   search: { marginTop: 14, height: 50, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   chip: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf, justifyContent: 'center' },

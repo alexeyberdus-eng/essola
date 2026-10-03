@@ -87,8 +87,9 @@ jobs:
           export PATH="$HOME/yc/bin:$PATH"
           printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
           curl -s -f -o out/prev-index.json "https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID/letu/index.json" -H "X-YaCloud-SubjectToken: $(yc iam create-token)" || echo '[]' > out/prev-index.json
-          node -e "console.log(require('./out/prev-index.json').map(x=>x.k.replace('letu:','')).join('\n'))" > out/known.txt
-          echo "already in the base: $(grep -c . out/known.txt || true)"
+          node -e "console.log(require('./out/prev-index.json').filter(x=>!x.z).map(x=>x.k.replace('letu:','')).join('\n'))" > out/known.txt
+          # Products listed without a composition are not "known": every run checks them again.
+          echo "already in the base with composition: $(grep -c . out/known.txt || true)"
       - name: Fetch compositions
         timeout-minutes: 330
         continue-on-error: true

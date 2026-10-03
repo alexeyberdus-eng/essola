@@ -44,7 +44,7 @@ const comp: Record<string, string> = {};
 for (const f of readdirSync(tabsDir).filter((f) => /^tabs-\d+\.json$/.test(f))) Object.assign(comp, JSON.parse(readFileSync(`${tabsDir}/${f}`, 'utf8')));
 console.log('cards', cards.length, 'with composition', Object.keys(comp).length);
 
-const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number; g?: string }[] = [];
+const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number; g?: string; z?: 1 }[] = [];
 const shards: Record<string, Record<string, string>> = {};
 for (const c of cards) {
   const text = comp[c.id];
@@ -63,6 +63,12 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
   let lost = 0;
   for (const x of prev) {
     if (have.has(x.k)) continue;
+    // A card without a composition is kept as is (it has no shard), unless this run found its composition.
+    if (x.z) {
+      index.push(x);
+      kept++;
+      continue;
+    }
     const h = shardOf(x.k);
     // A card whose composition file is missing is dropped, so the next run fetches it again.
     if (!existsSync(`${prevDir}/x/${h}.json`)) {
@@ -79,6 +85,20 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
     if (existsSync(f)) shards[h] = { ...(JSON.parse(readFileSync(f, 'utf8')) as Record<string, string>), ...shards[h] };
   }
   console.log('kept from the existing base', kept);
+}
+// Products whose composition Letual doesn't publish (or we couldn't read): still listed with name, photo and link,
+// marked z:1 so the app shows "состав недоступен". A later run that finds the composition replaces the card.
+{
+  const have = new Set(index.map((x) => x.k));
+  let none = 0;
+  for (const c of cards) {
+    const k = `letu:${c.id}`;
+    if (have.has(k)) continue;
+    have.add(k);
+    index.push({ k, t: c.t.slice(0, 140), b: c.b.slice(0, 60), i: c.img ? (c.img.startsWith('http') ? c.img : BASE + c.img) : '', u: c.url ? BASE + c.url : '', c: catOf(c.path), s: 0, n: 0, p: c.n, z: 1 });
+    none++;
+  }
+  console.log('without composition (listed with a link)', none);
 }
 // Composition fingerprints for "analogs by composition" (recomputed for every card, old ones included).
 {
@@ -99,7 +119,7 @@ for (const [h, m] of Object.entries(shards)) writeFileSync(`${outDir}/x/${h}.jso
 // The same base as a table for the owner (Excel opens it: UTF-8 with BOM, ";" between columns).
 const cell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
 const allText: Record<string, string> = Object.assign({}, ...Object.values(shards));
-const rows = index.map((x) => [x.t, x.b, x.c, x.s, x.n, x.p, x.u, x.i, allText[x.k] ?? ''].map(cell).join(';'));
+const rows = index.map((x) => [x.t, x.b, x.c, x.z ? '' : x.s, x.n, x.p, x.u, x.i, allText[x.k] ?? 'состав недоступен'].map(cell).join(';'));
 writeFileSync(`${outDir}/letu.csv`, '\uFEFF' + ['Название;Бренд;Категория;Оценка;Ингредиентов;Отзывов;Ссылка;Фото;Состав', ...rows].join('\r\n'));
 const by: Record<string, number> = {};
 for (const x of index) by[x.c] = (by[x.c] || 0) + 1;
