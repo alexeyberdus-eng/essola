@@ -7,7 +7,8 @@ import { RecipeCard } from '../../components/RecipeCard';
 import { Glow } from '../../components/silk';
 import { IconButton, Press, tap } from '../../components/ui';
 import { RECIPES } from '../../data/recipes';
-import { PRODUCTS } from '../../data/shop';
+import { PRODUCTS, shopItemOf } from '../../data/shop';
+import { useState } from 'react';
 import { SITE } from '../../data/shop-site';
 import { colors, fonts, space } from '../../theme';
 
@@ -23,8 +24,10 @@ const stem = (title: string) =>
 export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const p = PRODUCTS.find((x) => x.id === id);
-  if (!p) return null;
+  const item = shopItemOf(id);
+  const [pick, setPick] = useState(id);
+  const p = PRODUCTS.find((x) => x.id === pick) ?? PRODUCTS.find((x) => x.id === id);
+  if (!p || !item) return null;
   const site = SITE[p.id] ?? {};
   const s = stem(p.title);
   const recipes = s.length >= 4 ? RECIPES.filter((r) => r.ingredients.some((i) => i.name.toLowerCase().includes(s))).slice(0, 6) : [];
@@ -37,7 +40,7 @@ export default function ProductScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 120 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: insets.bottom + 180 }}>
         <View style={{ height: 52, justifyContent: 'center' }}>
           <IconButton icon="arrowLeft" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/shop' as never))} />
         </View>
@@ -67,7 +70,7 @@ export default function ProductScreen() {
           </View>
           <View style={styles.fact}>
             <Icon name="shield" size={16} color={colors.violet} />
-            <Text style={styles.factText}>Бренд essola</Text>
+            <Text style={styles.factText}>Бренд Essola</Text>
           </View>
         </View>
 
@@ -82,6 +85,16 @@ export default function ProductScreen() {
       </ScrollView>
 
       <View style={[styles.bar, { paddingBottom: insets.bottom + 12 }]}>
+        {item.variants.length > 1 && (
+          <View style={styles.vols}>
+            {item.variants.map((v) => (
+              <Press key={v.id} haptic={false} onPress={() => { tap(); setPick(v.id); }} style={[styles.vol, v.id === p.id && styles.volOn]} accessibilityLabel={`Объём ${v.volume}`}>
+                <Text style={[styles.volText, v.id === p.id && styles.volTextOn]}>{v.volume}</Text>
+              </Press>
+            ))}
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
         {p.wb && (
           <Press onPress={() => open(p.wb)} style={[styles.buy, styles.wb]} accessibilityLabel="Купить на Wildberries">
             <Text style={styles.buyText}>Купить на WB</Text>
@@ -92,6 +105,7 @@ export default function ProductScreen() {
             <Text style={[styles.buyText, { color: '#fff' }]}>Купить на Ozon</Text>
           </Press>
         )}
+        </View>
       </View>
     </View>
   );
@@ -110,7 +124,12 @@ const styles = StyleSheet.create({
   fact: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: 14, backgroundColor: '#F4F0FF' },
   factText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink },
   h2: { fontFamily: fonts.display, fontSize: 19, color: colors.ink, marginTop: 26, marginBottom: 4 },
-  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', gap: 10, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.96)', borderTopWidth: 1, borderColor: colors.line },
+  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: 10, paddingHorizontal: space.gutter, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.96)', borderTopWidth: 1, borderColor: colors.line },
+  vols: { flexDirection: 'row', padding: 4, borderRadius: 16, backgroundColor: '#F1F2F8', gap: 4 },
+  vol: { flex: 1, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  volOn: { backgroundColor: '#fff', shadowColor: '#15172B', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  volText: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.muted },
+  volTextOn: { color: colors.ink },
   buy: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   wb: { backgroundColor: '#CB11AB' },
   oz: { backgroundColor: '#005BFF' },

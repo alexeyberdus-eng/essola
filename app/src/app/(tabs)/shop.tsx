@@ -8,14 +8,14 @@ import { ProductArt } from '../../components/ProductArt';
 import { Icon } from '../../components/Icon';
 import { Brand, FadeIn, Glow } from '../../components/silk';
 import { Press, Seg, tap } from '../../components/ui';
-import { Product, PRODUCTS, SHOP_CATEGORIES } from '../../data/shop';
+import { SHOP_CATEGORIES, SHOP_ITEMS, ShopItem } from '../../data/shop';
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
 type Cat = 'all' | (typeof SHOP_CATEGORIES)[number];
 
 type Mode = 'base' | 'shop';
 
-/** «Средства»: search the product base, or the essola shop of ingredients. */
+/** «Средства»: search the product base, or the Essola shop of ingredients. */
 export default function ShopScreen() {
   const [mode, setMode] = useState<Mode>('base');
   const toggle = (
@@ -23,7 +23,7 @@ export default function ShopScreen() {
       {(
         [
           ['base', 'База средств'],
-          ['shop', 'Магазин essola'],
+          ['shop', 'Магазин Essola'],
         ] as const
       ).map(([k, l]) => (
         <Press key={k} haptic={false} onPress={() => { tap(); setMode(k); }} style={[styles.tg, mode === k && styles.tgOn]}>
@@ -41,7 +41,7 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
   const [q, setQ] = useState('');
   const list = useMemo(() => {
     const nq = q.trim().toLowerCase();
-    return PRODUCTS.filter((p) => (cat === 'all' || p.category === cat) && (!nq || (p.title + ' ' + p.desc).toLowerCase().includes(nq)));
+    return SHOP_ITEMS.filter((p) => (cat === 'all' || p.category === cat) && (!nq || (p.title + ' ' + p.desc).toLowerCase().includes(nq)));
   }, [cat, q]);
 
   const header = (
@@ -51,7 +51,7 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
       <View style={styles.hero}>
         <LinearGradient colors={[colors.violet, colors.lilac, colors.orchid]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.heroCircle} />
-        <Text style={styles.heroKicker}>Магазин essola</Text>
+        <Text style={styles.heroKicker}>Магазин Essola</Text>
         <Text style={styles.heroTitle}>Всё для домашней лаборатории</Text>
         <Text style={styles.heroText}>Масла, гидролаты и глины для рецептов из ленты. Покупка на Wildberries и Ozon.</Text>
       </View>
@@ -87,15 +87,16 @@ function ShopStore({ toggle }: { toggle: ReactNode }) {
   );
 }
 
-function ProductCard({ p }: { p: Product }) {
+function ProductCard({ p }: { p: ShopItem }) {
+  const v = p.variants[0];
   const open = (url: string | null) => {
     if (!url) return;
     tap();
     Linking.openURL(url).catch(() => {});
   };
   return (
-    <Press haptic={false} onPress={() => router.push(`/product/${p.id}` as never)} style={styles.card}>
-      <ProductArt p={p} />
+    <Press haptic={false} onPress={() => router.push(`/product/${v.id}` as never)} style={styles.card}>
+      <ProductArt p={{ ...v, volume: p.variants.map((x) => x.volume.replace(' мл', '')).join(' / ') + ' мл' }} />
       <Text style={styles.cat}>{p.category}</Text>
       <Text style={styles.title} numberOfLines={2}>
         {p.title}
@@ -104,14 +105,14 @@ function ProductCard({ p }: { p: Product }) {
         {p.desc}
       </Text>
       <View style={styles.buttons}>
-        {p.wb && (
-          <Press onPress={() => open(p.wb)} style={[styles.btn, styles.wb]} accessibilityLabel="Купить на Wildberries">
+        {v.wb && (
+          <Press onPress={() => open(v.wb)} style={[styles.btn, styles.wb]} accessibilityLabel="Купить на Wildberries">
             <Text style={styles.btnText}>WB</Text>
           </Press>
         )}
-        {p.ozon && (
-          <Press onPress={() => open(p.ozon)} style={[styles.btn, styles.oz]} accessibilityLabel="Купить на Ozon">
-            <Text style={[styles.btnText, { color: colors.ink }]}>Ozon</Text>
+        {v.ozon && (
+          <Press onPress={() => open(v.ozon)} style={[styles.btn, styles.oz]} accessibilityLabel="Купить на Ozon">
+            <Text style={styles.btnText}>Ozon</Text>
           </Press>
         )}
       </View>
@@ -140,8 +141,8 @@ const styles = StyleSheet.create({
   desc: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 4, minHeight: 48 },
   buttons: { flexDirection: 'row', gap: 6, marginTop: 10 },
   btn: { flex: 1, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  wb: { backgroundColor: colors.ink },
-  oz: { backgroundColor: colors.tint },
+  wb: { backgroundColor: '#CB11AB' },
+  oz: { backgroundColor: '#005BFF' },
   btnText: { fontFamily: fonts.bold, fontSize: 13, color: '#fff' },
   empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 40 },
 });

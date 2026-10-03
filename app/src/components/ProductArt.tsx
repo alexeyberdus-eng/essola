@@ -19,7 +19,7 @@ export function ProductArt({ p, height = 110 }: { p: Product; height?: number })
   const photo = SITE[p.id]?.image;
   if (photo)
     return (
-      <View style={[styles.art, { height, backgroundColor: '#F6F3EE' }]}>
+      <View style={[styles.art, { height, backgroundColor: '#FFFFFF' }]}>
         <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="memory-disk" transition={150} />
         <Text style={styles.volume}>{p.volume}</Text>
       </View>

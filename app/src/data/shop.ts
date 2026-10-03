@@ -518,3 +518,20 @@ export const PRODUCTS: Product[] = [
     "wb": "https://www.wildberries.ru/catalog/885282073/detail.aspx"
   }
 ];
+
+/** One card per product: its volumes (30 мл, 100 мл…) are variants with their own marketplace links. */
+export type ShopItem = { id: string; title: string; category: string; desc: string; variants: Product[] };
+export const SHOP_ITEMS: ShopItem[] = (() => {
+  const by = new Map<string, ShopItem>();
+  for (const p of PRODUCTS) {
+    const key = `${p.category}|${p.title}`;
+    const item = by.get(key);
+    if (item) item.variants.push(p);
+    else by.set(key, { id: p.id, title: p.title, category: p.category, desc: p.desc, variants: [p] });
+  }
+  const ml = (v: string) => parseFloat(v.replace(',', '.')) || 0;
+  for (const item of by.values()) item.variants.sort((a, b) => ml(a.volume) - ml(b.volume));
+  return [...by.values()];
+})();
+/** The card a product (any of its volumes) belongs to. */
+export const shopItemOf = (productId: string) => SHOP_ITEMS.find((i) => i.variants.some((v) => v.id === productId));
