@@ -7,6 +7,10 @@ on:
         description: 'Only rebuild the index from the base already in the bucket (no crawling)'
         type: boolean
         default: false
+      skip:
+        description: 'Sections already collected, comma-separated (skipped by this run)'
+        type: string
+        default: ''
   schedule:
     - cron: '23 1 * * 0'
 
@@ -32,6 +36,8 @@ jobs:
         with:
           node-version: 20
       - id: find
+        env:
+          SKIP_SECTIONS: ${{ inputs.skip }}
         # Only the last stdout line is the section list; diagnostics go to stderr.
         run: echo "sections=$(node app/scripts/letu-crawl.mjs roots | tail -n 1)" >> "$GITHUB_OUTPUT"
 

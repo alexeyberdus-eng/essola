@@ -53,6 +53,18 @@ function childrenOf(tree, path) {
 
 export const ROOTS = ['/browse/uhod-za-kozhei', '/browse/volosy', '/browse/makiyazh', '/browse/parfyumeriya', '/browse/dlya-muzhchin', '/browse/aptechnaya-kosmetika', '/browse/korejskaya-kosmetika', '/browse/organicheskaya-kosmetika', '/browse/dlya-doma'];
 
+// Likely section addresses, checked one by one (a wrong one just reports 0 products).
+const GUESSES = [
+  'uhod-za-volosami', 'volosy-1', 'dlya-volos', 'sredstva-dlya-volos', 'uhod-za-volosami-1', 'shampuni', 'okrashivanie-volos', 'kraski-dlya-volos', 'ukladka-volos', 'stajling',
+  'muzhchinam', 'dlya-nego', 'muzhskaya-kosmetika', 'dlya-muzhchin-1', 'uhod-dlya-muzhchin', 'britie',
+  'uhod-za-telom', 'telo', 'dlya-tela', 'uhod-za-rukami', 'uhod-za-nogtyami', 'nogti', 'manikyur', 'pedikyur',
+  'dlya-detej', 'detskaya-kosmetika', 'detyam', 'mama-i-malysh',
+  'aksessuary', 'aksessuary-1', 'tehnika', 'tehnika-dlya-krasoty', 'gigiena', 'lichnaya-gigiena', 'polost-rta', 'uhod-za-polostyu-rta',
+  'zagar', 'solncezashhitnye-sredstva', 'sredstva-dlya-zagara', 'dom', 'tovary-dlya-doma', 'aromaty-dlya-doma', 'podarki', 'podarochnye-nabory', 'nabory',
+  'nishevaya-parfyumeriya', 'selektivnaya-parfyumeriya', 'lyuks', 'novinki', 'eksklyuziv', 'aziatskaya-kosmetika', 'korejskaya', 'naturalnaya-kosmetika', 'organicheskaya',
+  'aptechnaya', 'zdorove', 'bad', 'vitaminy', 'intimnaya-gigiena', 'dezodoranty',
+].map((x) => `/browse/${x}`);
+
 // Top-level sections as the site's own menu lists them (falls back to the known ones).
 async function roots() {
   const menu = await req(`${BASE}/api/content-delivery/v1/public/header/top-menu?pushSite=storeMobileRU`);
@@ -63,7 +75,22 @@ async function roots() {
   const tree = menu ? null : await filters('/browse');
   const fromTree = (tree?.categories || []).map((n) => `/browse${n.path || ''}`).filter((p) => /^\/browse\/[a-z0-9-]+$/.test(p));
   if (!menu) console.error('category tree:', fromTree.length ? fromTree.join(' ') : 'unavailable');
-  const found = [...new Set([...[...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]), ...fromTree, ...ROOTS])].filter((p) => !skip.has(p));
+  // Third source: the category trees of sections that work list their sibling sections too.
+  const fromKnown = new Set();
+  for (const r of ['/browse/uhod-za-kozhei', '/browse/makiyazh', '/browse/parfyumeriya']) {
+    const f = await filters(r);
+    const walk = (nodes) => {
+      for (const n of nodes || []) {
+        const top = `/browse${n.path || ''}`.match(/^\/browse\/[a-z0-9-]+/)?.[0];
+        if (top) fromKnown.add(top);
+        walk(n.children);
+      }
+    };
+    walk(f?.categories);
+    await sleep(300);
+  }
+  console.error('sections in category trees:', [...fromKnown].join(' ') || 'none');
+  const found = [...new Set([...[...JSON.stringify(menu || {}).matchAll(/\/browse\/[a-z0-9-]+(?=["/?])/g)].map((m) => m[0]), ...fromTree, ...fromKnown, ...ROOTS, ...GUESSES])].filter((p) => !skip.has(p));
   const checked = [];
   for (const path of found) {
     const total = (await search(path, 1, SIZE))?.totalProducts ?? 0;
