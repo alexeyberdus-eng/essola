@@ -181,7 +181,20 @@ function guess(raw: string, key: string): Ingredient {
 const LOOKALIKE: Record<string, string> = { а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x', и: 'u', г: 'r', п: 'n' };
 const latinize = (s: string) => s.toLowerCase().replace(/[авекмнорстухигп]/g, (ch) => LOOKALIKE[ch] ?? ch);
 
+// The same names come up again and again (water, glycerin, shea butter…): fuzzy matching is the slow part,
+// so each distinct name is recognised once per app session.
+const IDENTIFIED = new Map<string, { ing: Ingredient; match: Match }>();
 export function identify(raw: string): { ing: Ingredient; match: Match } {
+  let hit = IDENTIFIED.get(raw);
+  if (!hit) {
+    hit = identifyUncached(raw);
+    if (IDENTIFIED.size > 20000) IDENTIFIED.clear();
+    IDENTIFIED.set(raw, hit);
+  }
+  return hit;
+}
+
+function identifyUncached(raw: string): { ing: Ingredient; match: Match } {
   const direct = identifyExact(raw);
   if (direct.match === 'exact' || direct.match === 'fuzzy' || !/[а-яё]/i.test(raw)) return direct;
   // "BUTYROSPERMUM РАВКИ" → try again with look-alike Cyrillic letters swapped for Latin.

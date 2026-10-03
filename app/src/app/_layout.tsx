@@ -33,7 +33,13 @@ function Root() {
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
   });
-  const loaded = fontsLoaded && ready;
+  // Never keep people behind the intro: after 6 s the app opens even if a font or the account is still loading.
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLate(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+  const loaded = (fontsLoaded && ready) || late;
 
   // The native splash is blank; our animation starts at once and the app appears under it as soon as it is ready.
   useEffect(() => {

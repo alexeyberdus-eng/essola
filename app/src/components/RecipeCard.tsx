@@ -157,19 +157,21 @@ const styles = StyleSheet.create({
   author: { marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: 'rgba(21,23,43,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden', maxWidth: 140 },
 });
 
-/** Prepares cards in small portions while the feed is idle, so switching «В топе / Новое» never waits for them. */
+/** Prepares the first cards in small portions after start-up, so switching «В топе / Новое» doesn't wait for them. */
 export function warmRecipeCards(list: Recipe[]) {
+  const first = list.slice(0, 60);
   let i = 0;
   let stop = false;
   const step = () => {
     if (stop) return;
-    for (const end = Math.min(list.length, i + 15); i < end; i++) {
-      actives(list[i]);
-      teaser(list[i]);
+    // One recipe per tick: the screen and animations stay smooth even on a slow phone.
+    for (const end = Math.min(first.length, i + 2); i < end; i++) {
+      actives(first[i]);
+      teaser(first[i]);
     }
-    if (i < list.length) setTimeout(step, 16);
+    if (i < first.length) setTimeout(step, 40);
   };
-  setTimeout(step, 300);
+  setTimeout(step, 2500);
   return () => {
     stop = true;
   };
