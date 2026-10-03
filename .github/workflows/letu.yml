@@ -2,9 +2,11 @@ name: Letual catalog (with Letual's permission)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/awesome-mccarthy-dlbgor]
-    paths: ['app/scripts/letu-crawl.mjs', 'app/scripts/build-letu.ts', '.github/workflows/letu.yml']
+    inputs:
+      build_only:
+        description: 'Only rebuild the index from the base already in the bucket (no crawling)'
+        type: boolean
+        default: false
   schedule:
     - cron: '23 1 * * 0'
 
@@ -19,6 +21,7 @@ jobs:
   # One collector per site section, in parallel; each saves after every category and uploads what it has
   # even if it hits its time limit.
   roots:
+    if: ${{ !inputs.build_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -113,6 +116,7 @@ jobs:
         with:
           node-version: 20
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: out
           pattern: letu-*

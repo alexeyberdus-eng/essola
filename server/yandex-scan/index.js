@@ -348,7 +348,7 @@ module.exports.handler = async (event, context) => {
       if (row) await put('forum/index.json', [{ ...row, last: at, replies: t.posts.length }, ...idx.filter((x) => x.id !== tid)]);
       return reply(200, { topic: t });
     }
-    if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment') {
+    if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment' || req.mode === 'social.rate') {
       const key = `social/${crypto.createHash('sha1').update(String(req.key || '')).digest('hex')}.json`;
       const me = uid(req.id);
       const data = await get(key, { likes: [], comments: [] });
@@ -361,7 +361,16 @@ module.exports.handler = async (event, context) => {
         data.comments = [...data.comments, { id: Date.now().toString(36), user: me, nick: clean(req.nick, 24) || 'user', text: clean(req.text, 500), at: new Date().toISOString() }].slice(-200);
         await put(key, data);
       }
-      return reply(200, { likes: data.likes.length, liked: data.likes.includes(me), comments: data.comments.slice(-50) });
+      if (req.mode === 'social.rate' && me) {
+        const n = Math.round(Number(req.stars));
+        if (n >= 1 && n <= 5) {
+          data.rates = { ...(data.rates || {}), [me]: n };
+          await put(key, data);
+        }
+      }
+      const votes = Object.values(data.rates || {});
+      const rating = { avg: votes.length ? Math.round((votes.reduce((a, b) => a + b, 0) / votes.length) * 10) / 10 : 0, count: votes.length, mine: (data.rates || {})[me] || 0 };
+      return reply(200, { likes: data.likes.length, liked: data.likes.includes(me), comments: data.comments.slice(-50), rating });
     }
     if (req.mode === 'catalog') {
       // Ready-made catalog built weekly by CI (scripts/build-catalog.ts), kept warm between calls.
@@ -376,7 +385,49 @@ module.exports.handler = async (event, context) => {
       else if (req.sort === 'worst') list = [...list].sort((a, b) => a.s - b.s);
       const size = Math.min(Number(req.size) || 40, 40);
       const page = Math.max(Number(req.page) || 1, 1);
-      return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size), iam), total: list.length });
+      return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam), total: list.length });
+    }
+    if (req.mode === 'similar') {
+      // Analogs by composition from our Letual base: overlap of the composition fingerprints
+      // (first meaningful ingredients, earlier positions weigh more).
+      const q = String(req.g || '').split('.').filter(Boolean).slice(0, 16);
+      if (q.length < 2) return reply(200, { items: [] });
+      const w = (i) => 1 / (1 + i * 0.18);
+      const qw = new Map(q.map((h, i) => [h, w(i)]));
+      const qTotal = q.reduce((a, _, i) => a + w(i), 0);
+      const skip = String(req.k || '');
+      const scored = [];
+      for (const x of await loadLetu(iam)) {
+        if (!x.g || x.k === skip) continue;
+        const g = x.g.split('.');
+        let common = 0;
+        let cTotal = 0;
+        const hit = [];
+        g.forEach((h, i) => {
+          cTotal += w(i);
+          const v = qw.get(h);
+          if (v) {
+            common += (v + w(i)) / 2;
+            hit.push(h);
+          }
+        });
+        if (hit.length < 2) continue;
+        const sim = (2 * common) / (qTotal + cTotal);
+        if (sim >= 0.3) scored.push({ x, sim, hit });
+      }
+      scored.sort((a, b) => b.sim - a.sim || b.x.p - a.x.p);
+      // One card per product name: the same cream in several volumes would fill the list.
+      const seenTitles = new Set();
+      const top = [];
+      for (const s of scored) {
+        const t = `${s.x.b}|${s.x.t}`.toLowerCase();
+        if (seenTitles.has(t)) continue;
+        seenTitles.add(t);
+        top.push(s);
+        if (top.length >= 8) break;
+      }
+      const withX = await withCompositions(top.map(({ x: { g, ...x } }) => x), iam);
+      return reply(200, { items: withX.map((x, i) => ({ ...x, match: Math.round(top[i].sim * 100), common: top[i].hit })) });
     }
     if (req.mode === 'search') {
       return reply(200, { items: await search(req.q, iam) });

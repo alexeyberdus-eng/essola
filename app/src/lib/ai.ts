@@ -128,6 +128,16 @@ export async function searchProducts(q: string): Promise<CachedProduct[]> {
 }
 
 export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string };
+export type SimilarItem = CatalogItem & { match: number; common: string[] };
+/** Products from our base with the most similar composition fingerprint (see lib/signature.ts). */
+export async function catalogSimilar(g: string): Promise<SimilarItem[] | null> {
+  if (!aiEnabled) return null;
+  try {
+    return (await call<{ items: SimilarItem[] }>({ mode: 'similar', g })).items ?? [];
+  } catch {
+    return null;
+  }
+}
 /** A page of our pre-scored catalog (built weekly from Open Beauty Facts); null when the server can't be reached. */
 export async function catalogPage(q: string, cat: string | undefined, sort: string, page: number): Promise<{ items: CatalogItem[]; total: number } | null> {
   if (!aiEnabled) return null;

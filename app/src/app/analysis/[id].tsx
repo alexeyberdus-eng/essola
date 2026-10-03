@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import { Image } from 'expo-image';
@@ -9,7 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
 import { CompositionSummary } from '../../components/Summary';
-import { aiAnalogs, aiEnabled, Analog, useAiSummary } from '../../lib/ai';
+import { aiEnabled, catalogSimilar, SimilarItem, useAiSummary } from '../../lib/ai';
+import { signature } from '../../lib/signature';
+import { ProductReviews } from '../../components/ProductReviews';
 import { summarize } from '../../lib/effects';
 import { recipeNo } from '../../components/RecipeCard';
 import { Card, FadeIn, Glow } from '../../components/silk';
@@ -25,6 +27,7 @@ import { personalize } from '../../lib/personal';
 import { opinion } from '../../lib/opinion';
 import { ingredientId } from '../../lib/wiki';
 import { useProfile } from '../../lib/profile';
+import { ScoreBadge } from '../../components/ScoreBadge';
 import { ShareCard } from '../../components/ShareCard';
 
 const HERO: Record<'good' | 'caution' | 'avoid', [string, string, string]> = {
@@ -44,7 +47,7 @@ const RISK = [
 export default function AnalysisScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getScan, removeScan } = useLibrary();
+  const { getScan, removeScan, saveScan } = useLibrary();
   const { addToShelf, shelf } = useUserContent();
   const { user } = useAuth();
   const scan = getScan(id);
@@ -52,18 +55,23 @@ export default function AnalysisScreen() {
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
   const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
   const summary = useAiSummary(result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
-  const [shop, setShop] = useState<{ busy?: boolean; list?: Analog[]; error?: boolean }>({});
-  const findAnalogs = async () => {
-    if (!result) return;
-    tap('medium');
-    setShop({ busy: true });
-    try {
-      const known = result.items.filter((i) => i.match === 'exact' || i.match === 'fuzzy');
-      const keys = [...known].sort((a, b) => b.ing.act - a.ing.act).filter((i) => i.ing.act >= 1).slice(0, 3).map((i) => i.ing.ru.toLowerCase());
-      setShop({ list: await aiAnalogs(known.map((i) => i.ing.inci), keys, local.kind) });
-    } catch {
-      setShop({ error: true });
-    }
+  // Analogs by composition from our base (Letual), matched by the composition fingerprint.
+  const [similar, setSimilar] = useState<SimilarItem[] | null | undefined>(undefined);
+  const sig = useMemo(() => (result ? signature(result) : ''), [result]);
+  useEffect(() => {
+    if (!aiEnabled || !sig || sig.split('.').length < 3) return setSimilar(null);
+    let live = true;
+    const own = (scan?.title ?? '').toLowerCase();
+    catalogSimilar(sig).then((list) => live && setSimilar(list ? list.filter((x) => !own.includes(x.t.toLowerCase())) : null));
+    return () => {
+      live = false;
+    };
+  }, [sig, scan?.title]);
+  const openSimilar = (x: SimilarItem) => {
+    tap();
+    const a = analyze(x.x, null);
+    const next = saveScan({ title: [x.b, x.t].filter(Boolean).join(' · '), text: x.x, overall: a.scores.overall, source: 'Летуаль', image: x.i || null, url: x.u });
+    router.push(`/analysis/${next.id}`);
   };
   const { profile } = useProfile();
   const me = useMemo(() => (result ? personalize(result, profile) : null), [result, profile]);
@@ -336,39 +344,39 @@ export default function AnalysisScreen() {
             </Press>
           </FadeIn>
         ))}
-        {aiEnabled && (
+        {aiEnabled && similar !== null && (
           <View style={{ marginTop: 22, gap: 10 }}>
             <View style={styles.anHead}>
               <Text style={styles.section}>Аналоги по составу</Text>
-              <Text style={styles.kicker}>Золотое Яблоко</Text>
+              <Text style={styles.kicker}>{similar?.length ? `${similar.length} в базе` : ''}</Text>
             </View>
-            {shop.list?.length ? (
-              shop.list.map((a, i) => (
-                <FadeIn key={a.url} index={i}>
-                  <Press haptic={false} onPress={() => Linking.openURL(a.url).catch(() => {})}>
+            {similar === undefined ? (
+              <ActivityIndicator color={colors.violet} style={{ marginVertical: 12 }} />
+            ) : similar.length ? (
+              similar.map((a, i) => (
+                <FadeIn key={a.k} index={i}>
+                  <Press haptic={false} onPress={() => openSimilar(a)}>
                     <Card style={styles.an}>
-                      <Ring value={a.match} size={52} stroke={4} color={a.match >= 70 ? colors.good : a.match >= 45 ? colors.violet : colors.warn} track={colors.line}>
-                        <Text style={styles.matchText}>{a.match}%</Text>
-                      </Ring>
+                      {a.i ? (
+                        <Image source={{ uri: a.i }} style={styles.simImg} contentFit="contain" cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={[styles.simImg, { alignItems: 'center', justifyContent: 'center' }]}>
+                          <Icon name="flask" size={22} color={colors.faint} />
+                        </View>
+                      )}
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.anTitle} numberOfLines={2}>{a.title}</Text>
-                        {!!a.common.length && <Text style={styles.anSub} numberOfLines={1}>Общее: {a.common.join(', ')}</Text>}
-                        {!!a.note && <Text style={styles.anSub} numberOfLines={2}>{a.note}</Text>}
+                        <Text style={styles.anTitle} numberOfLines={2}>{a.t}</Text>
+                        <Text style={styles.anSub} numberOfLines={1}>{[a.b, `совпадение ${a.match}%`].filter(Boolean).join(' · ')}</Text>
                       </View>
-                      <Icon name="external" size={14} color={colors.muted} />
+                      <ScoreBadge value={a.s} size={40} />
                     </Card>
                   </Press>
                 </FadeIn>
               ))
             ) : (
-              <Press onPress={findAnalogs} disabled={shop.busy} style={styles.findBtn}>
-                {shop.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="search" size={17} color={colors.onDark} />}
-                <Text style={styles.findText}>{shop.busy ? 'Ищем аналоги…' : 'Найти аналоги по составу'}</Text>
-              </Press>
+              <T v="small">Похожих по составу средств в базе пока не нашлось.</T>
             )}
-            {shop.list && !shop.list.length && <T v="small">Похожих товаров не нашлось — попробуйте поиск в магазинах ниже.</T>}
-            {shop.error && <T v="small" style={{ color: colors.bad }}>Не получилось выполнить поиск. Проверьте интернет и попробуйте ещё раз.</T>}
-            {!!shop.list?.length && <T v="small" style={{ color: colors.faint }}>Процент — оценка совпадения ключевых компонентов, а не точное сравнение полного состава.</T>}
+            {!!similar?.length && <T v="small" style={{ color: colors.faint }}>Совпадение — доля общих ключевых ингредиентов с учётом их места в составе.</T>}
           </View>
         )}
 
@@ -387,6 +395,8 @@ export default function AnalysisScreen() {
             ))}
           </View>
         </Card>
+
+        {(scan.barcode || scan.url) && <ProductReviews id={scan.url ?? scan.barcode!} />}
 
         <T v="small" style={{ marginTop: 20, color: colors.faint }}>
           Оценка информационная и не заменяет консультацию дерматолога: концентрации производитель обычно не указывает.
@@ -529,9 +539,6 @@ const styles = StyleSheet.create({
   fn: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, maxWidth: 100 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   detail: { paddingLeft: 32, paddingBottom: 14 },
-  matchText: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.ink },
-  findBtn: { height: 52, borderRadius: 18, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  findText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
   detailLead: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 20, color: colors.ink },
   detailText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.ink2, marginTop: 6 },
   fnIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -557,6 +564,7 @@ const styles = StyleSheet.create({
   meIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   meTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
   meText: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 2 },
+  simImg: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#fff' },
   offscreen: { position: 'absolute', left: -2000, top: 0 },
   generalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 16, padding: 8 },
   generalNum: { fontFamily: fonts.display, fontSize: 14, color: colors.ink },

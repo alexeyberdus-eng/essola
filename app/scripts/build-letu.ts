@@ -6,6 +6,7 @@
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { analyze } from '../src/lib/analyze';
+import { signature } from '../src/lib/signature';
 
 const BASE = 'https://www.letu.ru';
 const CATS: [string, RegExp][] = [
@@ -43,7 +44,7 @@ const comp: Record<string, string> = {};
 for (const f of readdirSync(tabsDir).filter((f) => /^tabs-\d+\.json$/.test(f))) Object.assign(comp, JSON.parse(readFileSync(`${tabsDir}/${f}`, 'utf8')));
 console.log('cards', cards.length, 'with composition', Object.keys(comp).length);
 
-const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number }[] = [];
+const index: { k: string; t: string; b: string; i: string; u: string; c: string; s: number; n: number; p: number; g?: string }[] = [];
 const shards: Record<string, Record<string, string>> = {};
 for (const c of cards) {
   const text = comp[c.id];
@@ -78,6 +79,18 @@ if (prevDir && existsSync(`${prevDir}/letu-index.json`)) {
     if (existsSync(f)) shards[h] = { ...(JSON.parse(readFileSync(f, 'utf8')) as Record<string, string>), ...shards[h] };
   }
   console.log('kept from the existing base', kept);
+}
+// Composition fingerprints for "analogs by composition" (recomputed for every card, old ones included).
+{
+  const texts: Record<string, string> = Object.assign({}, ...Object.values(shards));
+  let withSig = 0;
+  for (const x of index) {
+    const t = texts[x.k];
+    if (!t) continue;
+    x.g = signature(analyze(t));
+    if (x.g) withSig++;
+  }
+  console.log('fingerprints', withSig);
 }
 index.sort((a, b) => b.p - a.p);
 mkdirSync(`${outDir}/x`, { recursive: true });
