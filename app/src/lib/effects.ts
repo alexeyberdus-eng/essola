@@ -32,6 +32,32 @@ function list(names: string[]) {
   return u.length > 1 ? `${u[0]} и ${u[1].toLowerCase()}` : u[0];
 }
 
+/** Products that aren't skin care at all are recognised by their signature ingredients. */
+function specialKind(items: Ingredient[]): { type: string; use: string[] } | null {
+  const top = items.slice(0, 4).map((i) => i.inci.toLowerCase());
+  const all = items.map((i) => i.inci.toLowerCase());
+  const any = (re: RegExp, list = all) => list.some((x) => re.test(x));
+  if (any(/^acetone$|^ethyl acetate$/, top.slice(0, 2)) && !any(/nitrocellulose/))
+    return { type: 'Жидкость для снятия лака', use: ['Ногти: ватным диском, затем вымыть руки и нанести крем', 'Пользуйтесь в проветриваемом помещении'] };
+  if (any(/nitrocellulose|tosylamide|trimellitic anhydride/))
+    return { type: 'Лак для ногтей', use: ['Ногти: 2 тонких слоя, затем закрепитель'] };
+  if (any(/phenylenediamine|toluene-2,5-diamine|^resorcinol$|aminophenol/) || (any(/^ammonia$|ethanolamine/) && any(/hydrogen peroxide/)))
+    return { type: 'Краска для волос', use: ['Волосы: по инструкции производителя, перчатки обязательны', 'За 48 часов — тест на сгибе локтя'] };
+  if (any(/sodium fluoride|monofluorophosphate|stannous fluoride|hydroxyapatite/) || (any(/hydrated silica/, top) && any(/sorbitol|xylitol/)))
+    return { type: 'Зубная паста', use: ['Зубы: 2 раза в день по 2 минуты, не глотать'] };
+  if (any(/aluminum chlorohydrate|aluminium chlorohydrate|aluminum zirconium|potassium alum|zinc ricinoleate|triethyl citrate/))
+    return { type: 'Дезодорант', use: ['Подмышки: на чистую сухую кожу, не сразу после бритья'] };
+  if (any(/thioglycol/))
+    return { type: 'Средство для депиляции или завивки', use: ['Строго по инструкции и времени на упаковке, не на раздражённую кожу'] };
+  if (any(/dihydroxyacetone|erythrulose/))
+    return { type: 'Автозагар', use: ['Тело: на отшелушенную кожу ровным слоем, вымыть руки после нанесения'] };
+  if (any(/^alcohol denat|^alcohol$/, top.slice(0, 1)) && any(/^parfum$|^fragrance$/, top.slice(0, 3)))
+    return { type: 'Парфюм', use: ['На запястья и шею, не на раздражённую кожу и не перед солнцем'] };
+  if (any(/behentrimonium|cetrimonium|stearamidopropyl dimethylamine/, top) && !any(/sulfate|glucoside|betaine|isethionate/, top))
+    return { type: 'Бальзам или маска для волос', use: ['Волосы: на длину после шампуня, 2–5 минут, смыть'] };
+  return null;
+}
+
 /**
  * Explains in plain words what a set of ingredients does together.
  * `items` go in formula order (first = highest share); `kind` overrides the guessed product type.
@@ -68,7 +94,12 @@ export function summarize(items: Ingredient[], kind?: string): Summary {
           : water
             ? 'Тоник или сыворотка'
             : 'Уходовое средство';
-  const type = kind ?? guessed;
+  const special = specialKind(items);
+  const type = kind ?? special?.type ?? guessed;
+  if (special && !kind) {
+    const top = effects.slice(0, 2).map((e) => e.title.toLowerCase());
+    return { kind: type, lead: `${type}${top.length ? `: ${top.join(', ')}` : ''}.`, effects, use: special.use };
+  }
 
   const skin = keys.has('acne') || keys.has('tone') ? 'жирной и комбинированной кожи' : keys.has('calm') ? 'чувствительной кожи' : keys.has('barrier') || oils >= 2 ? 'сухой кожи' : 'любого типа кожи';
   const top = effects.slice(0, 2).map((e) => e.title.toLowerCase());
