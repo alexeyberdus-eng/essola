@@ -1,10 +1,9 @@
 import { router } from 'expo-router';
-import { Hint } from '../../components/Hint';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, LayoutAnimation, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
-import { DarkBlock, Flask, FormulaBar } from '../../components/lab';
+import { Flask, FormulaBar } from '../../components/lab';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { CompositionSummary } from '../../components/Summary';
 import { aiEnabled, aiReview, Review } from '../../lib/ai';
@@ -13,9 +12,20 @@ import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_ICON, FN_LABEL, INGREDIENTS } from '../../data/ingredients';
 import { identify, normalize } from '../../lib/analyze';
 import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, setDraft, total } from '../../lib/builder';
-import { colors, fonts, PHASE_COLOR, shadow, space, TAB_SPACE } from '../../theme';
+import { colors, fonts, PHASE_COLOR, scoreColor, shadow, space, TAB_SPACE } from '../../theme';
 
-const VOLUMES = [30, 50, 100, 200];
+const AREAS = ['Лицо', 'Тело', 'Волосы', 'Кожа головы', 'Губы', 'Руки и ногти', 'Вокруг глаз'];
+const GOALS = ['Увлажнение', 'Питание', 'Против акне', 'Успокоение', 'Сияние и тон', 'Антивозраст', 'Восстановление', 'Очищение'];
+/** Starting points for each area: a base, a humectant, an emulsifier, actives and a preservative. */
+const QUICK: Record<string, string[]> = {
+  'Лицо': ['Aqua', 'Glycerin', 'Cetearyl Olivate', 'Squalane', 'Niacinamide', 'Panthenol', 'Sodium Hyaluronate', 'Simmondsia Chinensis Seed Oil', 'Ceramide NP', 'Phenoxyethanol'],
+  'Вокруг глаз': ['Aqua', 'Caffeine', 'Sodium Hyaluronate', 'Squalane', 'Panthenol', 'Cetearyl Olivate', 'Palmitoyl Tripeptide-1', 'Phenoxyethanol'],
+  'Тело': ['Aqua', 'Glycerin', 'Butyrospermum Parkii Butter', 'Prunus Amygdalus Dulcis Oil', 'Urea', 'Cetearyl Olivate', 'Cetearyl Alcohol', 'Tocopherol', 'Phenoxyethanol'],
+  'Волосы': ['Aqua', 'Behentrimonium Methosulfate', 'Cetearyl Alcohol', 'Hydrolyzed Keratin', 'Panthenol', 'Argania Spinosa Kernel Oil', 'Glycerin', 'Phenoxyethanol'],
+  'Кожа головы': ['Aqua', 'Caffeine', 'Niacinamide', 'Panthenol', 'Salicylic Acid', 'Menthol', 'Propanediol', 'Phenoxyethanol'],
+  'Губы': ['Cera Alba', 'Butyrospermum Parkii Butter', 'Ricinus Communis Seed Oil', 'Theobroma Cacao Seed Butter', 'Lanolin', 'Tocopherol'],
+  'Руки и ногти': ['Aqua', 'Glycerin', 'Urea', 'Butyrospermum Parkii Butter', 'Allantoin', 'Cetearyl Olivate', 'Simmondsia Chinensis Seed Oil', 'Phenoxyethanol'],
+};
 const PHASE_ICON: Record<string, 'drop' | 'leaf' | 'swap' | 'bolt' | 'shield'> = { water: 'drop', oil: 'leaf', emulsifier: 'swap', active: 'bolt', preservative: 'shield' };
 const KIND_USE: Record<Kind, string> = {
   cream: 'Лицо и шея: утром и вечером на чистую кожу, горошина на всё лицо',
@@ -31,7 +41,9 @@ export default function BuilderScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [review, setReview] = useState<{ sig: string; data?: Review; busy?: boolean; error?: boolean } | null>(null);
   const [volume, setVolume] = useState(50);
-  const [picker, setPicker] = useState(false);
+  const [q, setQ] = useState('');
+  const [area, setArea] = useState<string>(AREAS[0]);
+  const [goal, setGoal] = useState<string | null>(null);
   const [drop, setDrop] = useState(0);
   const [dropColor, setDropColor] = useState<string>(colors.sageDeep);
 
@@ -50,13 +62,28 @@ export default function BuilderScreen() {
     const fn = INGREDIENTS.find((x) => x.inci === i.inci)?.fn[0];
     return `${i.inci || i.name} ${i.pct}%${fn ? ` (${FN_LABEL[fn].toLowerCase()})` : ` (${PHASE_LABEL[i.phase].toLowerCase()})`}`;
   });
-  const sig = `${kind}|${formula.join(',')}`;
+  const purpose = `${local.kind}. Для чего: ${area}${goal ? `. Задача: ${goal.toLowerCase()}` : ''}`;
+  const sig = `${purpose}|${formula.join(',')}`;
+  const nq = normalize(q);
+  const found = useMemo(
+    () =>
+      nq
+        ? INGREDIENTS.filter((i) => i.risk <= 1 && [i.ru, i.inci, ...i.aliases].some((t) => normalize(t).includes(nq)))
+            .sort((a, b) => Number(normalize(b.ru).startsWith(nq)) - Number(normalize(a.ru).startsWith(nq)) || b.act - a.act)
+            .slice(0, 8)
+        : [],
+    [nq],
+  );
+  const quick = useMemo(() => {
+    const have = new Set(items.map((i) => i.inci));
+    return (QUICK[area] ?? QUICK['Лицо']).map((inci) => INGREDIENTS.find((x) => x.inci === inci)).filter((x): x is (typeof INGREDIENTS)[number] => !!x && !have.has(x.inci)).slice(0, 10);
+  }, [area, items]);
   const shown = review?.sig === sig ? review : null;
   const askReview = async () => {
     tap('medium');
     setReview({ sig, busy: true });
     try {
-      const data = await aiReview(formula, local.kind, list.filter((c) => !c.ok).map((c) => c.text));
+      const data = await aiReview(formula, purpose, list.filter((c) => !c.ok).map((c) => c.text));
       setReview({ sig, data });
     } catch {
       setReview({ sig, error: true });
@@ -90,7 +117,6 @@ export default function BuilderScreen() {
     setItems((prev) => [...prev, item]);
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
-    setPicker(false);
   };
   // "+" next to a technologist suggestion: add it straight into the formula at the suggested share.
   const addSuggested = (name: string, pct?: string) => {
@@ -128,9 +154,9 @@ export default function BuilderScreen() {
           <Text style={styles.h1}>Конструктор</Text>
           {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
         </View>
-        <Hint id="builder" title="Конструктор формул" text="Выберите тип средства, добавьте ингредиенты через поиск и задайте доли в процентах. Описание появится сразу, а технолог подскажет, что улучшить." />
-        <Text style={styles.ask}>Что делаем?</Text>
+        <Text style={styles.intro}>Соберите своё средство из {INGREDIENTS.length}+ ингредиентов: мы посчитаем граммы, опишем эффект, а технолог essola lab подскажет, что улучшить.</Text>
 
+        <Text style={styles.ask}>Что делаем</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {KINDS.map((k) => (
             <Press key={k.key} haptic={false} onPress={() => choose(k.key)} style={[styles.chip, kind === k.key && styles.chipOn]}>
@@ -138,87 +164,65 @@ export default function BuilderScreen() {
             </Press>
           ))}
         </ScrollView>
+        <Text style={styles.ask}>Для чего</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
+          {AREAS.map((a) => (
+            <Press key={a} haptic={false} onPress={() => { tap(); setArea(a); }} style={[styles.chip, area === a && styles.chipOn]}>
+              <Text style={[styles.chipText, area === a && styles.chipTextOn]}>{a}</Text>
+            </Press>
+          ))}
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 6 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
+          {GOALS.map((g) => (
+            <Press key={g} haptic={false} onPress={() => { tap(); setGoal(goal === g ? null : g); }} style={[styles.goal, goal === g && styles.goalOn]}>
+              <Text style={[styles.goalText, goal === g && { color: colors.violet }]}>{g}</Text>
+            </Press>
+          ))}
+        </ScrollView>
 
-        {!items.length && (
-          <FadeIn>
-            <Card style={styles.empty}>
-              <Text style={styles.emptyTitle}>Соберите свою формулу</Text>
-              <Text style={styles.emptyText}>Найдите ингредиенты через поиск и задайте доли. Мы сразу опишем, что даст средство, а технолог подскажет, что добавить или убавить.</Text>
-              <Button label="Найти ингредиент" icon="search" onPress={() => setPicker(true)} />
-            </Card>
-          </FadeIn>
-        )}
-
-        {items.length > 0 && (
-        <DarkBlock style={styles.lab}>
-          <View style={styles.labRow}>
-            <Flask layers={layers} size={78} dropKey={drop} dropColor={dropColor} />
-            <View style={{ flex: 1, gap: 10 }}>
-              <View>
-                <Text style={styles.darkKicker}>Сумма</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-                  <Text style={styles.sum}>{pctText(sum)}</Text>
+        <View style={styles.search}>
+          <Icon name="search" size={18} color={colors.muted} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Найти ингредиент: масло ши, ниацинамид…" placeholderTextColor={colors.faint} style={styles.searchInput} returnKeyType="search" />
+          {!!q && (
+            <Press haptic={false} onPress={() => setQ('')} accessibilityLabel="Очистить">
+              <Icon name="close" size={16} color={colors.muted} />
+            </Press>
+          )}
+        </View>
+        {q.trim() ? (
+          <View style={styles.results}>
+            {found.map((item) => (
+              <Press key={item.inci} haptic={false} onPress={() => { add(item.inci); setQ(''); }} style={styles.pRow}>
+                <View style={[styles.pIcon, { backgroundColor: item.fn[0] ? FN_ICON[item.fn[0]].bg : colors.surf }]}>
+                  {item.fn[0] && <Icon name={FN_ICON[item.fn[0]].icon} size={16} color={FN_ICON[item.fn[0]].color} strokeWidth={1.9} />}
                 </View>
-              </View>
-              <View>
-                <Text style={styles.darkKicker}>Прогноз Essola</Text>
-                <Text style={styles.score}>{score}/100</Text>
-              </View>
-              <View style={styles.vols}>
-                {VOLUMES.map((v) => (
-                  <Press key={v} haptic={false} onPress={() => { tap(); setVolume(v); }} style={[styles.vol, volume === v && styles.volOn]}>
-                    <Text style={[styles.volText, volume === v && { color: colors.olive }]}>{v}</Text>
-                  </Press>
-                ))}
-                <TextInput
-                  value={VOLUMES.includes(volume) ? '' : String(volume)}
-                  onChangeText={(t) => {
-                    const v = parseInt(t.replace(/\D/g, ''), 10);
-                    if (v > 0 && v <= 5000) setVolume(v);
-                  }}
-                  placeholder="своё"
-                  placeholderTextColor="rgba(255,255,255,0.55)"
-                  keyboardType="number-pad"
-                  style={[styles.volInput, !VOLUMES.includes(volume) && styles.volOn, !VOLUMES.includes(volume) && { color: colors.olive }]}
-                />
-              </View>
-              <Text style={styles.darkMuted}>мл в партии</Text>
-            </View>
-          </View>
-          <View style={{ marginTop: 14 }}>
-            <FormulaBar parts={layers} track="rgba(255,255,255,0.08)" />
-          </View>
-          <View style={{ marginTop: 12, gap: 6 }}>
-            {list.map((c) => (
-              <View key={c.text} style={styles.check}>
-                <Icon name={c.ok ? 'check' : 'alert'} size={14} color={c.ok ? '#B9C9A6' : colors.brassLight} strokeWidth={2} />
-                <Text style={[styles.checkText, { color: c.ok ? '#C9D6B8' : colors.brassLight }]}>{c.text}</Text>
-                {c.fix === 'water' && (
-                  <Press onPress={fillWater} style={styles.fix}>
-                    <Text style={styles.fixText}>Дополнить водой</Text>
-                  </Press>
-                )}
-              </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pName}>{item.ru}</Text>
+                  <Text style={styles.pInci} numberOfLines={1}>{item.note}</Text>
+                </View>
+                <View style={styles.plusSmall}>
+                  <Icon name="plus" size={14} color="#fff" strokeWidth={2.4} />
+                </View>
+              </Press>
             ))}
-          </View>
-        </DarkBlock>
-        )}
-
-        {items.length > 0 && <CompositionSummary s={summary} title="Что даст эта формула" />}
-
-        {items.length === 1 && aiEnabled && <Text style={styles.minHint}>Добавьте минимум 2 ингредиента — и технолог сможет оценить формулу.</Text>}
-
-        {items.length > 1 && aiEnabled && (
-          <View style={{ marginTop: 12 }}>
-            {shown?.data ? (
-              <ReviewCard r={shown.data} onAdd={addSuggested} added={items.flatMap((i) => [i.name, i.inci ?? ""]).map((x) => x.toLowerCase())} />
-            ) : (
-              <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
-                {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
-                <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : 'Получить оценку технолога'}</Text>
+            {q.trim().length > 2 && (
+              <Press haptic={false} onPress={() => { add(q.trim()); setQ(''); }} style={styles.pCustom}>
+                <Icon name="plus" size={15} color={colors.brassText} />
+                <Text style={styles.pCustomText}>Добавить «{q.trim()}» как свой</Text>
               </Press>
             )}
-            {shown?.error && <Text style={styles.reviewErr}>Не получилось связаться. Проверьте интернет и нажмите ещё раз.</Text>}
+          </View>
+        ) : (
+          <View style={styles.quick}>
+            <Text style={styles.quickTitle}>{items.length ? 'Часто добавляют' : 'С чего начать'}</Text>
+            <View style={styles.quickWrap}>
+              {quick.map((item) => (
+                <Press key={item.inci} haptic={false} onPress={() => add(item.inci)} style={styles.quickChip}>
+                  <Icon name="plus" size={12} color={colors.violet} strokeWidth={2.4} />
+                  <Text style={styles.quickText}>{item.ru}</Text>
+                </Press>
+              ))}
+            </View>
           </View>
         )}
 
@@ -261,10 +265,67 @@ export default function BuilderScreen() {
         })}
 
         {items.length > 0 && (
-        <Press onPress={() => setPicker(true)} style={styles.addBtn}>
-          <Icon name="plus" size={16} color={colors.ink2} strokeWidth={2} />
-          <Text style={styles.addText}>Добавить ингредиент</Text>
-        </Press>
+          <View style={styles.stats}>
+            <Flask layers={layers} size={44} dropKey={drop} dropColor={dropColor} />
+            <View style={styles.stat}>
+              <Text style={styles.statL}>Сумма</Text>
+              <Text style={[styles.statN, Math.abs(sum - 100) > 0.5 && { color: colors.warn }]}>{pctText(sum)}</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statL}>Прогноз</Text>
+              <Text style={[styles.statN, { color: scoreColor(score) }]}>{score}</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statL}>Партия, г</Text>
+              <TextInput
+                value={String(volume)}
+                onChangeText={(t) => {
+                  const v = parseInt(t.replace(/\D/g, ''), 10);
+                  if (v > 0 && v <= 5000) setVolume(v);
+                }}
+                keyboardType="number-pad"
+                style={styles.volInput}
+              />
+            </View>
+          </View>
+        )}
+        {items.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <FormulaBar parts={layers} track="#EEF0F7" />
+          </View>
+        )}
+        {items.length > 0 && (
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {list.map((c) => (
+              <View key={c.text} style={styles.check}>
+                <Icon name={c.ok ? 'check' : 'alert'} size={14} color={c.ok ? colors.good : colors.warn} strokeWidth={2} />
+                <Text style={[styles.checkText, { color: c.ok ? colors.ink2 : colors.warn }]}>{c.text}</Text>
+                {c.fix === 'water' && (
+                  <Press onPress={fillWater} style={styles.fix}>
+                    <Text style={styles.fixText}>Дополнить водой</Text>
+                  </Press>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {items.length > 0 && <CompositionSummary s={summary} title="Что даст эта формула" />}
+
+        {items.length === 1 && aiEnabled && <Text style={styles.minHint}>Добавьте минимум 2 ингредиента — и технолог сможет оценить формулу.</Text>}
+
+        {items.length > 1 && aiEnabled && (
+          <View style={{ marginTop: 12 }}>
+            {shown?.data ? (
+              <ReviewCard r={shown.data} onAdd={addSuggested} added={items.flatMap((i) => [i.name, i.inci ?? '']).map((x) => x.toLowerCase())} />
+            ) : (
+              <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
+                {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
+                <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : `Оценка технолога · ${area.toLowerCase()}`}</Text>
+              </Press>
+            )}
+            {shown?.error && <Text style={styles.reviewErr}>Не получилось связаться. Проверьте интернет и нажмите ещё раз.</Text>}
+          </View>
         )}
       </ScrollView>
 
@@ -273,13 +334,11 @@ export default function BuilderScreen() {
           <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ flex: 1 }} />
         </View>
       )}
-
-      <Picker visible={picker} onClose={() => setPicker(false)} onPick={add} />
     </View>
   );
 }
 
-/** The technologist's verdict and what to add, reduce or remove. */
+/** The technologist's verdict and what to add, reduce or remove; a big "+" on the left adds a suggestion. */
 function ReviewCard({ r, onAdd, added }: { r: Review; onAdd: (name: string, pct?: string) => void; added: string[] }) {
   const groups: [string, string, { name: string; note: string; raw?: string; pct?: string }[]][] = [
     ['plus', 'Добавить', (r.add ?? []).map((x) => ({ name: `${x.name}${x.pct ? ` · ${x.pct}` : ''}`, note: x.why ?? '', raw: x.name, pct: x.pct }))],
@@ -293,24 +352,29 @@ function ReviewCard({ r, onAdd, added }: { r: Review; onAdd: (name: string, pct?
         {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
         {groups.map(([icon, title, list]) =>
           list.length ? (
-            <View key={title} style={{ gap: 8 }}>
+            <View key={title} style={{ gap: 10 }}>
               <Text style={styles.reviewGroup}>{title}</Text>
-              {list.map((x) => (
-                <View key={x.name} style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Icon name={icon as 'plus'} size={13} color={colors.violet} strokeWidth={2} />
+              {list.map((x) => {
+                const can = !!x.raw && !added.includes(String(x.raw).toLowerCase());
+                const done = !!x.raw && !can;
+                return (
+                  <View key={x.name} style={styles.reviewRow}>
+                    {can ? (
+                      <Press onPress={() => onAdd(String(x.raw), x.pct)} style={styles.addSug} accessibilityLabel="Добавить в формулу">
+                        <Icon name="plus" size={20} color="#fff" strokeWidth={2.6} />
+                      </Press>
+                    ) : (
+                      <View style={[styles.reviewIcon, done && { backgroundColor: '#E5F5EC' }]}>
+                        <Icon name={done ? 'check' : (icon as 'plus')} size={16} color={done ? colors.good : colors.violet} strokeWidth={2.2} />
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reviewName}>{x.name}</Text>
+                      {!!x.note && <Text style={styles.reviewNote}>{x.note}</Text>}
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewName}>{x.name}</Text>
-                    {!!x.note && <Text style={styles.reviewNote}>{x.note}</Text>}
-                  </View>
-                  {'raw' in x && x.raw && !added.includes(String(x.raw).toLowerCase()) && (
-                    <Press onPress={() => onAdd(String(x.raw), (x as { pct?: string }).pct)} style={styles.addSug} accessibilityLabel="Добавить в формулу">
-                      <Icon name="plus" size={15} color="#fff" strokeWidth={2.4} />
-                    </Press>
-                  )}
-                </View>
-              ))}
+                );
+              })}
             </View>
           ) : null,
         )}
@@ -349,58 +413,6 @@ function PctInput({ value, onCommit }: { value: number; onCommit: (text: string)
   );
 }
 
-function Picker({ visible, onClose, onPick }: { visible: boolean; onClose: () => void; onPick: (inci: string) => void }) {
-  const [q, setQ] = useState('');
-  const nq = normalize(q);
-  const list = useMemo(
-    () =>
-      INGREDIENTS.filter((i) => i.risk <= 1 && (!nq || [i.ru, i.inci, ...i.aliases].some((t) => normalize(t).includes(nq))))
-        .sort((a, b) => b.act - a.act)
-        .slice(0, 80),
-    [nq],
-  );
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 18 }}>
-        <View style={styles.pHead}>
-          <Text style={styles.pTitle}>Ингредиент</Text>
-          <IconButton icon="close" label="Закрыть" onPress={onClose} />
-        </View>
-        <View style={styles.pSearch}>
-          <Icon name="search" size={18} color={colors.muted} />
-          <TextInput value={q} onChangeText={setQ} placeholder="Название или INCI" placeholderTextColor={colors.faint} style={styles.pInput} autoFocus />
-        </View>
-        <FlatList
-          data={list}
-          keyExtractor={(i) => i.inci}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: space.gutter, paddingBottom: 60 }}
-          ListHeaderComponent={
-            q.trim().length > 2 ? (
-              <Press haptic={false} onPress={() => onPick(q.trim())} style={styles.pCustom}>
-                <Icon name="plus" size={15} color={colors.brassText} />
-                <Text style={styles.pCustomText}>Добавить «{q.trim()}» как свой</Text>
-              </Press>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <Press haptic={false} onPress={() => onPick(item.inci)} style={styles.pRow}>
-              <View style={[styles.pIcon, { backgroundColor: item.fn[0] ? FN_ICON[item.fn[0]].bg : colors.surf }]}>
-                {item.fn[0] && <Icon name={FN_ICON[item.fn[0]].icon} size={16} color={FN_ICON[item.fn[0]].color} strokeWidth={1.9} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pName}>{item.ru}</Text>
-                <Text style={styles.pInci}>{item.inci}</Text>
-              </View>
-              <Text style={styles.pFn}>{item.fn[0] ? FN_LABEL[item.fn[0]] : ''}</Text>
-            </Press>
-          )}
-        />
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 48 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
@@ -421,8 +433,8 @@ const styles = StyleSheet.create({
   volText: { fontFamily: fonts.monoMedium, fontSize: 12, color: colors.onDark },
   check: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   checkText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 16 },
-  fix: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 9, backgroundColor: colors.brassLight },
-  fixText: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.olive },
+  fix: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 9, backgroundColor: colors.tint },
+  fixText: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.violet },
   phase: { marginTop: 10, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 4 },
   phHead: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 2 },
   phDot: { width: 8, height: 8, borderRadius: 3 },
@@ -448,15 +460,32 @@ const styles = StyleSheet.create({
   reviewLead: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, color: colors.ink },
   reviewGroup: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
   reviewRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  reviewIcon: { width: 24, height: 24, borderRadius: 8, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  reviewIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   reviewName: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   reviewNote: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.ink2, marginTop: 1 },
   reviewWarn: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: 12, backgroundColor: colors.warnSoft },
   reviewWarnText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: colors.warn },
-  ask: { fontFamily: fonts.display, fontSize: 17, color: colors.ink, marginTop: 4, marginBottom: 10 },
-  volInput: { minWidth: 46, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9, fontFamily: fonts.monoMedium, fontSize: 12, color: colors.onDark, textAlign: 'center' },
+  ask: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 14, marginBottom: 8 },
+  intro: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginTop: 2 },
+  goal: { height: 30, paddingHorizontal: 11, borderRadius: 99, borderWidth: 1, borderColor: '#E3E5F0', justifyContent: 'center' },
+  goalOn: { borderColor: colors.violet, backgroundColor: colors.tint },
+  goalText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
+  search: { marginTop: 16, height: 50, borderRadius: 16, backgroundColor: colors.cardSolid, borderWidth: 1, borderColor: '#E6E8F3', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, ...shadow },
+  searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
+  results: { marginTop: 6, paddingHorizontal: 4 },
+  plusSmall: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  quick: { marginTop: 12, gap: 8 },
+  quickTitle: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
+  quickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  quickChip: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 32, paddingHorizontal: 11, borderRadius: 99, backgroundColor: colors.tint },
+  quickText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink },
+  stats: { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 18, backgroundColor: '#F6F7FB' },
+  stat: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fff' },
+  statL: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted },
+  statN: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 1 },
+  volInput: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, padding: 0, marginTop: 1 },
   minHint: { marginTop: 12, fontFamily: fonts.medium, fontSize: 13.5, color: colors.warn, textAlign: 'center' },
-  addSug: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  addSug: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
   pctBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F1F8', borderRadius: 9, paddingRight: 6 },
   pctSign: { fontFamily: fonts.monoMedium, fontSize: 12.5, color: colors.muted },
   saveBar: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row' },
