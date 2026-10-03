@@ -17,7 +17,7 @@ import { recipeNo } from '../../components/RecipeCard';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, Press, Seg, T, Tag, tap } from '../../components/ui';
 import { useUserContent } from '../../context/UserContentContext';
-import { Similar, similarRecipes, storeQuery, STORES } from '../../lib/similar';
+import { Similar, similarRecipes } from '../../lib/similar';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { FLAG_LABEL, FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
@@ -138,7 +138,6 @@ export default function AnalysisScreen() {
   const shown = groups[filter];
   const verdictTone = scores.overall >= 68 ? colors.good : scores.overall >= 50 ? colors.warn : colors.bad;
   const onShelf = shelf.some((x) => x.scanId === scan.id);
-  const query = storeQuery(result);
   const toShelf = () => {
     if (onShelf) return router.push('/profile');
     tap('success');
@@ -279,11 +278,23 @@ export default function AnalysisScreen() {
 
         {op && <TechnologistOpinion s={summary} op={op} />}
 
-        {!!scan.url && <Button label={`Купить в ${scan.source === 'Летуаль' ? 'Летуаль' : 'магазине'}`} icon="external" variant="outline" onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={{ marginTop: 14 }} />}
+        {!!scan.url && (
+          <Press onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={styles.buy} accessibilityLabel="Купить">
+            <LinearGradient colors={['#FF8FB1', '#B57BFF', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <Icon name="bag" size={19} color="#fff" strokeWidth={2} />
+            <Text style={styles.buyText}>Купить</Text>
+          </Press>
+        )}
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-          <Button label={onShelf ? 'На полке' : 'На полку'} icon={onShelf ? 'check' : 'shelf'} onPress={toShelf} style={{ flex: 1 }} variant={onShelf ? 'outline' : 'honey'} />
-          <Button label="Поделиться" icon="send" onPress={share} style={{ flex: 1 }} variant="outline" />
+          <Press onPress={toShelf} style={styles.soft}>
+            <Icon name={onShelf ? 'check' : 'shelf'} size={17} color={colors.violetDeep} />
+            <Text style={styles.softText}>{onShelf ? 'На полке' : 'На полку'}</Text>
+          </Press>
+          <Press onPress={share} style={styles.soft}>
+            <Icon name="send" size={17} color={colors.violetDeep} />
+            <Text style={styles.softText}>Поделиться</Text>
+          </Press>
         </View>
 
         <View style={styles.offscreen} pointerEvents="none">
@@ -388,21 +399,6 @@ export default function AnalysisScreen() {
           </View>
         )}
 
-        <Card style={[styles.an, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
-          <View>
-            <Text style={styles.mono}>Похожие товары в магазинах</Text>
-            <Text style={styles.anTitle}>Поиск по ключевым активам: «{query}»</Text>
-            <Text style={styles.anSub}>Сравните цены и составы — откроется поиск магазина.</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {STORES.map((st) => (
-              <Press key={st.name} onPress={() => Linking.openURL(st.url(query)).catch(() => {})} style={styles.store}>
-                <Text style={styles.storeText}>{st.name}</Text>
-                <Icon name="external" size={13} color={colors.ink2} />
-              </Press>
-            ))}
-          </View>
-        </Card>
 
         {(scan.barcode || scan.url) && <ProductReviews id={scan.url ?? scan.barcode!} />}
 
@@ -508,6 +504,10 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
 }
 
 const styles = StyleSheet.create({
+  buy: { height: 56, marginTop: 14, borderRadius: 18, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, shadowColor: '#7C66EE', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+  buyText: { fontFamily: fonts.bold, fontSize: 17, color: '#fff', letterSpacing: 0.2 },
+  soft: { flex: 1, height: 52, borderRadius: 16, backgroundColor: '#EEE9FF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  softText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.violetDeep },
   oddTitle: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, color: colors.ink, marginTop: 8 },
   odd: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 16, padding: 16, borderRadius: 18, backgroundColor: colors.tint },
   oddText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, color: colors.ink },

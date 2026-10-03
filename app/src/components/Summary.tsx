@@ -85,8 +85,8 @@ export function TechnologistOpinion({ s, op }: { s: Summary; op: Opinion }) {
           </View>
         ))}
         <Part title="Сильная сторона" text={op.strong} />
-        {!!(s.weak || op.weak) && <Part title="Слабая сторона" text={s.weak || op.weak!} tone={colors.bad} />}
-        {!!op.watch && <Part title="На что обратить внимание" text={op.watch} tone={colors.warn} />}
+        {/* Weak side and the ingredients to watch in one place, each ingredient once. */}
+        {!!(s.weak || op.weak || op.watch) && <Part title="Слабая сторона" text={[s.weak || op.weak, op.watch].filter(Boolean).join(' ')} tone={colors.bad} />}
         {!!op.suits && <Part title="Кому подойдёт" text={op.suits} />}
         {use.length > 0 && (
           <View style={styles.use}>

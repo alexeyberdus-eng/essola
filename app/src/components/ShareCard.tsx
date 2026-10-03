@@ -58,9 +58,13 @@ export function ShareCard({
       <Text style={styles.title} numberOfLines={2}>
         {title}
       </Text>
-      <Text style={[styles.verdict, { color: c }]} numberOfLines={1}>
-        {label}
-      </Text>
+      {/* The verdict on a white pill, so its colour reads on the violet background. */}
+      <View style={styles.verdictPill}>
+        <View style={[styles.verdictDot, { backgroundColor: c }]} />
+        <Text style={[styles.verdict, { color: c }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
 
       <View style={styles.grid}>
         {(
@@ -83,27 +87,31 @@ export function ShareCard({
         ))}
       </View>
 
-      {!!good[0] && (
-        <Text style={styles.note} numberOfLines={1}>
-          <Text style={{ color: '#8FE3B0' }}>+ </Text>
-          {good.slice(0, 2).join(', ')}
-        </Text>
-      )}
-      {!!bad[0] && (
-        <Text style={styles.note} numberOfLines={1}>
-          <Text style={{ color: '#FFB98F' }}>! </Text>
-          {bad.slice(0, 2).join(', ')}
-        </Text>
+      {(!!good[0] || !!bad[0]) && (
+        <View style={styles.notes}>
+          {!!good[0] && (
+            <View style={styles.noteRow}>
+              <Text style={[styles.noteTag, { color: '#9BF0C0' }]}>Сильное</Text>
+              <Text style={styles.note} numberOfLines={1}>{good.slice(0, 3).join(', ')}</Text>
+            </View>
+          )}
+          {!!bad[0] && (
+            <View style={styles.noteRow}>
+              <Text style={[styles.noteTag, { color: '#FFD0A8' }]}>Внимание</Text>
+              <Text style={styles.note} numberOfLines={1}>{bad.slice(0, 3).join(', ')}</Text>
+            </View>
+          )}
+        </View>
       )}
 
       <View style={styles.cta}>
         <View style={styles.ctaIcon}>
-          <Icon name="scan" size={22} color="#fff" />
+          <Icon name="scan" size={22} color={colors.violetDeep} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.ctaTitle}>Наведи камеру — узнай правду о составе</Text>
-          <Text style={styles.ctaText}>Сканер косметики, 250 рецептов и технолог в кармане</Text>
-          <Text style={styles.ctaLink}>essola lab · essola.ru</Text>
+          <Text style={styles.ctaText}>Сканер косметики, домашние рецепты и технолог в кармане</Text>
+          <Text style={styles.ctaLink}>essola.ru</Text>
         </View>
       </View>
     </LinearGradient>
@@ -117,24 +125,30 @@ const styles = StyleSheet.create({
   brandLab: { fontFamily: fonts.regular, color: 'rgba(255,255,255,0.6)' },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.14)' },
   chipText: { fontFamily: fonts.medium, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' },
-  photoBox: { alignSelf: 'center', marginTop: 18, width: 196, height: 196 },
-  photo: { width: 196, height: 196, borderRadius: 32, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  badge: { position: 'absolute', right: -22, bottom: -14, width: 82, height: 82, borderRadius: 41, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: '#2B2F7A' },
+  photoBox: { alignSelf: 'center', marginTop: 14, width: 170, height: 170 },
+  photo: { width: 170, height: 170, borderRadius: 32, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  badge: { position: 'absolute', right: -26, bottom: -12, width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: '#fff' },
   badgeN: { fontFamily: fonts.display, fontSize: 30, lineHeight: 33, color: '#fff' },
   badgeL: { fontFamily: fonts.medium, fontSize: 10, color: 'rgba(255,255,255,0.9)' },
-  title: { fontFamily: fonts.display, fontSize: 21, lineHeight: 26, letterSpacing: -0.5, color: '#fff', marginTop: 26, textAlign: 'center' },
-  verdict: { fontFamily: fonts.semibold, fontSize: 15, marginTop: 6, textAlign: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
-  cell: { width: 152, padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', gap: 7 },
+  title: { fontFamily: fonts.display, fontSize: 20, lineHeight: 25, letterSpacing: -0.5, color: '#fff', marginTop: 24, textAlign: 'center' },
+  verdictPill: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99, backgroundColor: '#fff' },
+  verdictDot: { width: 8, height: 8, borderRadius: 4 },
+  verdict: { fontFamily: fonts.bold, fontSize: 14 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  cell: { width: 152, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', gap: 7 },
   cellHead: { flexDirection: 'row', justifyContent: 'space-between' },
   cellL: { fontFamily: fonts.medium, fontSize: 11.5, color: 'rgba(255,255,255,0.75)' },
   cellN: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
   bar: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
   barFill: { height: 5, borderRadius: 3 },
-  note: { fontFamily: fonts.regular, fontSize: 13, color: 'rgba(255,255,255,0.88)', marginTop: 9 },
-  cta: { marginTop: 'auto', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, backgroundColor: '#fff' },
-  ctaIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
-  ctaTitle: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 17, color: colors.ink },
-  ctaText: { fontFamily: fonts.regular, fontSize: 11.5, lineHeight: 15, color: colors.muted, marginTop: 2 },
-  ctaLink: { fontFamily: fonts.semibold, fontSize: 12, color: colors.violet, marginTop: 3 },
+  notes: { marginTop: 12, padding: 12, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.12)', gap: 8 },
+  noteRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  noteTag: { width: 66, fontFamily: fonts.semibold, fontSize: 11.5, lineHeight: 17 },
+  note: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: '#fff' },
+  // Frosted glass in the card's colours instead of a white block.
+  cta: { marginTop: 'auto', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  ctaIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  ctaTitle: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 17, color: '#fff' },
+  ctaText: { fontFamily: fonts.regular, fontSize: 11.5, lineHeight: 15, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  ctaLink: { fontFamily: fonts.bold, fontSize: 12.5, color: '#fff', marginTop: 3 },
 });

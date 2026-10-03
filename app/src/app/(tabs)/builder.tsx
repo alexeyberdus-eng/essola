@@ -142,13 +142,19 @@ export default function BuilderScreen() {
   };
   // "+" next to a technologist suggestion: add it straight into the formula at the suggested share.
   const addSuggested = (name: string, pct?: string) => {
-    const hit = identify(name.replace(/\(.*?\)/g, '').split(/[,/]| или /)[0].trim());
-    const item = newItem(hit.match === 'exact' || hit.match === 'fuzzy' ? hit.ing.inci : name);
+    const hit = identifyName(name);
     const v = parseFloat((pct ?? '').replace(',', '.').match(/[\d.]+/)?.[0] ?? '');
-    if (v > 0 && v < 100) item.pct = v;
     tap('medium');
+    // Already in the formula (a second tap, or the same thing under another name): raise its share, no new row.
+    const existing = rowFor(items, name);
+    if (existing) {
+      if (v > existing.pct && v < 100) setItems((prev) => fit(prev.map((i) => (i.key === existing.key ? { ...i, pct: v } : i)), existing.key));
+      return;
+    }
+    const item = newItem(hit ? hit.inci : name);
+    if (v > 0 && v < 100) item.pct = v;
     animate();
-    setItems((prev) => fit([...prev, item], item.key));
+    setItems((prev) => (rowFor(prev, name) ? prev : fit([...prev, item], item.key)));
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
   };
@@ -394,10 +400,19 @@ export default function BuilderScreen() {
 }
 
 /** Finds the formula row a technologist's suggestion refers to (by INCI or by name). */
+/** A suggestion's ingredient in our base: the whole INCI name first («Caprylic/Capric Triglyceride» has a slash), then its first part. */
+function identifyName(name: string) {
+  const clean = name.replace(/\(.*?\)/g, '').split(/,| или /)[0].trim();
+  for (const c of [clean, clean.split('/')[0].trim()]) {
+    const hit = identify(c);
+    if (hit.match === 'exact' || hit.match === 'fuzzy') return hit.ing;
+  }
+  return null;
+}
+
 function rowFor(items: Item[], name: string) {
-  const clean = name.replace(/\(.*?\)/g, '').split(/[,/]| или /)[0].trim();
-  const hit = identify(clean);
-  const inci = hit.match === 'exact' || hit.match === 'fuzzy' ? hit.ing.inci.toLowerCase() : null;
+  const clean = name.replace(/\(.*?\)/g, '').split(/,| или /)[0].trim();
+  const inci = identifyName(name)?.inci.toLowerCase() ?? null;
   const n = normalize(clean);
   return items.find((i) => (inci && (i.inci ?? '').toLowerCase() === inci) || normalize(i.name) === n || (n.length > 4 && normalize(i.name).includes(n)));
 }
@@ -466,13 +481,13 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
             <Text style={styles.reviewGroup}>Изменить долю</Text>
             {(r.reduce ?? []).map((x) => {
               const row = rowFor(items, x.name);
-              // No number from the technologist: one tap takes a third off.
-              let to = pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
-              // The model sometimes answers with a typical share from other recipes ("water → 85%") when the point
-              // is to make room for its additions: then the room is counted from this formula instead.
-              const room = adds.reduce((sum, a) => sum + (a.row ? 0 : a.to ?? 0), 0);
-              const meansLess = /уменьш|убав|меньше|сниз|за сч[её]т|освобод|место|компенс|баланс|100/i.test(x.why ?? '');
-              if (row && to !== null && to > row.pct && (meansLess || to - row.pct > 30)) to = room > 0 && row.pct - room > 0.1 ? Math.round((row.pct - room) * 10) / 10 : null;
+              // Lines that balance the formula («до 100%», «за счёт воды») are counted here from the actual sum and the
+              // additions still to be made — the model often gets that number wrong or leaves it out.
+              const pending = adds.reduce((sum, a) => sum + (a.row ? 0 : a.to ?? 0), 0);
+              const sum = total(items);
+              const balancing = row?.phase === 'water' && (/100|баланс|довед|освобод|за сч[её]т|мест|компенс|сумм/i.test(x.why ?? '') || !pctOf(x.to) || Math.abs(sum - 100) > 0.5);
+              let to = row && balancing ? Math.max(0.1, Math.round((row.pct + 100 - sum - pending) * 10) / 10) : pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
+              if (row && to !== null && Math.abs(to - row.pct) < 0.05) to = row.pct;
               const can = row && to !== null && Math.abs(row.pct - to) > 0.01;
               const up = can && to! > row!.pct;
               return (
