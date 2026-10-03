@@ -209,7 +209,7 @@ function TopicCard({ t }: { t: TopicRow }) {
         </Text>
       )}
       <View style={styles.cardFoot}>
-        <View style={styles.row}>
+        <Press haptic={false} onPress={() => t.author.id !== 'essola' && router.push(`/user/${t.author.id}` as never)} style={styles.row} hitSlop={6}>
           {t.author.id === 'essola' ? (
             <View style={styles.labAvatar}>
               <Text style={styles.labLetter}>e</Text>
@@ -218,7 +218,7 @@ function TopicCard({ t }: { t: TopicRow }) {
             <Avatar nick={t.author.nick} size={22} />
           )}
           <Text style={[styles.metaText, t.author.id === 'essola' && { color: colors.ink, fontFamily: fonts.semibold }]}>@{t.author.nick}</Text>
-        </View>
+        </Press>
         <View style={styles.row}>
           {!!t.likes && (
             <>

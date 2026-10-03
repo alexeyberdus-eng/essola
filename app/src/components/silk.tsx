@@ -272,15 +272,32 @@ export function GradText({ children, style }: { children: ReactNode; style?: Sty
 }
 
 /** "essola lab" + tagline. */
-export function Brand({ size = 23, tagline = true, light }: { size?: number; tagline?: boolean; light?: boolean }) {
+export function Brand({ size = 31, tagline = true, light }: { size?: number; tagline?: boolean; light?: boolean }) {
   const t = { fontFamily: fonts.display, fontSize: size, letterSpacing: -size * 0.05, lineHeight: size * 1.15 };
+  // «essola» is filled with a lavender gradient that slowly slides through the letters.
+  const shift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(shift, { toValue: 1, duration: 3200, easing: Easing.inOut(Easing.sin), useNativeDriver: native }));
+    loop.start();
+    return () => loop.stop();
+  }, [shift]);
+  const w = size * 3.4;
   return (
     <View accessibilityRole="header" accessibilityLabel="essola lab">
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-        <Text style={[t, { color: light ? '#fff' : colors.ink }]}>essola </Text>
-        <Text style={[t, { fontFamily: fonts.regular, color: light ? 'rgba(255,255,255,0.7)' : colors.muted }]}>lab</Text>
+        {light ? (
+          <Text style={[t, { color: '#fff' }]}>essola </Text>
+        ) : (
+          <MaskedView maskElement={<Text style={[t, { color: '#000' }]}>essola </Text>}>
+            <Text style={[t, { opacity: 0 }]}>essola </Text>
+            <Animated.View style={[StyleSheet.absoluteFill, { width: w * 3, transform: [{ translateX: shift.interpolate({ inputRange: [0, 1], outputRange: [0, -w * 2] }) }] }]}>
+              <LinearGradient colors={['#2A2350', '#7C66EE', '#C37BE8', '#7C66EE', '#2A2350', '#7C66EE', '#C37BE8']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+            </Animated.View>
+          </MaskedView>
+        )}
+        <Text style={[t, { fontFamily: fonts.regular, color: light ? 'rgba(255,255,255,0.7)' : '#A79BE0' }]}>lab</Text>
       </View>
-      {tagline && <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 3 }}>домашняя лаборатория косметики</Text>}
+      {tagline && <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 2 }}>домашняя лаборатория косметики</Text>}
     </View>
   );
 }

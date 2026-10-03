@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { FLAG_LABEL, FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
 import { AnalyzedItem, analyze } from '../../lib/analyze';
+import { detectNotCosmetic, NOT_COSMETIC_TEXT } from '../../lib/kind';
 import { colors, fonts, radius, scoreColor, space } from '../../theme';
 import { personalize } from '../../lib/personal';
 import { opinion } from '../../lib/opinion';
@@ -105,6 +106,25 @@ export default function AnalysisScreen() {
     );
   }
 
+  // Repellents, nail polish removers, household products: no cosmetics score, one plain note.
+  if (detectNotCosmetic(scan.text)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Glow flask={false} />
+        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter }}>
+          <View style={{ height: 52, justifyContent: 'center' }}>
+            <IconButton icon="arrowLeft" label="Назад" onPress={back} />
+          </View>
+          <Text style={styles.oddTitle}>{scan.title}</Text>
+          <View style={styles.odd}>
+            <Icon name="alert" size={20} color={colors.violet} />
+            <Text style={styles.oddText}>{NOT_COSMETIC_TEXT.other}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   const { scores, items } = result;
   const groups: Record<Filter, AnalyzedItem[]> = {
     all: items,
@@ -143,7 +163,7 @@ export default function AnalysisScreen() {
               {scan.barcode || scan.url ? 'Средство' : 'Скан состава'} · {items.length} ингредиентов
             </Text>
             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-              <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>
+              <Text style={[styles.heroTitle, { flex: 1, fontSize: scan.title.length > 60 ? 17 : scan.title.length > 35 ? 20 : 24, lineHeight: scan.title.length > 60 ? 21 : scan.title.length > 35 ? 24 : 28 }]} numberOfLines={5}>
                 {scan.title}
               </Text>
               {!!scan.image && <Image source={{ uri: scan.image.replace('.100.', '.400.') }} style={styles.heroImg} contentFit="cover" cachePolicy="memory-disk" />}
@@ -485,6 +505,9 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
 }
 
 const styles = StyleSheet.create({
+  oddTitle: { fontFamily: fonts.display, fontSize: 22, lineHeight: 27, color: colors.ink, marginTop: 8 },
+  odd: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 16, padding: 16, borderRadius: 18, backgroundColor: colors.tint },
+  oddText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, color: colors.ink },
   center: { flex: 1, alignItems: 'center', gap: 14, backgroundColor: colors.bg },
   nav: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 10 },
   navTitle: { fontFamily: fonts.display, fontSize: 16, color: colors.ink },

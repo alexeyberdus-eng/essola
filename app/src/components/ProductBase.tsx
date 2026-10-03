@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Hero } from './Hero';
 import { router } from 'expo-router';
@@ -10,7 +11,7 @@ import { analyze } from '../lib/analyze';
 import { personalize } from '../lib/personal';
 import { readJSON, writeJSON } from '../lib/storage';
 import { useProfile } from '../lib/profile';
-import { colors, fonts, space, TAB_SPACE } from '../theme';
+import { colors, fonts, LAVENDER, space, TAB_SPACE } from '../theme';
 import { Icon } from './Icon';
 import { ScoreBadge } from './ScoreBadge';
 import { Brand, Glow } from './silk';
@@ -110,11 +111,13 @@ export async function pageBase(q: string, tag: string | undefined, page: number,
 
 /** Warms the server and fills the saved first page so «База средств» opens instantly. Called once at app start. */
 export function prefetchBase() {
-  pageBase('', undefined, 1, 'popular')
-    .then((r) => {
-      if (r.list.length) writeJSON('essola.base.||popular', r.list.slice(0, 40));
-    })
-    .catch(() => {});
+  // All three orders, so switching «Оценка ↓ / ↑» shows a ready list at once.
+  for (const sort of ['popular', 'best', 'worst'] as Sort[])
+    pageBase('', undefined, 1, sort)
+      .then((r) => {
+        if (r.list.length) writeJSON(`essola.base.||${sort}`, r.list.slice(0, 40));
+      })
+      .catch(() => {});
 }
 
 /** Product base: a feed from our shared base and Open Beauty Facts, infinite scroll, sorting and categories; scored on the device. */
@@ -213,6 +216,11 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       <Brand />
       {toggle}
       <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Очень много кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
+      <Press onPress={() => { tap(); router.push('/match' as never); }} style={styles.matchBtn} accessibilityLabel="Подбор средств">
+        <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Icon name="spark" size={17} color="#fff" />
+        <Text style={styles.matchText}>Подбор средств под мои цели</Text>
+      </Press>
       <View style={styles.search}>
         <Icon name="search" size={18} color={colors.muted} />
         <TextInput
@@ -309,6 +317,8 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  matchBtn: { marginTop: 12, height: 50, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  matchText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
   noScore: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#F1F2F7', alignItems: 'center', justifyContent: 'center' },
   noScoreText: { fontFamily: fonts.semibold, fontSize: 16, color: colors.muted },
   search: { marginTop: 14, height: 50, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },

@@ -6,10 +6,11 @@ import { colors, fonts } from '../theme';
 import { Glow } from './silk';
 
 const native = Platform.OS !== 'web';
-const BODY = 150;
+const BODY = 180;
 
 /** Launch animation, centred: a ring spins round a flask that fills with aurora liquid, bubbles rise, then the wordmark. */
-export function Splash({ onDone }: { onDone: () => void }) {
+/** `ready`: fonts and the account are loaded; until then the flask keeps bubbling and the wordmark waits. */
+export function Splash({ onDone, ready }: { onDone: () => void; ready: boolean }) {
   const appear = useRef(new Animated.Value(0)).current;
   const fill = useRef(new Animated.Value(0)).current;
   const spin = useRef(new Animated.Value(0)).current;
@@ -27,19 +28,22 @@ export function Splash({ onDone }: { onDone: () => void }) {
     const t = (v: Animated.Value, duration: number, easing = Easing.out(Easing.cubic)) => Animated.timing(v, { toValue: 1, duration, easing, useNativeDriver: native });
     Animated.loop(Animated.timing(spin, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: native })).start();
     Animated.loop(Animated.timing(bubbles, { toValue: 1, duration: 1300, easing: Easing.linear, useNativeDriver: native })).start();
-    Animated.sequence([
-      t(appear, 450),
-      t(fill, 1100, Easing.inOut(Easing.cubic)),
-      t(word, 500),
-      Animated.delay(500),
-      Animated.timing(out, { toValue: 0, duration: 420, useNativeDriver: native }),
-    ]).start(() => done.current());
+    Animated.sequence([t(appear, 300), t(fill, 750, Easing.inOut(Easing.cubic))]).start();
     // Safety net: never keep the app behind the intro, even if an animation stalls.
-    const t2 = setTimeout(() => done.current(), 5000);
+    const t2 = setTimeout(() => done.current(), 8000);
     return () => clearTimeout(t2);
     // Runs once on mount; parent re-renders must not restart the intro.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Once the app is ready: the wordmark rises, a short pause, and the intro fades out.
+  useEffect(() => {
+    if (!ready) return;
+    const t = (v: Animated.Value, duration: number) => Animated.timing(v, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: native });
+    const seq = Animated.sequence([Animated.delay(450), t(word, 380), Animated.delay(450), Animated.timing(out, { toValue: 0, duration: 300, useNativeDriver: native })]);
+    seq.start(() => done.current());
+    return () => seq.stop();
+  }, [ready, word, out]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const rise = (delay: number, x: number, size: number) => ({
@@ -56,9 +60,9 @@ export function Splash({ onDone }: { onDone: () => void }) {
       <Glow height={900} />
       <Animated.View style={[styles.stage, { opacity: appear, transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
         <Animated.View style={[styles.ring, { transform: [{ rotate }] }]}>
-          <Svg width={250} height={250}>
-            <Circle cx={125} cy={125} r={118} stroke={colors.violet} strokeOpacity={0.35} strokeWidth={3} strokeDasharray="2 14" strokeLinecap="round" fill="none" />
-            <Circle cx={125} cy={7} r={6} fill={colors.violet} />
+          <Svg width={300} height={300}>
+            <Circle cx={150} cy={150} r={142} stroke={colors.violet} strokeOpacity={0.35} strokeWidth={3} strokeDasharray="2 14" strokeLinecap="round" fill="none" />
+            <Circle cx={150} cy={8} r={7} fill={colors.violet} />
           </Svg>
         </Animated.View>
 
@@ -93,14 +97,14 @@ export function Splash({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  stage: { width: 250, height: 250, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
-  ring: { position: 'absolute', width: 250, height: 250 },
+  stage: { width: 300, height: 300, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
+  ring: { position: 'absolute', width: 300, height: 300 },
   flask: { alignItems: 'center', marginTop: 18 },
-  neck: { width: 38, height: 38, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderWidth: 3, borderBottomWidth: 0, borderColor: colors.accent, backgroundColor: 'rgba(255,255,255,0.7)', marginBottom: -3, zIndex: 2 },
+  neck: { width: 46, height: 44, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderWidth: 3, borderBottomWidth: 0, borderColor: colors.accent, backgroundColor: 'rgba(255,255,255,0.7)', marginBottom: -3, zIndex: 2 },
   body: { width: BODY, height: BODY, borderRadius: BODY / 2, borderWidth: 3, borderColor: colors.accent, backgroundColor: 'rgba(255,255,255,0.75)', overflow: 'hidden' },
   bubble: { position: 'absolute', top: 0, backgroundColor: 'rgba(255,255,255,0.9)' },
   shine: { position: 'absolute', left: 24, top: 22, width: 22, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.65)', transform: [{ rotate: '25deg' }] },
-  brand: { fontFamily: fonts.bold, fontSize: 40, letterSpacing: -1.6, color: colors.ink },
+  brand: { fontFamily: fonts.bold, fontSize: 54, letterSpacing: -2.2, color: colors.ink },
   brandLab: { fontFamily: fonts.regular, color: colors.muted },
-  tag: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink2, marginTop: 4 },
+  tag: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, marginTop: 4 },
 });

@@ -121,13 +121,8 @@ export default function ProfileScreen() {
         <View style={styles.socialRow}>
           <Press haptic={false} onPress={async () => router.push(`/user/${await myId()}` as never)} style={styles.socialTile}>
             <Icon name="user" size={20} color={colors.violet} strokeWidth={2} />
-            <Text style={styles.socialTitle}>Мой профиль</Text>
-            <Text style={styles.socialText}>как его видят другие</Text>
-          </Press>
-          <Press haptic={false} onPress={() => router.push('/forum' as never)} style={styles.socialTile}>
-            <Icon name="heart" size={20} color={colors.violet} strokeWidth={2} />
-            <Text style={styles.socialTitle}>Форум</Text>
-            <Text style={styles.socialText}>темы и рецепты</Text>
+            <Text style={styles.socialTitle}>Мой аккаунт</Text>
+            <Text style={styles.socialText}>как его видят другие · подписчики</Text>
           </Press>
         </View>
 

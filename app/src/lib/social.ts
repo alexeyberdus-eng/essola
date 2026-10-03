@@ -45,7 +45,7 @@ export async function recentRecipes(): Promise<CommunityItem[]> {
 }
 
 export async function getUser(id: string) {
-  return call<{ user: PublicUser | null; recipes: Recipe[]; followers: number; following: boolean }>({ mode: 'user.get', id, viewer: await myId() });
+  return call<{ user: PublicUser | null; recipes: Recipe[]; followers: number; follows?: number; following: boolean }>({ mode: 'user.get', id, viewer: await myId() });
 }
 
 export async function follow(target: string, on: boolean) {

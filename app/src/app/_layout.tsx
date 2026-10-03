@@ -1,5 +1,4 @@
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
-import { Unbounded_400Regular, Unbounded_500Medium } from '@expo-google-fonts/unbounded';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-google-fonts/onest';
 import { useFonts } from 'expo-font';
@@ -33,20 +32,19 @@ function Root() {
     Inter_700Bold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
-    Unbounded_400Regular,
-    Unbounded_500Medium,
   });
   const loaded = fontsLoaded && ready;
 
+  // The native splash is blank; our animation starts at once and the app appears under it as soon as it is ready.
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync().catch(() => {});
-  }, [loaded]);
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   const [intro, setIntro] = useState(true);
-  if (!loaded) return null;
   return (
     <>
       <StatusBar style="dark" />
+      {loaded && (
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipe/[id]" options={{ animation: 'fade_from_bottom' }} />
@@ -64,7 +62,8 @@ function Root() {
         <Stack.Screen name="community" />
         <Stack.Screen name="user/[id]" />
       </Stack>
-      {intro && <Splash onDone={() => setIntro(false)} />}
+      )}
+      {intro && <Splash onDone={() => setIntro(false)} ready={loaded} />}
     </>
   );
 }

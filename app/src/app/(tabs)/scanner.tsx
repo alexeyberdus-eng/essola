@@ -1,4 +1,4 @@
-import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -26,6 +26,8 @@ import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
 // Without the native module (Expo Go) photos are read by Tesseract inside a hidden WebView.
 const webOcr = !nativeOcr && Platform.OS !== 'web';
 const native = Platform.OS !== 'web';
+
+const LINK_NOTICE = 'Скопируйте ссылку на товар в приложении или на сайте Летуаль и нажмите «Ссылка Летуаль» ещё раз. Для других магазинов сделайте скриншот состава и загрузите его через «Галерея».';
 
 type Mode = 'barcode' | 'label' | 'front';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
@@ -129,11 +131,6 @@ export default function ScannerScreen() {
     router.push(`/analysis/${scan.id}`);
   };
 
-  const onBarcode = ({ data }: BarcodeScanningResult) => {
-    if (scanning.current || lookup || busy) return;
-    if (mode === 'barcode') lookupCode(data);
-    else if (seen !== data) setSeen(data);
-  };
 
   const findByName = async (q: string, tries: string[] = []) => {
     if (q.trim().length < 2) return;
@@ -269,7 +266,7 @@ export default function ScannerScreen() {
     const t = (await Clipboard.getStringAsync().catch(() => '')) ?? '';
     const url = t.match(SHOP_LINK)?.[0];
     if (url) checkLink(url);
-    else setNotice('Скопируйте ссылку на товар в приложении или на сайте Летуаль и нажмите «Ссылка Летуаль» ещё раз. Для других магазинов сделайте скриншот состава и загрузите его через «Галерея».');
+    else setNotice(LINK_NOTICE);
   };
 
   const readImage = async (uri: string) => {
@@ -483,7 +480,12 @@ export default function ScannerScreen() {
             </Text>
           </>
         )}
-        {notice && <Text style={[styles.notice, { marginTop: 12 }]}>{notice}</Text>}
+        {notice && (
+          <View style={[styles.noticeBox, { marginTop: 12 }]}>
+            <Text style={styles.noticeText}>{notice}</Text>
+            {notice === LINK_NOTICE && <LinkHelp inline />}
+          </View>
+        )}
         {seen && !lookup && mode === 'label' && (
           <Press onPress={() => { setMode('barcode'); lookupCode(seen); }} style={styles.clip}>
             <Icon name="barcode" size={16} color={colors.violet} />
@@ -537,7 +539,6 @@ export default function ScannerScreen() {
             </View>
           </>
         )}
-        {aiEnabled && !lookup && <LinkHelp />}
       </View>
   );
 
@@ -556,8 +557,6 @@ export default function ScannerScreen() {
             zoom={zoom}
             autofocus={focus}
             onCameraReady={() => setReady(true)}
-            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'itf14'] }}
-            onBarcodeScanned={!lookup && !busy ? onBarcode : undefined}
           />
         )
       ) : (
@@ -571,7 +570,7 @@ export default function ScannerScreen() {
 
       {permission?.granted && <Pressable onPress={refocus} style={StyleSheet.absoluteFill} accessibilityLabel="Навести фокус" />}
       {permission?.granted && (
-        <View style={[styles.zoom, { bottom: full ? undefined : 14, top: full ? insets.top + 62 : undefined }]}>
+        <View style={[styles.zoom, { bottom: full ? 350 : 14 }]}>
           {ZOOMS.map(([z, l]) => (
             <Press key={l} haptic={false} onPress={() => { tap(); setZoom(z); refocus(); }} style={[styles.zoomBtn, zoom === z && styles.zoomOn]}>
               <Text style={[styles.zoomText, zoom === z && { color: colors.olive }]}>{l}</Text>
@@ -601,7 +600,6 @@ export default function ScannerScreen() {
           <View style={{ flexDirection: 'row', padding: 4 }}>
             {(
               [
-                ['barcode', 'Штрихкод'],
                 ['label', 'Состав'],
                 ...(aiEnabled ? ([['front', 'Этикетка']] as const) : []),
               ] as const
@@ -845,10 +843,10 @@ const styles = StyleSheet.create({
   steps: { marginTop: 12, gap: 7 },
   stepText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
   stepNow: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
-  zoom: { position: 'absolute', left: 14, flexDirection: 'row', gap: 4, padding: 3, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.45)' },
-  zoomBtn: { minWidth: 34, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  zoom: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', gap: 6, padding: 4, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  zoomBtn: { minWidth: 46, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   zoomOn: { backgroundColor: '#FBF8F2' },
-  zoomText: { fontFamily: fonts.semibold, fontSize: 12.5, color: '#fff' },
+  zoomText: { fontFamily: fonts.semibold, fontSize: 14, color: '#fff' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16 },
   action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 82, paddingHorizontal: 6, paddingVertical: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E0F2', shadowColor: '#2B2F7A', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
   actionIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
@@ -865,6 +863,8 @@ const styles = StyleSheet.create({
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 3, borderColor: colors.olive, padding: 5 },
   shutterIn: { flex: 1, borderRadius: 34, backgroundColor: colors.olive },
   shutterGhost: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, borderColor: '#D9D2EC', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  noticeBox: { backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12 },
+  noticeText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.brassText },
   notice: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.brassText, backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12 },
   manualTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 6 },
   manualTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },

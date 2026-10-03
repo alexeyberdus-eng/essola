@@ -88,7 +88,9 @@ export function ProductReviews({ id }: { id: string }) {
         .map((c) => (
           <View key={c.id} style={styles.comment}>
             <View style={styles.meta}>
-              <Text style={styles.nick}>@{c.nick}</Text>
+              <Press haptic={false} onPress={() => router.push(`/user/${c.user}` as never)} hitSlop={6}>
+                <Text style={styles.nick}>@{c.nick}</Text>
+              </Press>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Text style={styles.time}>{ago(c.at)}</Text>
                 <Press haptic={false} onPress={() => moderate({ kind: 'review', target: `${key}/${c.id}`, author: { id: c.user, nick: c.nick }, text: c.text })} accessibilityLabel="Ещё">

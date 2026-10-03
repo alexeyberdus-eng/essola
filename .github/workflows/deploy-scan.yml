@@ -68,6 +68,9 @@ jobs:
                    '{"mode":"user.get","id":"zzsmoke","viewer":"x"}' \
                    '{"mode":"forum.list"}' \
                    '{"mode":"catalog","q":"la roche","size":2}' \
+                   '{"mode":"barcode.web","barcode":"3337875597197"}' \
+                   '{"mode":"catalog","sort":"best","size":2}' \
+                   '{"mode":"catalog","sort":"best","size":2,"page":2}' \
                    '{"mode":"analogs","kind":"Сыворотка","keys":["ниацинамид","цинк"],"ingredients":["Aqua","Niacinamide","Zinc PCA","Glycerin","Panthenol"]}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done

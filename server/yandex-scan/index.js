@@ -20,13 +20,13 @@ const REVIEW = `Ты косметолог-технолог. Дана форму�
 - ингредиент | новая доля | почему, до 12 слов
 x ингредиент | почему, до 12 слов
 ! предупреждение, до 12 слов
-Строк «+» — 2–4 (обязательно, называй конкретные ингредиенты), «-», «x», «!» — 0–2. В «+» только ингредиенты, которых НЕТ в формуле (сверяй INCI и русские названия, синонимы тоже). Если уже имеющегося компонента мало или много — пиши строку «-» с новой долей (она может быть и больше текущей). Учитывай «Тип»: для чего средство и задачу. Сумма формулы должна остаться 100%: если что-то добавляешь, обязательно добавь строку «-», за счёт чего (компонента с самой большой долей в ЭТОЙ формуле) и до какой доли. Новую долю считай от текущей доли в формуле: например, было Aqua 12%, добавляешь 2% — пиши «- Aqua | 10%». Никогда не пиши типичную долю из других рецептов, только пересчёт этой формулы.
+Предлагай изменения ТОЛЬКО если они действительно нужны: ошибка, нестабильность, опасная доля или явная нехватка эффекта для задачи. Не улучшай ради улучшения. Если формула уже сбалансирована и стабильна — ответь одной строкой «В: Хорошая, стабильная формула…» с коротким объяснением и больше ничего не пиши. Строк «+» — 0–3 (конкретные ингредиенты), «-», «x», «!» — 0–2. В «+» только ингредиенты, которых НЕТ в формуле (сверяй INCI и русские названия, синонимы тоже). Если уже имеющегося компонента мало или много — пиши строку «-» с новой долей (она может быть и больше текущей). Учитывай «Тип»: для чего средство и задачу. Сумма формулы должна остаться 100%: если что-то добавляешь, обязательно добавь строку «-», за счёт чего (компонента с самой большой долей в ЭТОЙ формуле) и до какой доли. Новую долю считай от текущей доли в формуле: например, было Aqua 12%, добавляешь 2% — пиши «- Aqua | 10%». Никогда не пиши типичную долю из других рецептов, только пересчёт этой формулы.
 Пример:
 В: Получится лёгкий увлажняющий тоник, но кислоты многовато для ежедневного ухода. Смягчите формулу пантенолом и добавьте увлажнитель.
 + Panthenol | 1% | смягчит действие кислоты и успокоит кожу
 + Sodium Hyaluronate | 0,2% | дополнительное увлажнение без липкости
 - Lactic Acid | 5% | 8% может раздражать при ежедневном использовании /no_think`;
-const LABEL = `На фото лицевая сторона упаковки косметического средства. Ответь ОДНОЙ строкой: бренд | название средства как на упаковке (с линейкой и объёмом, если видно) | тип по-русски (крем, шампунь, сыворотка…). Без пояснений. Если на фото не косметика — ответь «НЕ КОСМЕТИКА: что это». /no_think`;
+const LABEL = `На фото лицевая сторона упаковки косметического средства. Ответь ОДНОЙ строкой: бренд | название средства как на упаковке (с линейкой, без объёма) | тип по-русски (крем, шампунь, сыворотка…). Если бренда не видно, но ты узнаёшь средство по названию и дизайну, назови бренд (например, Egg Mellow — Too Cool For School). Без пояснений. Если на фото не косметика — ответь «НЕ КОСМЕТИКА: что это». /no_think`;
 const ANALOGS = `Ты косметолог-технолог. Даны состав средства пользователя и найденные товары магазина (номер, название, фрагмент страницы). Оцени для каждого товара совпадение по составу 0–100: ключевые активы весят больше всего, затем база и назначение. 100 — только если полный состав товара виден во фрагменте и практически совпадает. Если состава не видно, оценивай по активам, их концентрациям, дополнительным компонентам и типу средства из названия; разным товарам ставь разные оценки, отличие в концентрации или лишние активы снижают оценку. Не косметику и не похожие по назначению товары исключи. Верни ТОЛЬКО JSON:
 {"items":[{"n":1,"match":72,"common":["общий ингредиент по-русски"],"note":"чем похож или отличается, до 10 слов"}]}
 Максимум 5 товаров, по убыванию match. /no_think`;
@@ -113,7 +113,7 @@ async function indexAdd(iam, key, title, source, n) {
   list.push({ k: key, t: String(title).slice(0, 160), s: source || '', n });
   await cachePut('index.json', iam, list, true);
 }
-async function search(q, iam) {
+async function searchCache(q, iam) {
   const words = String(q || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
   if (!words.length) return [];
   const idx = (await cacheGet('index.json', iam)) || [];
@@ -227,10 +227,11 @@ async function loadLetu(iam) {
   return letu || [];
 }
 const shards = new Map();
+const sortedMemo = new Map();
 async function letuShard(h, iam) {
   if (shards.has(h)) return shards.get(h);
   const data = (await cacheGet(`letu/x/${h}.json`, iam)) || {};
-  if (shards.size > 300) shards.delete(shards.keys().next().value);
+  if (shards.size > 1500) shards.delete(shards.keys().next().value);
   shards.set(h, data);
   return data;
 }
@@ -265,13 +266,43 @@ async function findByLabel(brand, name, kind, iam, model) {
       return { item, none: true };
     }
   }
-  // Not in our base: look for the composition on the web and let the model copy the ingredient list out.
-  const docs = await search(`${brand} ${name} состав ingredients`, iam).catch(() => []);
-  if (!docs.length) return {};
-  const text = docs.slice(0, 6).map((d, i) => `${i + 1}. ${d.title} — ${d.text}`).join('\n').slice(0, 6000);
-  const out = await chat(model, [{ role: 'user', content: `Найди в фрагментах страниц полный состав (ingredients) средства «${brand} ${name}». Выпиши ингредиенты через запятую, как в источнике, без пояснений. Если полного состава нет — ответь «нет».\n${text}` }], 600, true).catch(() => '');
+  // Not in our base: find the product's pages on the web, open a few and let the model copy the ingredient list out.
+  const ck = `label/${crypto.createHash('sha1').update(norm(`${brand} ${name}`)).digest('hex')}.json`;
+  const hit = await cacheGet(ck, iam);
+  if (hit && hit.ingredients) return hit;
+  const queries = [`${brand} ${name} ingredients`, `${brand} ${name} состав`, `${brand} ${name} site:incidecoder.com`];
+  const docs = (await Promise.all(queries.map((q) => search(q, iam).catch(() => [])))).flat();
+  // Marketplaces render their pages with scripts (nothing to read) and some shops block robots: skip them.
+  const skip = /wildberries|ozon\.|goldapple|market\.yandex|aliexpress|youtube|vk\.com|pinterest|instagram/;
+  const seen = new Set();
+  const pages = docs.filter((d) => d.url && !skip.test(d.url) && !seen.has(d.url) && seen.add(d.url)).sort((a, b) => Number(/incidecoder|skinsort|cosdna|inci/.test(b.url)) - Number(/incidecoder|skinsort|cosdna|inci/.test(a.url))).slice(0, 4);
+  const texts = await Promise.all(pages.map((d) => pageIngredients(d.url).catch(() => '')));
+  const snippets = docs.slice(0, 6).map((d) => `${d.title} — ${d.text}`).join('\n');
+  const text = [...texts.filter(Boolean), snippets].join('\n---\n').slice(0, 9000);
+  console.log('label web:', pages.length, 'pages,', texts.filter(Boolean).length, 'with text');
+  if (!text.trim()) return {};
+  const out = await chat(model, [{ role: 'user', content: `Ниже тексты страниц о средстве «${brand} ${name}». Найди его полный состав (ingredients, INCI). Выпиши ингредиенты через запятую, как в источнике, без пояснений. Если полного состава этого средства нет — ответь «нет».\n${text}` }], 700, true).catch(() => '');
   const ingredients = String(out).replace(/^[^:\n]{0,25}:\s*/, '').split(/\s*,\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
-  return ingredients.length >= 5 ? { ingredients, web: true } : {};
+  if (ingredients.length < 5) return {};
+  const found = { ingredients, web: true };
+  await cachePut(ck, iam, found, true).catch(() => {});
+  return found;
+}
+
+/** One page's text around its ingredient list (what a reader sees, without markup). */
+async function pageIngredients(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EssolaBot/1.0; +https://essola.ru)', Accept: 'text/html' }, signal: AbortSignal.timeout(7000) });
+  if (!res.ok) return '';
+  const html = (await res.text()).slice(0, 1_500_000);
+  const text = strip(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<\/(p|div|li|h\d|br|tr)>/gi, '\n'));
+  const at = text.search(/ingredients|состав|inci/i);
+  return at < 0 ? '' : text.slice(Math.max(0, at - 100), at + 2500);
+}
+
+/** Someone who posts gets a public profile with their nickname (if they had none), so tapping the nick opens it. */
+async function ensureUser(get, put, id, nick) {
+  if (!id || !nick) return;
+  if (!(await get(`users/${id}.json`, null))) await put(`users/${id}.json`, { id, nick: String(nick).slice(0, 24) });
 }
 
 module.exports.handler = async (event, context) => {
@@ -376,8 +407,8 @@ module.exports.handler = async (event, context) => {
     }
     if (req.mode === 'user.get') {
       const id = uid(req.id);
-      const [user, recipes, followers] = await Promise.all([get(`users/${id}.json`, null), get(`users/${id}/recipes.json`, []), get(`users/${id}/followers.json`, [])]);
-      return reply(200, { user, recipes, followers: followers.length, following: followers.includes(uid(req.viewer)) });
+      const [user, recipes, followers, follows] = await Promise.all([get(`users/${id}.json`, null), get(`users/${id}/recipes.json`, []), get(`users/${id}/followers.json`, []), get(`users/${id}/following.json`, [])]);
+      return reply(200, { user, recipes, followers: followers.length, follows: follows.length, following: followers.includes(uid(req.viewer)) });
     }
     if (req.mode === 'recipe.publish') {
       const id = uid(req.id);
@@ -401,6 +432,9 @@ module.exports.handler = async (event, context) => {
       const list = (await get(`users/${target}/followers.json`, [])).filter((x) => x !== me);
       if (req.on) list.push(me);
       await put(`users/${target}/followers.json`, list);
+      const mine = (await get(`users/${me}/following.json`, [])).filter((x) => x !== target);
+      if (req.on) mine.push(target);
+      await put(`users/${me}/following.json`, mine);
       return reply(200, { followers: list.length, following: !!req.on });
     }
     // Recipes the admin imported from a table, shown to everyone next to the built-in editorial ones.
@@ -464,6 +498,7 @@ module.exports.handler = async (event, context) => {
       return reply(t ? 200 : 404, t ? { topic: t } : { error: 'not_found' });
     }
     if (req.mode === 'forum.create') {
+      await ensureUser(get, put, uid(req.id), req.nick);
       const me = uid(req.id);
       const title = clean(req.title, 120);
       const text = clean(req.text, 4000);
@@ -475,6 +510,7 @@ module.exports.handler = async (event, context) => {
       return reply(200, { id: tid });
     }
     if (req.mode === 'forum.reply') {
+      await ensureUser(get, put, uid(req.id), req.nick);
       const me = uid(req.id);
       const text = clean(req.text, 3000);
       const t = await loadTopic(clean(req.tid, 40));
@@ -548,6 +584,7 @@ module.exports.handler = async (event, context) => {
         await put(key, data);
       }
       if (req.mode === 'social.comment' && me && clean(req.text, 500)) {
+        await ensureUser(get, put, me, req.nick);
         data.comments = [...data.comments, { id: Date.now().toString(36), user: me, nick: clean(req.nick, 24) || 'user', text: clean(req.text, 500), at: new Date().toISOString() }].slice(-200);
         await put(key, data);
       }
@@ -565,15 +602,23 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'catalog') {
       // Ready-made catalog built weekly by CI (scripts/build-catalog.ts), kept warm between calls.
       const [obf, letuList] = await Promise.all([loadCatalog(iam), loadLetu(iam)]);
-      // Letual first: Russian shelf products the users actually buy; then Open Beauty Facts.
-      const all = [...letuList, ...obf];
       const words = String(req.q || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-      let list = all;
-      if (req.cat) list = list.filter((x) => x.c === req.cat);
-      if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
-      // Products without a published composition (z) have no score: they go last when sorting by score.
-      if (req.sort === 'best') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || b.s - a.s);
-      else if (req.sort === 'worst') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || a.s - b.s);
+      // Without a text query the filtered and sorted list is kept in memory: switching sort or paging is instant.
+      const memoKey = !words.length && `${letuList.length}|${obf.length}|${req.cat || ''}|${req.sort || ''}`;
+      let list = memoKey && sortedMemo.get(memoKey);
+      if (!list) {
+        // Letual first: Russian shelf products the users actually buy; then Open Beauty Facts.
+        list = [...letuList, ...obf];
+        if (req.cat) list = list.filter((x) => x.c === req.cat);
+        if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
+        // Products without a published composition (z) have no score: they go last when sorting by score.
+        if (req.sort === 'best') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || b.s - a.s);
+        else if (req.sort === 'worst') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || a.s - b.s);
+        if (memoKey) {
+          if (sortedMemo.size > 60) sortedMemo.clear();
+          sortedMemo.set(memoKey, list);
+        }
+      }
       const size = Math.min(Number(req.size) || 40, 40);
       const page = Math.max(Number(req.page) || 1, 1);
       return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam), total: list.length });
@@ -642,7 +687,7 @@ module.exports.handler = async (event, context) => {
       return reply(200, { items: withX.map((x, i) => ({ ...x, match: Math.round(top[i].sim * 100), common: top[i].hit })) });
     }
     if (req.mode === 'search') {
-      return reply(200, { items: await search(req.q, iam) });
+      return reply(200, { items: await searchCache(req.q, iam) });
     }
     if (req.mode === 'barcode.web') {
       // Unknown barcode: search the web (marketplaces, shops, barcode catalogs) for the product name.

@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -96,13 +97,15 @@ export default function ProductScreen() {
         )}
         <View style={{ flexDirection: 'row', gap: 10 }}>
         {p.wb && (
-          <Press onPress={() => open(p.wb)} style={[styles.buy, styles.wb]} accessibilityLabel="Купить на Wildberries">
+          <Press onPress={() => open(p.wb)} style={styles.buy} accessibilityLabel="Купить на Wildberries">
+            <LinearGradient colors={['#E9C6F2', '#C9A6EC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             <Text style={styles.buyText}>Купить на WB</Text>
           </Press>
         )}
         {p.ozon && (
-          <Press onPress={() => open(p.ozon)} style={[styles.buy, styles.oz]} accessibilityLabel="Купить на Ozon">
-            <Text style={[styles.buyText, { color: '#fff' }]}>Купить на Ozon</Text>
+          <Press onPress={() => open(p.ozon)} style={styles.buy} accessibilityLabel="Купить на Ozon">
+            <LinearGradient colors={['#C8D4FB', '#A9B8F2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <Text style={styles.buyText}>Купить на Ozon</Text>
           </Press>
         )}
         </View>
@@ -130,8 +133,6 @@ const styles = StyleSheet.create({
   volOn: { backgroundColor: '#fff', shadowColor: '#15172B', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
   volText: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.muted },
   volTextOn: { color: colors.ink },
-  buy: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  wb: { backgroundColor: '#CB11AB' },
-  oz: { backgroundColor: '#005BFF' },
-  buyText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
+  buy: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  buyText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
 });

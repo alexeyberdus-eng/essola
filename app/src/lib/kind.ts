@@ -43,10 +43,17 @@ function score(text: string, markers: Marker[]) {
   return total;
 }
 
-export type NotCosmetic = { kind: 'household' | 'food'; label: string };
+export type NotCosmetic = { kind: 'household' | 'food' | 'other'; label: string };
+
+// Not for skin care even though it is applied to the body or nails: insect repellents and nail polish removers.
+const REPELLENT = /toluamide|\bdeet\b|дэта|диэтилтолуамид|icaridin|picaridin|икаридин|ir ?3535|butylacetylaminopropionate|menthane-3,8-diol|citriodiol|permethrin|cypermethrin|перметрин|циперметрин|репеллент|repellent|от комаров|от клещей/i;
+const SOLVENT = /^(acetone|ацетон|ethyl acetate|этилацетат|butyl acetate|бутилацетат|propylene carbonate|methyl ethyl ketone)$/i;
 
 export function detectNotCosmetic(text: string): NotCosmetic | null {
   const t = text.replace(/\s+/g, ' ');
+  if (REPELLENT.test(t)) return { kind: 'other', label: 'средство от насекомых' };
+  const first = t.replace(/^[^:]{0,40}:\s*/, '').split(/\s*[,;]\s*/).slice(0, 3).map((x) => x.replace(/[.\s]+$/, '').trim());
+  if (first.some((x) => SOLVENT.test(x)) && !/nitrocellulose|нитроцеллюлоз|tosylamide/i.test(t)) return { kind: 'other', label: 'жидкость для снятия лака' };
   const household = score(t, HOUSEHOLD);
   const food = score(t, FOOD);
   if (household >= 4 && household >= food) return { kind: 'household', label: 'бытовая химия' };
@@ -54,8 +61,6 @@ export function detectNotCosmetic(text: string): NotCosmetic | null {
   return null;
 }
 
-export const NOT_COSMETIC_TEXT: Record<NotCosmetic['kind'], string> = {
-  household:
-    'Похоже, это бытовая химия — средство для стирки, посуды или уборки. Мы оцениваем только косметику и уход для кожи и волос, поэтому баллы здесь не показываем.',
-  food: 'Похоже, это продукт питания, а не косметика. Мы оцениваем только составы средств для кожи и волос.',
-};
+// One plain message for anything that is not cosmetics: we don't guess what exactly it is.
+const NOT_COSMETIC = 'Похоже, это не косметическое средство. Мы оцениваем только косметику для кожи, волос и тела.';
+export const NOT_COSMETIC_TEXT: Record<NotCosmetic['kind'], string> = { household: NOT_COSMETIC, food: NOT_COSMETIC, other: NOT_COSMETIC };

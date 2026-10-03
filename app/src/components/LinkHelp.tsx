@@ -102,17 +102,24 @@ const STEPS_SAFARI: [string, ReactNode][] = [
 ];
 
 /** Tappable hint under the scanner: how to copy a product link on iPhone, with drawn screens. */
-export function LinkHelp() {
+/** The guide opens from a tappable line; `inline` makes it a short «Как скопировать» link inside a message. */
+export function LinkHelp({ inline }: { inline?: boolean }) {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'app' | 'safari'>('app');
   const steps = tab === 'app' ? STEPS_APP : STEPS_SAFARI;
   return (
     <>
-      <Press haptic={false} onPress={() => { tap(); setOpen(true); }} style={styles.hint}>
-        <Icon name="spark" size={14} color={colors.violet} />
-        <Text style={styles.hintText}>Как скопировать ссылку на товар? Показать</Text>
-      </Press>
+      {inline ? (
+        <Press haptic={false} onPress={() => { tap(); setOpen(true); }} hitSlop={8}>
+          <Text style={styles.inline}>Как скопировать</Text>
+        </Press>
+      ) : (
+        <Press haptic={false} onPress={() => { tap(); setOpen(true); }} style={styles.hint}>
+          <Icon name="spark" size={14} color={colors.violet} />
+          <Text style={styles.hintText}>Как скопировать ссылку на товар? Показать</Text>
+        </Press>
+      )}
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <View style={styles.head}>
@@ -158,6 +165,7 @@ export function LinkHelp() {
 }
 
 const styles = StyleSheet.create({
+  inline: { fontFamily: fonts.semibold, fontSize: 14, color: colors.violet, textDecorationLine: 'underline', marginTop: 6 },
   hint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 6 },
   hintText: { fontFamily: fonts.medium, fontSize: 13, color: colors.violet, textDecorationLine: 'underline' },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingBottom: 6 },

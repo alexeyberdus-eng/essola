@@ -91,7 +91,7 @@ export type Review = {
   warn?: string[];
 };
 /** Technologist's advice on a builder formula ("Aqua 70%", …). */
-export const aiReview = (items: string[], kind: string, notes: string[]) => cached<Review>('review4', { mode: 'review', items, kind, notes });
+export const aiReview = (items: string[], kind: string, notes: string[]) => cached<Review>('review5', { mode: 'review', items, kind, notes });
 
 export type Analog = { title: string; url: string; match: number; common: string[]; note: string };
 /** Gold Apple products with a similar composition, with an estimated match %. */

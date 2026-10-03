@@ -177,7 +177,7 @@ export default function BuilderScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Glow flask={false} />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 110 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 10 }} keyboardShouldPersistTaps="handled">
         <View style={styles.top}>
           <Text style={styles.h1}>Конструктор</Text>
           {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
@@ -386,13 +386,9 @@ export default function BuilderScreen() {
             )}
           </View>
         )}
+        {/* At the very end of the page, after the steps: not pinned over the content. */}
+        {items.length > 0 && <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ marginTop: 16 }} />}
       </ScrollView>
-
-      {items.length > 0 && (
-        <View style={[styles.saveBar, { bottom: TAB_SPACE - 4 }]}>
-          <Button label="Сохранить как рецепт" icon="bookmark" onPress={save} style={{ flex: 1 }} />
-        </View>
-      )}
     </View>
   );
 }
@@ -421,6 +417,12 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
     <FadeIn>
       <Card style={styles.review}>
         <Text style={styles.reviewKicker}>Оценка технолога</Text>
+        {!(r.add ?? []).length && !(r.reduce ?? []).length && !(r.remove ?? []).length && (
+          <View style={styles.goodBadge}>
+            <Icon name="check" size={16} color={colors.good} strokeWidth={2.6} />
+            <Text style={styles.goodText}>Хорошая формула — менять ничего не нужно</Text>
+          </View>
+        )}
         {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
         {summary.effects.length > 0 && (
           <View style={styles.effects}>
@@ -597,6 +599,8 @@ const styles = StyleSheet.create({
   reviewErr: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.bad, marginTop: 8, textAlign: 'center' },
   review: { padding: 16, gap: 12 },
   reviewKicker: { fontFamily: fonts.monoMedium, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: colors.violet },
+  goodBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12, backgroundColor: colors.goodSoft },
+  goodText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.good },
   reviewLead: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, color: colors.ink },
   reviewGroup: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
   reviewRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },

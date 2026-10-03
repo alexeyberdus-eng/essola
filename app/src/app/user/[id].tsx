@@ -17,6 +17,7 @@ export default function UserScreen() {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [followers, setFollowers] = useState(0);
+  const [follows, setFollows] = useState(0);
   const [following, setFollowing] = useState(false);
   const [me, setMe] = useState('');
   const [busy, setBusy] = useState(true);
@@ -33,6 +34,7 @@ export default function UserScreen() {
         });
         setRecipes(list);
         setFollowers(d.followers);
+        setFollows(d.follows ?? 0);
         setFollowing(d.following);
       })
       .catch(() => {})
@@ -80,6 +82,10 @@ export default function UserScreen() {
                 <View style={[styles.stat, styles.statLine]}>
                   <Text style={styles.statN}>{followers}</Text>
                   <Text style={styles.statL}>подписчиков</Text>
+                </View>
+                <View style={[styles.stat, styles.statLine]}>
+                  <Text style={styles.statN}>{follows}</Text>
+                  <Text style={styles.statL}>подписок</Text>
                 </View>
               </View>
               {me !== id && <Button label={following ? 'Вы подписаны' : 'Подписаться'} icon={following ? 'check' : 'plus'} variant={following ? 'outline' : undefined} onPress={toggle} style={{ alignSelf: 'stretch' }} />}
