@@ -16,7 +16,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiScan, productByBarcode, productByLink, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiScan, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -54,6 +54,12 @@ export default function ScannerScreen() {
   const pendingCode = useRef<string | null>(null);
   const pendingName = useRef<string | null>(null);
   const scanning = useRef(false);
+  // A barcode noticed while in «Состав» mode: offered as a chip instead of interrupting the photo.
+  const [seen, setSeen] = useState<string | null>(null);
+  // Products from our base that may be the scanned one (barcode unknown, name known or typed).
+  const [matches, setMatches] = useState<CatalogItem[] | null>(null);
+  const [findQ, setFindQ] = useState('');
+  const [finding, setFinding] = useState(false);
   const [ocr, setOcr] = useState<OcrStatus>({ state: nativeOcr ? 'ready' : 'loading', progress: 0 });
 
   const laser = useRef(new Animated.Value(0)).current;
@@ -100,7 +106,10 @@ export default function ScannerScreen() {
     const code = meta?.barcode ?? pendingCode.current ?? undefined;
     const next = Math.max(0, ...scans.map((x) => Number(x.title.match(/^Состав №(\d+)/)?.[1] ?? 0))) + 1;
     const name = title ?? pendingName.current ?? `Состав №${next}`;
-    if (code && !meta?.source) rememberBarcode(code, name, raw);
+    if (code && !meta?.source) {
+      rememberBarcode(code, name, raw);
+      saveBarcode(code, name, splitList(raw));
+    }
     const scan = saveScan({ title: name, text: raw, overall: result.scores.overall, barcode: code, source: meta?.source });
     pendingCode.current = null;
     pendingName.current = null;
@@ -111,9 +120,39 @@ export default function ScannerScreen() {
     router.push(`/analysis/${scan.id}`);
   };
 
-  const onBarcode = async ({ data }: BarcodeScanningResult) => {
-    if (scanning.current || mode !== 'barcode' || lookup) return;
+  const onBarcode = ({ data }: BarcodeScanningResult) => {
+    if (scanning.current || lookup || busy) return;
+    if (mode === 'barcode') lookupCode(data);
+    else if (seen !== data) setSeen(data);
+  };
+
+  const findByName = async (q: string) => {
+    if (q.trim().length < 2) return;
+    setFinding(true);
+    const res = await catalogPage(q.trim(), undefined, 'relevance', 1);
+    setMatches((res?.items ?? []).filter((x) => x.x).slice(0, 5));
+    setFinding(false);
+  };
+
+  const pickMatch = (item: CatalogItem) => {
+    tap('success');
+    const code = lookup?.code ?? pendingCode.current;
+    const text = `Состав: ${item.x}`;
+    const title = [item.b, item.t].filter(Boolean).join(' ');
+    if (code) {
+      rememberBarcode(code, title, text);
+      saveBarcode(code, title, splitList(item.x));
+    }
+    setMatches(null);
+    setFindQ('');
+    finish(text, title, { barcode: code ?? undefined, source: 'база essola' }, true);
+  };
+
+  const lookupCode = async (data: string) => {
+    if (scanning.current) return;
     scanning.current = true;
+    setSeen(null);
+    setMatches(null);
     tap('success');
     setWave((w) => w + 1);
     setNotice(null);
@@ -132,6 +171,10 @@ export default function ScannerScreen() {
       pendingCode.current = data;
       pendingName.current = res.name;
       setLookup({ code: data, state: 'missing', name: res.name });
+      if (res.name) {
+        setFindQ(res.name);
+        findByName(res.name);
+      }
     }
     setTimeout(() => (scanning.current = false), 800);
   };
@@ -320,6 +363,27 @@ export default function ScannerScreen() {
                 <Text style={styles.stepText}>Сфотографируйте состав на упаковке — мы разберём его и запомним за этим штрихкодом.</Text>
               )}
             </View>
+            {lookup.state === 'missing' && aiEnabled && (
+              <View style={styles.find}>
+                <Text style={styles.findTitle}>{matches?.length ? 'Это одно из этих средств?' : 'Найдите средство в нашей базе'}</Text>
+                <View style={styles.findRow}>
+                  <Icon name="search" size={16} color={colors.muted} />
+                  <TextInput value={findQ} onChangeText={setFindQ} onSubmitEditing={() => findByName(findQ)} placeholder="Бренд и название, например CeraVe крем" placeholderTextColor={colors.faint} style={styles.findInput} returnKeyType="search" />
+                  {finding ? <ActivityIndicator color={colors.violet} /> : <Press onPress={() => findByName(findQ)} accessibilityLabel="Искать"><Text style={styles.clipGo}>Найти</Text></Press>}
+                </View>
+                {matches?.map((m) => (
+                  <Press key={m.k} onPress={() => pickMatch(m)} style={styles.match}>
+                    <ScoreBadge value={m.s} size={36} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.matchTitle} numberOfLines={2}>{m.t}</Text>
+                      {!!m.b && <Text style={styles.matchBrand}>{m.b}</Text>}
+                    </View>
+                    <Icon name="arrowRight" size={15} color={colors.muted} />
+                  </Press>
+                ))}
+                {matches && !matches.length && !finding && <Text style={styles.sheetText}>Не нашли — уточните название или сфотографируйте состав.</Text>}
+              </View>
+            )}
             {lookup.state === 'missing' && (
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                 <Button label="Снять состав" icon="camera" onPress={() => setMode('label')} style={{ flex: 1 }} />
@@ -350,6 +414,16 @@ export default function ScannerScreen() {
           </>
         )}
         {notice && <Text style={[styles.notice, { marginTop: 12 }]}>{notice}</Text>}
+        {seen && !lookup && mode === 'label' && (
+          <Press onPress={() => { setMode('barcode'); lookupCode(seen); }} style={styles.clip}>
+            <Icon name="barcode" size={16} color={colors.violet} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clipTitle}>В кадре штрихкод</Text>
+              <Text style={styles.clipText}>{seen}</Text>
+            </View>
+            <Text style={styles.clipGo}>Найти</Text>
+          </Press>
+        )}
         {clip && !lookup && (
           <Press onPress={() => checkLink(clip)} style={styles.clip}>
             <Icon name="external" size={16} color={colors.violet} />
@@ -363,29 +437,35 @@ export default function ScannerScreen() {
           </Press>
         )}
         {(!lookup || (lookup.state === 'missing' && mode === 'label')) && (
-          <View style={styles.controls}>
-            <Press onPress={pick} style={styles.square} accessibilityLabel="Фото из галереи">
-              <Icon name="image" size={21} />
-            </Press>
-            {mode === 'label' ? (
-              <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
-                <View style={styles.shutterIn} />
+          <>
+            <View style={styles.controls}>
+              {mode === 'label' ? (
+                <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
+                  <View style={styles.shutterIn} />
+                </Press>
+              ) : (
+                <View style={styles.shutterGhost}>
+                  <Icon name="barcode" size={26} color={colors.sageDeep} />
+                </View>
+              )}
+            </View>
+            <View style={styles.actions}>
+              <Press onPress={pick} style={styles.action}>
+                <Icon name="image" size={20} color={colors.violet} />
+                <Text style={styles.actionText}>Галерея</Text>
               </Press>
-            ) : (
-              <View style={styles.shutterGhost}>
-                <Icon name="barcode" size={26} color={colors.sageDeep} />
-              </View>
-            )}
-            <Press onPress={() => setManual(true)} style={styles.square} accessibilityLabel="Ввести текстом">
-              <Icon name="text" size={21} />
-            </Press>
-          </View>
-        )}
-        {aiEnabled && !lookup && (
-          <Press onPress={pasteLink} style={styles.linkBtn}>
-            <Icon name="external" size={15} color={colors.violet} />
-            <Text style={styles.linkText}>Вставить ссылку на Золотое Яблоко или Летуаль</Text>
-          </Press>
+              <Press onPress={() => setManual(true)} style={styles.action}>
+                <Icon name="text" size={20} color={colors.violet} />
+                <Text style={styles.actionText}>Вставить текст</Text>
+              </Press>
+              {aiEnabled && !lookup && (
+                <Press onPress={pasteLink} style={styles.action}>
+                  <Icon name="external" size={20} color={colors.violet} />
+                  <Text style={styles.actionText}>Ссылка Летуаль / ЗЯ</Text>
+                </Press>
+              )}
+            </View>
+          </>
         )}
         {aiEnabled && !lookup && <LinkHelp />}
       </View>
@@ -404,8 +484,8 @@ export default function ScannerScreen() {
             facing="back"
             enableTorch={torch}
             onCameraReady={() => setReady(true)}
-            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
-            onBarcodeScanned={barcode && !lookup ? onBarcode : undefined}
+            barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'itf14'] }}
+            onBarcodeScanned={!lookup && !busy ? onBarcode : undefined}
           />
         )
       ) : (
@@ -550,6 +630,11 @@ function Reading() {
   );
 }
 
+/** Composition text → ingredient names for the shared base. */
+function splitList(raw: string) {
+  return raw.replace(/^[^:]{0,40}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
+}
+
 function Step({ ok, text }: { ok?: boolean; text: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -633,7 +718,17 @@ const styles = StyleSheet.create({
   steps: { marginTop: 12, gap: 7 },
   stepText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
   stepNow: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingHorizontal: 16 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 72, paddingHorizontal: 6, paddingVertical: 10, borderRadius: 18, backgroundColor: '#F4F5FC', borderWidth: 1, borderColor: '#E6E8F6' },
+  actionText: { fontFamily: fonts.semibold, fontSize: 12.5, lineHeight: 16, color: colors.ink, textAlign: 'center' },
+  find: { marginTop: 14, padding: 12, borderRadius: 18, backgroundColor: '#F6F7FD', gap: 8 },
+  findTitle: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  findRow: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 44, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12 },
+  findInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, paddingVertical: 0 },
+  match: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, backgroundColor: '#fff' },
+  matchTitle: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 18, color: colors.ink },
+  matchBrand: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 16 },
   square: { width: 52, height: 52, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 3, borderColor: colors.olive, padding: 5 },
   shutterIn: { flex: 1, borderRadius: 34, backgroundColor: colors.olive },

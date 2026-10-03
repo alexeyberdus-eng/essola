@@ -381,6 +381,14 @@ module.exports.handler = async (event, context) => {
     if (req.mode === 'search') {
       return reply(200, { items: await search(req.q, iam) });
     }
+    if (req.mode === 'barcode.save') {
+      // A barcode someone matched to a composition (photo or a product from our base): remembered for everyone.
+      const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
+      const code = String(req.barcode || '').replace(/\D/g, '');
+      if (code.length < 8 || ingredients.length < 3) return reply(400, { error: 'bad_product' });
+      if (!(await cacheGet(keyFor({ barcode: code }), iam))) await cachePut(keyFor({ barcode: code }), iam, { title: String(req.title || '').slice(0, 200), ingredients, source: 'essola' });
+      return reply(200, { ok: true });
+    }
     if (req.mode === 'save') {
       // A composition the user's phone read from a shop page: keep it for everyone.
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
