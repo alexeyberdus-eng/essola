@@ -8,6 +8,7 @@ import { useLibrary } from '../context/LibraryContext';
 import { catalogPage, searchProducts } from '../lib/ai';
 import { analyze } from '../lib/analyze';
 import { personalize } from '../lib/personal';
+import { readJSON, writeJSON } from '../lib/storage';
 import { useProfile } from '../lib/profile';
 import { colors, fonts, space, TAB_SPACE } from '../theme';
 import { Icon } from './Icon';
@@ -107,6 +108,15 @@ export async function pageBase(q: string, tag: string | undefined, page: number,
   return { list: await pageOBF(q, tag, page), sorted: false };
 }
 
+/** Warms the server and fills the saved first page so «База средств» opens instantly. Called once at app start. */
+export function prefetchBase() {
+  pageBase('', undefined, 1, 'popular')
+    .then((r) => {
+      if (r.list.length) writeJSON('essola.base.||popular', r.list.slice(0, 40));
+    })
+    .catch(() => {});
+}
+
 /** Product base: a feed from our shared base and Open Beauty Facts, infinite scroll, sorting and categories; scored on the device. */
 export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -128,6 +138,16 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
     async (p: number) => {
       const my = ++seq.current;
       setBusy(true);
+      // First page: show the last saved copy at once, then refresh it from the server.
+      const cacheKey = `essola.base.${query}|${tag ?? ''}|${sort}`;
+      if (p === 1) {
+        const saved = await readJSON<Found[] | null>(cacheKey, null);
+        if (saved?.length && my === seq.current) {
+          setItems(saved);
+          setPage(1);
+          setEnd(false);
+        }
+      }
       const [ours, open] = await Promise.all([
         p === 1 && query
           ? searchProducts(query).then((list) =>
@@ -144,6 +164,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
         return all.filter((x) => (seen.has(x.key) ? false : (seen.add(x.key), true)));
       });
       setEnd(open.list.length === 0);
+      if (p === 1 && open.list.length) writeJSON(cacheKey, [...ours, ...open.list].slice(0, 40));
       setPage(p);
       setBusy(false);
     },

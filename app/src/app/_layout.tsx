@@ -5,6 +5,7 @@ import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-goog
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { prefetchBase } from '../components/ProductBase';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Splash } from '../components/Splash';
@@ -17,6 +18,8 @@ import { ProfileProvider } from '../lib/profile';
 import { colors } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// Wake the product base on the server while the app starts, so the list opens without waiting.
+prefetchBase();
 
 function Root() {
   const { ready } = useAuth();
