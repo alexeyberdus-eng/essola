@@ -42,5 +42,6 @@ jobs:
           rm -f "$RUNNER_TEMP/dkim.pem"
           echo "================ DNS records for $DOMAIN ================"
           echo "1) TXT   name: postbox._domainkey   value: v=DKIM1;h=sha256;k=rsa;p=$PUB"
-          echo "2) TXT   name: @                    value: v=spf1 include:_spf.postbox.cloud.yandex.net ~all"
+          echo "2) TXT   name: @                    value: v=spf1 include:spf.postbox.yandexcloud.net ~all   (если SPF-запись уже есть — добавьте include:spf.postbox.yandexcloud.net в неё)"
+          echo "3) TXT   name: _dmarc               value: v=DMARC1; p=none"
           echo "========================================================="
