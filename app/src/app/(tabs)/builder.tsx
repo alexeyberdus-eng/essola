@@ -78,7 +78,9 @@ export default function BuilderScreen() {
     const have = new Set(items.map((i) => i.inci));
     return (QUICK[area] ?? QUICK['Лицо']).map((inci) => INGREDIENTS.find((x) => x.inci === inci)).filter((x): x is (typeof INGREDIENTS)[number] => !!x && !have.has(x.inci)).slice(0, 10);
   }, [area, items]);
-  const shown = review?.sig === sig ? review : null;
+  // The last review stays on screen while the formula changes (adding its suggestions shouldn't hide the rest).
+  const shown = review;
+  const stale = !!review?.data && review.sig !== sig;
   const askReview = async () => {
     tap('medium');
     setReview({ sig, busy: true });
@@ -130,6 +132,11 @@ export default function BuilderScreen() {
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
   };
+  // "−/+" next to a technologist's "change share" line: set that ingredient to the suggested share.
+  const setSuggestedPct = (key: string, to: number) => {
+    tap('medium');
+    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, pct: to } : i)));
+  };
   const fillWater = () => {
     tap('success');
     setItems((prev) => {
@@ -175,7 +182,7 @@ export default function BuilderScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 6 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
           {GOALS.map((g) => (
             <Press key={g} haptic={false} onPress={() => { tap(); setGoal(goal === g ? null : g); }} style={[styles.goal, goal === g && styles.goalOn]}>
-              <Text style={[styles.goalText, goal === g && { color: colors.violet }]}>{g}</Text>
+              <Text style={[styles.goalText, goal === g && { color: '#fff', fontFamily: fonts.semibold }]}>{g}</Text>
             </Press>
           ))}
         </ScrollView>
@@ -243,9 +250,7 @@ export default function BuilderScreen() {
                     <Press haptic={false} onPress={() => remove(i.key)} hitSlop={6} accessibilityLabel="Убрать">
                       <Icon name="close" size={13} color={colors.faint} />
                     </Press>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {i.name}
-                    </Text>
+                    <Text style={styles.name}>{i.name}</Text>
                     <Press haptic={false} onPress={() => change(i.key, i.pct > 2 ? -1 : -0.1)} style={styles.step} hitSlop={4}>
                       <Icon name="minus" size={13} color={colors.ink2} />
                     </Press>
@@ -317,7 +322,15 @@ export default function BuilderScreen() {
         {items.length > 1 && aiEnabled && (
           <View style={{ marginTop: 12 }}>
             {shown?.data ? (
-              <ReviewCard r={shown.data} onAdd={addSuggested} added={items.flatMap((i) => [i.name, i.inci ?? '']).map((x) => x.toLowerCase())} />
+              <>
+                <ReviewCard r={shown.data} items={items} onAdd={addSuggested} onSetPct={setSuggestedPct} />
+                {stale && (
+                  <Press onPress={askReview} style={styles.refresh}>
+                    <Icon name="spark" size={15} color={colors.violet} />
+                    <Text style={styles.refreshText}>Формула изменилась — обновить оценку</Text>
+                  </Press>
+                )}
+              </>
             ) : (
               <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
                 {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
@@ -338,45 +351,101 @@ export default function BuilderScreen() {
   );
 }
 
-/** The technologist's verdict and what to add, reduce or remove; a big "+" on the left adds a suggestion. */
-function ReviewCard({ r, onAdd, added }: { r: Review; onAdd: (name: string, pct?: string) => void; added: string[] }) {
-  const groups: [string, string, { name: string; note: string; raw?: string; pct?: string }[]][] = [
-    ['plus', 'Добавить', (r.add ?? []).map((x) => ({ name: `${x.name}${x.pct ? ` · ${x.pct}` : ''}`, note: x.why ?? '', raw: x.name, pct: x.pct }))],
-    ['minus', 'Убавить', (r.reduce ?? []).map((x) => ({ name: `${x.name}${x.to ? ` → ${x.to}` : ''}`, note: x.why ?? '' }))],
-    ['close', 'Убрать', (r.remove ?? []).map((x) => ({ name: x.name, note: x.why ?? '' }))],
-  ];
+/** Finds the formula row a technologist's suggestion refers to (by INCI or by name). */
+function rowFor(items: Item[], name: string) {
+  const clean = name.replace(/\(.*?\)/g, '').split(/[,/]| или /)[0].trim();
+  const hit = identify(clean);
+  const inci = hit.match === 'exact' || hit.match === 'fuzzy' ? hit.ing.inci.toLowerCase() : null;
+  const n = normalize(clean);
+  return items.find((i) => (inci && (i.inci ?? '').toLowerCase() === inci) || normalize(i.name) === n || (n.length > 4 && normalize(i.name).includes(n)));
+}
+const pctOf = (t?: string) => {
+  const v = parseFloat((t ?? '').replace(',', '.').match(/[\d.]+/)?.[0] ?? '');
+  return v > 0 && v < 100 ? v : null;
+};
+
+/** The technologist's verdict; every line has a big button on the left that applies it to the formula. */
+function ReviewCard({ r, items, onAdd, onSetPct }: { r: Review; items: Item[]; onAdd: (name: string, pct?: string) => void; onSetPct: (key: string, to: number) => void }) {
+  const adds = (r.add ?? []).map((x) => {
+    const row = rowFor(items, x.name);
+    const to = pctOf(x.pct);
+    return { x, row, to };
+  });
   return (
     <FadeIn>
       <Card style={styles.review}>
         <Text style={styles.reviewKicker}>Оценка технолога</Text>
         {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
-        {groups.map(([icon, title, list]) =>
-          list.length ? (
-            <View key={title} style={{ gap: 10 }}>
-              <Text style={styles.reviewGroup}>{title}</Text>
-              {list.map((x) => {
-                const can = !!x.raw && !added.includes(String(x.raw).toLowerCase());
-                const done = !!x.raw && !can;
-                return (
-                  <View key={x.name} style={styles.reviewRow}>
-                    {can ? (
-                      <Press onPress={() => onAdd(String(x.raw), x.pct)} style={styles.addSug} accessibilityLabel="Добавить в формулу">
-                        <Icon name="plus" size={20} color="#fff" strokeWidth={2.6} />
-                      </Press>
-                    ) : (
-                      <View style={[styles.reviewIcon, done && { backgroundColor: '#E5F5EC' }]}>
-                        <Icon name={done ? 'check' : (icon as 'plus')} size={16} color={done ? colors.good : colors.violet} strokeWidth={2.2} />
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.reviewName}>{x.name}</Text>
-                      {!!x.note && <Text style={styles.reviewNote}>{x.note}</Text>}
+        {adds.length > 0 && (
+          <View style={{ gap: 10 }}>
+            <Text style={styles.reviewGroup}>Добавить</Text>
+            {adds.map(({ x, row, to }) => {
+              // Already in the formula: offer to raise it to the suggested share instead of adding it again.
+              const raise = row && to && to > row.pct;
+              const done = row && !raise;
+              return (
+                <View key={x.name} style={styles.reviewRow}>
+                  {done ? (
+                    <View style={[styles.reviewIcon, { backgroundColor: '#E5F5EC' }]}>
+                      <Icon name="check" size={18} color={colors.good} strokeWidth={2.4} />
                     </View>
+                  ) : (
+                    <Press onPress={() => (raise ? onSetPct(row!.key, to!) : onAdd(x.name, x.pct))} style={styles.addSug} accessibilityLabel={raise ? 'Увеличить долю' : 'Добавить в формулу'}>
+                      <Icon name="plus" size={20} color="#fff" strokeWidth={2.6} />
+                    </Press>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reviewName}>{`${x.name}${x.pct ? ` · ${x.pct}` : ''}`}</Text>
+                    <Text style={styles.reviewNote}>{done ? 'Уже в формуле' : raise ? `Уже есть ${pctText(row!.pct)} — нажмите, чтобы поднять до ${pctText(to!)}` : x.why ?? ''}</Text>
                   </View>
-                );
-              })}
-            </View>
-          ) : null,
+                </View>
+              );
+            })}
+          </View>
+        )}
+        {(r.reduce ?? []).length > 0 && (
+          <View style={{ gap: 10 }}>
+            <Text style={styles.reviewGroup}>Изменить долю</Text>
+            {(r.reduce ?? []).map((x) => {
+              const row = rowFor(items, x.name);
+              const to = pctOf(x.to);
+              const can = row && to !== null && Math.abs(row.pct - to) > 0.01;
+              const up = can && to! > row!.pct;
+              return (
+                <View key={x.name} style={styles.reviewRow}>
+                  {can ? (
+                    <Press onPress={() => onSetPct(row!.key, to!)} style={styles.addSug} accessibilityLabel={up ? 'Увеличить долю' : 'Уменьшить долю'}>
+                      <Icon name={up ? 'plus' : 'minus'} size={20} color="#fff" strokeWidth={2.6} />
+                    </Press>
+                  ) : (
+                    <View style={[styles.reviewIcon, row && to !== null ? { backgroundColor: '#E5F5EC' } : null]}>
+                      <Icon name={row && to !== null ? 'check' : 'minus'} size={18} color={row && to !== null ? colors.good : colors.violet} strokeWidth={2.2} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reviewName}>{`${x.name}${x.to ? ` → ${x.to}` : ''}`}</Text>
+                    {!!x.why && <Text style={styles.reviewNote}>{x.why}</Text>}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+        {(r.remove ?? []).length > 0 && (
+          <View style={{ gap: 10 }}>
+            <Text style={styles.reviewGroup}>Убрать</Text>
+            {(r.remove ?? []).map((x) => (
+              <View key={x.name} style={styles.reviewRow}>
+                <View style={styles.reviewIcon}>
+                  <Icon name="close" size={16} color={colors.violet} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reviewName}>{x.name}</Text>
+                  {!!x.why && <Text style={styles.reviewNote}>{x.why}</Text>}
+                </View>
+              </View>
+            ))}
+          </View>
         )}
         {(r.warn ?? []).map((w) => (
           <View key={w} style={styles.reviewWarn}>
@@ -467,8 +536,8 @@ const styles = StyleSheet.create({
   reviewWarnText: { flex: 1, fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 17, color: colors.warn },
   ask: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 14, marginBottom: 8 },
   intro: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginTop: 2 },
-  goal: { height: 30, paddingHorizontal: 11, borderRadius: 99, borderWidth: 1, borderColor: '#E3E5F0', justifyContent: 'center' },
-  goalOn: { borderColor: colors.violet, backgroundColor: colors.tint },
+  goal: { height: 30, paddingHorizontal: 12, borderRadius: 99, backgroundColor: '#F3F1F8', justifyContent: 'center' },
+  goalOn: { backgroundColor: colors.violet },
   goalText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
   search: { marginTop: 16, height: 50, borderRadius: 16, backgroundColor: colors.cardSolid, borderWidth: 1, borderColor: '#E6E8F3', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, ...shadow },
   searchInput: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
@@ -484,6 +553,8 @@ const styles = StyleSheet.create({
   statL: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted },
   statN: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 1 },
   volInput: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, padding: 0, marginTop: 1 },
+  refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 10, height: 42, borderRadius: 14, backgroundColor: colors.tint },
+  refreshText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   minHint: { marginTop: 12, fontFamily: fonts.medium, fontSize: 13.5, color: colors.warn, textAlign: 'center' },
   addSug: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
   pctBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F1F8', borderRadius: 9, paddingRight: 6 },
