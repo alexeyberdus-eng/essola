@@ -8,11 +8,11 @@ import { ActivityIndicator, Animated, Linking, StyleSheet, Text, View } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
-import { CompositionSummary } from '../../components/Summary';
+import { TechnologistOpinion } from '../../components/Summary';
 import { aiEnabled, catalogSimilar, SimilarItem, useAiSummary } from '../../lib/ai';
 import { signature } from '../../lib/signature';
 import { ProductReviews } from '../../components/ProductReviews';
-import { summarize } from '../../lib/effects';
+import { specialKind, summarize } from '../../lib/effects';
 import { recipeNo } from '../../components/RecipeCard';
 import { Card, FadeIn, Glow } from '../../components/silk';
 import { Button, IconButton, Press, Seg, T, Tag, tap } from '../../components/ui';
@@ -54,7 +54,9 @@ export default function AnalysisScreen() {
   const result = useMemo(() => (scan ? analyze(scan.text, null) : null), [scan]);
   const analogs = useMemo(() => (result ? similarRecipes(result, 4) : []), [result]);
   const local = useMemo(() => summarize(result?.items.map((i) => i.ing) ?? []), [result]);
-  const summary = useAiSummary(result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
+  // Not skin care (nail polish remover, toothpaste…): our own description only, the AI would call it a skin product.
+  const special = useMemo(() => specialKind(result?.items.map((i) => i.ing) ?? []), [result]);
+  const summary = useAiSummary(special ? [] : result?.items.map((i) => i.ing.inci) ?? [], undefined, local);
   // Analogs by composition from our base (Letual), matched by the composition fingerprint.
   const [similar, setSimilar] = useState<SimilarItem[] | null | undefined>(undefined);
   const sig = useMemo(() => (result ? signature(result) : ''), [result]);
@@ -75,7 +77,7 @@ export default function AnalysisScreen() {
   };
   const { profile } = useProfile();
   const me = useMemo(() => (result ? personalize(result, profile) : null), [result, profile]);
-  const op = useMemo(() => (result ? opinion(result) : { title: '', paragraphs: [] }), [result]);
+  const op = useMemo(() => (result ? opinion(result, special?.type) : null), [result, special]);
   const card = useRef<View>(null);
   const share = async () => {
     try {
@@ -252,24 +254,7 @@ export default function AnalysisScreen() {
           </View>
         )}
 
-        <CompositionSummary s={summary} />
-
-        <FadeIn index={4}>
-          <View style={styles.opinion}>
-            <View style={styles.opHead}>
-              <View style={styles.opIcon}>
-                <Icon name="flask" size={16} color={colors.violet} strokeWidth={2} />
-              </View>
-              <Text style={styles.opTitle}>Мнение технолога · {op.title}</Text>
-            </View>
-            {op.paragraphs.map((t) => (
-              <Text key={t} style={styles.opText}>
-                {t}
-              </Text>
-            ))}
-          </View>
-        </FadeIn>
-
+        {op && <TechnologistOpinion s={summary} op={op} />}
 
         {!!scan.url && <Button label={`Купить в ${scan.source === 'Летуаль' ? 'Летуаль' : 'магазине'}`} icon="external" variant="outline" onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={{ marginTop: 14 }} />}
 
@@ -569,11 +554,6 @@ const styles = StyleSheet.create({
   generalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 16, padding: 8 },
   generalNum: { fontFamily: fonts.display, fontSize: 14, color: colors.ink },
   generalLabel: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.ink },
-  opinion: { marginTop: 12, padding: 16, borderRadius: 22, backgroundColor: '#FBFAFF', borderWidth: 1, borderColor: '#E4DCFF', gap: 8 },
-  opHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  opIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#EFEAFF', alignItems: 'center', justifyContent: 'center' },
-  opTitle: { flex: 1, fontFamily: fonts.display, fontSize: 15.5, color: colors.ink },
-  opText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20.5, color: colors.ink2 },
   more: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-start' },
   moreText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   heroImg: { width: 76, height: 76, borderRadius: 18, backgroundColor: '#fff' },

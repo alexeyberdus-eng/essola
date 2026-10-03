@@ -13,15 +13,19 @@ const join = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1
  * A short technologist-style verdict written from our own base, no AI calls:
  * what the product is, its strong sides, what to watch, who it suits and how to use it.
  */
-export function opinion(a: Analysis): { title: string; paragraphs: string[] } {
+export type Opinion = { title: string; strong: string; watch: string | null; suits: string | null; tips: string[] };
+
+/**
+ * A technologist-style verdict written from our own base, no AI calls: strong sides, what to watch,
+ * who it suits and how to use it. `special` = a product that isn't skin care (nail polish remover, toothpaste…).
+ */
+export function opinion(a: Analysis, special?: string | null): Opinion {
   const known = a.items.filter((it) => it.match === 'exact' || it.match === 'fuzzy');
   const has = (re: RegExp) => known.some((it) => re.test(it.ing.inci));
   const fn = (f: string) => known.filter((it) => it.ing.fn.includes(f as never));
 
   const surf = fn('surfactant').length > 0;
   const emuls = fn('emulsifier').length > 0;
-  const water = has(/^aqua$|water|juice|hydrosol|flower water/i);
-  const kind = surf ? 'очищающее средство' : has(/zinc oxide|titanium dioxide|octocrylene|avobenzone|methoxydibenzoylmethane|tinosorb|triazine|homosalate/i) && fn('uv').length >= 1 ? 'солнцезащитное средство' : emuls ? 'крем или лосьон' : water ? 'лёгкое водное средство (тоник, сыворотка или гель)' : 'безводное средство на маслах (бальзам или масло)';
 
   const actives = known.filter((it) => it.ing.act >= 2).slice(0, 6);
   const base = known.slice(0, 5).filter((it) => it.ing.risk === 0 && !it.ing.fn.includes('base')).slice(0, 2);
@@ -30,40 +34,41 @@ export function opinion(a: Analysis): { title: string; paragraphs: string[] } {
   const risky = known.filter((it) => it.ing.risk >= 2 && !allergens.includes(it)).slice(0, 3);
   const clog = known.filter((it) => it.ing.com >= 3).slice(0, 3);
   const drying = known.filter((it) => it.ing.flags.includes('drying-alcohol') || it.ing.flags.includes('sulfate')).slice(0, 2);
-
-  const p: string[] = [];
   const score = a.scores.overall;
-  p.push(
-    `По составу это ${kind}. ${score >= 75 ? 'Формула продуманная и в целом безопасная.' : score >= 55 ? 'Формула рабочая, но с оговорками.' : 'Состав спорный — есть компоненты, к которым стоит присмотреться.'}`,
-  );
 
-  if (actives.length) p.push(`Сильная сторона — ${join(names(actives).slice(0, 4))}. ${actives[0].ing.ru}: ${actives[0].ing.note.charAt(0).toLowerCase()}${actives[0].ing.note.slice(1)}`);
-  else if (base.length) p.push(`Активов с доказанным действием немного — средство работает в основном за счёт базы: ${join(base.map(name))}.`);
-  else p.push('Выраженных активов нет — это скорее базовый уход, чем средство с целевым эффектом.');
+  const strong = special
+    ? `Это ${special.toLowerCase()}, а не уход за кожей: оценка показывает, насколько безопасны сами компоненты.`
+    : actives.length
+      ? `${join(names(actives).slice(0, 4)).replace(/^./, (c) => c.toUpperCase())}. ${actives[0].ing.ru}: ${actives[0].ing.note.charAt(0).toLowerCase()}${actives[0].ing.note.slice(1)}`
+      : base.length
+        ? `Активов с доказанным действием немного — средство работает в основном за счёт базы: ${join(base.map(name))}.`
+        : 'Выраженных активов нет — это скорее базовый уход, чем средство с целевым эффектом.';
 
-  const watch: string[] = [];
+  const watchList: string[] = [];
   const say = (xs: AnalyzedItem[], one: string, many: string) => {
     const n = names(xs);
-    if (n.length) watch.push(`${join(n)} — ${n.length > 1 ? many : one}`);
+    if (n.length) watchList.push(`${join(n)} — ${n.length > 1 ? many : one}`);
   };
   say(risky, 'спорный компонент', 'спорные компоненты');
   say(allergens, 'возможный аллерген', 'возможные аллергены');
   say(drying, 'может сушить', 'могут сушить');
-  say(clog, 'может забивать поры', 'могут забивать поры');
-  if (watch.length) p.push(`Обратите внимание: ${watch.join('; ')}.`);
+  if (!special) say(clog, 'может забивать поры', 'могут забивать поры');
+  const watch = watchList.length ? `${watchList.join('; ').replace(/^./, (c) => c.toUpperCase())}.` : null;
 
-  const suits: string[] = [];
-  if (!clog.length && !surf) suits.push('жирной', 'проблемной');
-  if (!drying.length && (emuls || fn('emollient').length > 2)) suits.push('сухой');
-  if (!allergens.length && !risky.length) suits.push('чувствительной');
-  p.push(suits.length ? `Подойдёт ${join(suits)} коже${suits.length < 4 ? '; остальным — смотрите по ощущениям' : ''}.` : 'Лучше подойдёт нормальной, нечувствительной коже.');
+  let suits: string | null = null;
+  if (!special) {
+    const s: string[] = [];
+    if (!clog.length && !surf) s.push('жирной', 'проблемной');
+    if (!drying.length && (emuls || fn('emollient').length > 2)) s.push('сухой');
+    if (!allergens.length && !risky.length) s.push('чувствительной');
+    suits = s.length ? `${join(s).replace(/^./, (c) => c.toUpperCase())} коже${s.length < 4 ? '; остальным — смотрите по ощущениям' : ''}.` : 'Лучше нормальной, нечувствительной коже.';
+  }
 
   const tips: string[] = [];
-  if (has(/glycolic|lactic|mandelic|salicylic|gluconolactone|lactobionic/i)) tips.push('кислоты повышают чувствительность к солнцу — днём обязателен SPF');
-  if (has(/retin/i)) tips.push('ретиноиды наносите вечером, начинайте с 2–3 раз в неделю');
-  if (has(/ascorbic acid/i)) tips.push('витамин C лучше утром под SPF');
-  if (surf) tips.push('не держите на коже долго — нанесите и смойте');
-  if (tips.length) p.push(`Как применять: ${tips.join('; ')}.`);
+  if (has(/glycolic|lactic|mandelic|salicylic|gluconolactone|lactobionic/i)) tips.push('Кислоты повышают чувствительность к солнцу — днём обязателен SPF');
+  if (has(/retin/i)) tips.push('Ретиноиды наносите вечером, начинайте с 2–3 раз в неделю');
+  if (has(/ascorbic acid/i)) tips.push('Витамин C лучше утром под SPF');
+  if (surf && !special) tips.push('Не держите на коже долго — нанесите и смойте');
 
-  return { title: score >= 75 ? 'Хороший выбор' : score >= 55 ? 'Можно, но с оговорками' : 'Стоит подумать', paragraphs: p };
+  return { title: score >= 75 ? 'Хороший выбор' : score >= 55 ? 'Можно, но с оговорками' : 'Стоит подумать', strong, watch, suits, tips };
 }

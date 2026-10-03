@@ -33,11 +33,11 @@ function list(names: string[]) {
 }
 
 /** Products that aren't skin care at all are recognised by their signature ingredients. */
-function specialKind(items: Ingredient[]): { type: string; use: string[] } | null {
+export function specialKind(items: Ingredient[]): { type: string; use: string[] } | null {
   const top = items.slice(0, 4).map((i) => i.inci.toLowerCase());
   const all = items.map((i) => i.inci.toLowerCase());
   const any = (re: RegExp, list = all) => list.some((x) => re.test(x));
-  if (any(/^acetone$|^ethyl acetate$/, top.slice(0, 2)) && !any(/nitrocellulose/))
+  if (any(/^acetone$|^ethyl acetate$|^butyl acetate$|propylene carbonate|methyl ethyl ketone|dimethyl glutarate|dimethyl succinate/, top.slice(0, 3)) && !any(/nitrocellulose|tosylamide|trimellitic/))
     return { type: 'Жидкость для снятия лака', use: ['Ногти: ватным диском, затем вымыть руки и нанести крем', 'Пользуйтесь в проветриваемом помещении'] };
   if (any(/nitrocellulose|tosylamide|trimellitic anhydride/))
     return { type: 'Лак для ногтей', use: ['Ногти: 2 тонких слоя, затем закрепитель'] };
@@ -98,7 +98,7 @@ export function summarize(items: Ingredient[], kind?: string): Summary {
   const type = kind ?? special?.type ?? guessed;
   if (special && !kind) {
     const top = effects.slice(0, 2).map((e) => e.title.toLowerCase());
-    return { kind: type, lead: `${type}${top.length ? `: ${top.join(', ')}` : ''}.`, effects, use: special.use };
+    return { kind: type, lead: `${type}.${top.length ? ` Добавки в составе: ${top.join(', ')}.` : ''}`, effects, use: special.use };
   }
 
   const skin = keys.has('acne') || keys.has('tone') ? 'жирной и комбинированной кожи' : keys.has('calm') ? 'чувствительной кожи' : keys.has('barrier') || oils >= 2 ? 'сухой кожи' : 'любого типа кожи';
