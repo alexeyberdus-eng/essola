@@ -498,10 +498,13 @@ async function handle(event, context) {
     // ---- Daily limits on what costs money (model calls, web search): per account, else per device,
     // plus a looser one per network address so a reinstalled app doesn't reset them.
     const LIMIT = Number(process.env.DAILY_LIMIT) || 50;
+    const CLUB_X = 3;
     const ip = String(event.requestContext?.identity?.sourceIp || h['x-forwarded-for'] || '').split(',')[0].trim();
     const allow = async (what, n = LIMIT) => {
       if (await adminOk()) return true;
       const me = await sessionUid();
+      // Essola Club members get three times as much.
+      if (me && (await get(`accounts/${me}.json`, null))?.club) n *= CLUB_X;
       const who = me ? `u:${me}` : uid(req.device) ? `d:${uid(req.device)}` : null;
       const checks = [who && [who, n], ip && [`ip:${ip}`, n * 4]].filter(Boolean);
       const files = await Promise.all(checks.map(([w]) => get(`limits/${day()}/${sha(w)}.json`, {})));
@@ -709,11 +712,37 @@ async function handle(event, context) {
       await put(`users/${me}/following.json`, mine);
       return reply(200, { followers: list.length, following: !!req.on });
     }
+    // ---- Essola Club: free for now; membership lives on the account, the monthly promo code is set in the admin panel ----
+    if (req.mode === 'club.get' || req.mode === 'club.join' || req.mode === 'club.leave') {
+      const me = await sessionUid();
+      const terms = { limit: LIMIT, club: LIMIT * CLUB_X, describe: LIMIT * 4, describeClub: LIMIT * 4 * CLUB_X, price: 0 };
+      if (!me) return reply(200, { member: false, signedIn: false, terms });
+      const acc = await get(`accounts/${me}.json`, null);
+      if (!acc) return reply(401, { error: 'no_account' });
+      if (req.mode !== 'club.get') {
+        acc.club = req.mode === 'club.join' ? acc.club || { since: new Date().toISOString() } : null;
+        await put(`accounts/${me}.json`, acc);
+        // The badge on the public profile.
+        const pub = await get(`users/${me}.json`, null);
+        if (pub) await put(`users/${me}.json`, { ...pub, club: !!acc.club });
+        const members = (await get('club/members.json', [])).filter((x) => x !== me);
+        if (acc.club) members.push(me);
+        await put('club/members.json', members);
+      }
+      const promo = acc.club ? await get('club/promo.json', null) : null;
+      return reply(200, { member: !!acc.club, since: acc.club?.since || null, signedIn: true, terms, promo: promo && promo.code ? promo : null });
+    }
     // ---- Admin panel: spending, reports ----
-    if (req.mode === 'admin.check' || req.mode === 'admin.stats' || req.mode === 'admin.reports' || req.mode === 'editorial.remove') {
+    if (req.mode === 'admin.check' || req.mode === 'admin.stats' || req.mode === 'admin.reports' || req.mode === 'editorial.remove' || req.mode === 'admin.club' || req.mode === 'admin.promo') {
       if (!(await adminOk())) return reply(403, { error: 'not_admin' });
       if (req.mode === 'admin.check') return reply(200, { ok: true });
       if (req.mode === 'admin.reports') return reply(200, { items: (await get('reports.json', [])).slice(0, 300) });
+      if (req.mode === 'admin.club') return reply(200, { members: (await get('club/members.json', [])).length, promo: await get('club/promo.json', null) });
+      if (req.mode === 'admin.promo') {
+        const promo = clean(req.code, 40) ? { code: clean(req.code, 40), text: clean(req.text, 200), until: clean(req.until, 10), at: new Date().toISOString() } : null;
+        await put('club/promo.json', promo);
+        return reply(200, { promo });
+      }
       if (req.mode === 'editorial.remove') {
         const next = (await get('editorial.json', [])).filter((r) => r.id !== String(req.id || ''));
         await put('editorial.json', next);

@@ -124,6 +124,12 @@ export default function ProfileScreen() {
             <Text style={styles.socialTitle}>Мой аккаунт</Text>
             <Text style={styles.socialText}>как его видят другие · подписчики</Text>
           </Press>
+          <Press haptic={false} onPress={() => router.push('/club' as never)} style={[styles.socialTile, styles.clubTile]}>
+            <LinearGradient colors={['#6A55D8', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
+            <Icon name="spark" size={20} color="#fff" strokeWidth={2} />
+            <Text style={[styles.socialTitle, { color: '#fff' }]}>Essola Клуб</Text>
+            <Text style={[styles.socialText, { color: 'rgba(255,255,255,0.88)' }]}>бонусы · сейчас 0 ₽</Text>
+          </Press>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 22 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 6 }}>
@@ -355,6 +361,7 @@ const styles = StyleSheet.create({
   importText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   socialRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   socialTile: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7' },
+  clubTile: { borderWidth: 0, overflow: 'hidden' },
   socialTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },
   socialText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   nick: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },

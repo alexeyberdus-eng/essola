@@ -61,6 +61,7 @@
       <button class="tab on" data-tab="stats">Расходы и статистика</button>
       <button class="tab" data-tab="stories">Истории</button>
       <button class="tab" data-tab="recipes">Рецепты (CSV)</button>
+      <button class="tab" data-tab="club">Клуб</button>
       <button class="tab" data-tab="reports">Жалобы</button>
       <button class="tab" data-tab="out" style="margin-left:auto">Выйти</button>
     </div>
@@ -109,6 +110,24 @@
       <div class="card"><h2>Уже загружены</h2><div class="tblwrap"><table id="rList"></table></div></div>
     </section>
 
+    <section id="tab-club" class="hidden">
+      <div class="card">
+        <h2>Essola Клуб</h2>
+        <div class="kpis"><div class="kpi"><small>Участников</small><b id="cMembers">—</b></div></div>
+      </div>
+      <div class="card">
+        <h2>Промокод месяца</h2>
+        <p class="muted">Его видят только участники клуба, в приложении: Профиль → Essola Клуб. Чтобы убрать промокод, сотрите код и сохраните.</p>
+        <label>Код</label>
+        <input id="cCode" maxlength="40" placeholder="ESSOLA10">
+        <label>Что даёт (до 200 символов)</label>
+        <input id="cText" maxlength="200" placeholder="Скидка 10% на всю косметику Essola">
+        <label>Действует до</label>
+        <input id="cUntil" type="date">
+        <div class="row" style="margin-top:12px"><button class="main" id="cSave">Сохранить</button><span id="cMsg"></span></div>
+      </div>
+    </section>
+
     <section id="tab-reports" class="hidden">
       <div class="card"><h2>Жалобы пользователей</h2><div id="reports" class="muted">Загрузка…</div></div>
     </section>
@@ -154,7 +173,7 @@ document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
   if (t === 'out') { try { localStorage.removeItem('essola.admin'); } catch {} location.reload(); return; }
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
   document.querySelectorAll('section').forEach((s) => s.classList.toggle('hidden', s.id !== 'tab-' + t));
-  ({ stats: loadStats, stories: loadStories, recipes: loadRecipes, reports: loadReports })[t]();
+  ({ stats: loadStats, stories: loadStories, recipes: loadRecipes, club: loadClub, reports: loadReports })[t]();
 }));
 
 const MODE_NAMES = { scan: 'Фото состава', label: 'Фото этикетки', describe: 'Описание средства', review: 'Технолог (конструктор)', nk: 'Честный знак / штрихкод', 'barcode.web': 'Штрихкод в интернете', url: 'Ссылка на магазин', other: 'Прочее' };
@@ -257,6 +276,22 @@ async function loadRecipes() {
   $('rList').innerHTML = items.length ? '<tr><th>Название</th><th>Категория</th><th></th></tr>' + items.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.category)}</td><td><button class="ghost" data-rdel="${esc(r.id)}">Удалить</button></td></tr>`).join('') : '<tr><td class="muted">Пока нет загруженных рецептов</td></tr>';
   $('rList').querySelectorAll('[data-rdel]').forEach((b) => (b.onclick = async () => { if (!confirm('Удалить рецепт?')) return; await api('editorial.remove', { id: b.dataset.rdel }); loadRecipes(); }));
 }
+
+// ---- Club ----
+async function loadClub() {
+  const { members, promo } = await api('admin.club');
+  $('cMembers').textContent = num(members);
+  $('cCode').value = promo?.code || '';
+  $('cText').value = promo?.text || '';
+  $('cUntil').value = promo?.until || '';
+}
+$('cSave').onclick = async () => {
+  $('cMsg').textContent = '';
+  try {
+    await api('admin.promo', { code: $('cCode').value.trim(), text: $('cText').value.trim(), until: $('cUntil').value });
+    $('cMsg').innerHTML = '<span class="ok">Сохранено</span>';
+  } catch (e) { $('cMsg').innerHTML = `<span class="err">Не получилось: ${esc(e.message)}</span>`; }
+};
 
 // ---- Reports ----
 const KINDS = { recipe: 'рецепт', comment: 'комментарий', topic: 'тема форума', post: 'ответ на форуме', user: 'профиль', review: 'отзыв' };

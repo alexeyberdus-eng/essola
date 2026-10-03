@@ -73,6 +73,11 @@ export default function UserScreen() {
                 <Text style={styles.avatarText}>{initial}</Text>
               </LinearGradient>
               <Text style={styles.nick}>@{user.nick}</Text>
+              {user.club && (
+                <View style={styles.clubBadge}>
+                  <Text style={styles.clubBadgeText}>✦ Essola Клуб</Text>
+                </View>
+              )}
               {!!user.name && <Text style={styles.name}>{user.name}</Text>}
               <View style={styles.stats}>
                 <View style={styles.stat}>
@@ -106,6 +111,8 @@ const styles = StyleSheet.create({
   avatar: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },
   nick: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, marginTop: 6 },
+  clubBadge: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, backgroundColor: colors.tint },
+  clubBadgeText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.violetDeep },
   name: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted },
   stats: { flexDirection: 'row', alignSelf: 'stretch', marginVertical: 12 },
   stat: { flex: 1, alignItems: 'center' },

@@ -10,7 +10,7 @@ const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
 /** The server counts paid requests per account (or per phone when signed out): 50 a day of each kind. */
-export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом.';
+export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Клубе (Профиль → Essola Клуб, сейчас бесплатно) лимит втрое больше.';
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {

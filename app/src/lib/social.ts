@@ -33,7 +33,7 @@ export async function myId() {
   return id;
 }
 
-export type PublicUser = { id: string; nick: string; name?: string; bio?: string };
+export type PublicUser = { id: string; nick: string; name?: string; bio?: string; /** Essola Club member */ club?: boolean };
 export type CommunityItem = { user: PublicUser; recipe: Recipe; at: string };
 export type Social = { likes: number; liked: boolean; comments: { id: string; user: string; nick: string; text: string; at: string }[]; rating?: { avg: number; count: number; mine: number } };
 
