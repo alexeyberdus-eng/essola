@@ -144,7 +144,9 @@ async function enter() {
   }
 }
 $('enter').onclick = () => { token = $('token').value.trim(); enter(); };
-$('token').onkeydown = (e) => e.key === 'Enter' && $('enter').click();
+$('token').onkeydown = (e) => {
+  if (e.key === 'Enter') $('enter').click();
+};
 if (token) enter();
 
 document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
