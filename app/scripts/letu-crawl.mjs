@@ -21,7 +21,7 @@ async function req(url, body, tries = 4) {
       const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: H, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
       if (r.ok) return await r.json();
       if (r.status === 404) return null;
-      if (i === 0) console.log('HTTP', r.status, url.slice(0, 90), (await r.text()).slice(0, 160));
+      if (i === 0) console.error('HTTP', r.status, url.slice(0, 90), (await r.text()).slice(0, 160));
       await sleep(1500 * (i + 1));
     } catch {
       await sleep(1500 * (i + 1));
@@ -66,7 +66,7 @@ async function roots() {
     if (total > 0) checked.push(path);
     await sleep(150);
   }
-  console.log(JSON.stringify((checked.length ? checked : ROOTS.slice(0, 3)).map((root, part) => ({ part, root }))));
+  console.log(JSON.stringify((checked.length ? checked : ROOTS).map((root, part) => ({ part, root }))));
 }
 
 async function list(out, root) {

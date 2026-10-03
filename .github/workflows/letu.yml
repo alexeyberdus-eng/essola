@@ -29,7 +29,8 @@ jobs:
         with:
           node-version: 20
       - id: find
-        run: echo "sections=$(node app/scripts/letu-crawl.mjs roots)" >> "$GITHUB_OUTPUT"
+        # Only the last stdout line is the section list; diagnostics go to stderr.
+        run: echo "sections=$(node app/scripts/letu-crawl.mjs roots | tail -n 1)" >> "$GITHUB_OUTPUT"
 
   list:
     needs: roots
