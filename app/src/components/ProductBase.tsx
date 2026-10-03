@@ -216,7 +216,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
       {toggle}
-      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Почти 100 000 кремов, шампуней, сывороток и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
+      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Более 125 000 кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
       <View style={styles.search}>
         <Icon name="search" size={18} color={colors.muted} />
         <TextInput
