@@ -6,7 +6,7 @@ on:
   push:
     paths: ['app/scripts/build-ingr.ts']
   schedule:
-    - cron: '41 5 3 * *'
+    - cron: '41 5 3 */3 *'
   workflow_dispatch:
 
 permissions:
