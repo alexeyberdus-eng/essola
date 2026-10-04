@@ -469,6 +469,20 @@ async function wbCard(nm) {
   }
   return null;
 }
+/** Short share links (ozon.ru/t/…, wb.ru/…, clck…) only redirect to the product page: read where they point. */
+async function resolveShort(url) {
+  let cur = url;
+  for (let i = 0; i < 4; i++) {
+    const r = await fetch(cur, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148' }, signal: AbortSignal.timeout(6000) }).catch(() => null);
+    const loc = r && r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;
+    if (!loc) break;
+    cur = new URL(loc, cur).toString();
+    if (/\/product\/|\/catalog\/\d/.test(cur)) break;
+  }
+  console.log('short link', url, '→', cur.slice(0, 160));
+  return cur;
+}
+
 /** Shop link → what the shop tells about the product: name, brand, composition when it is published openly. */
 async function fromMarketplace(url) {
   let u;
@@ -476,6 +490,12 @@ async function fromMarketplace(url) {
     u = new URL(url);
   } catch {
     return null;
+  }
+  // A share link without the product in it: follow its redirect first.
+  if (!/\/product\/|\/catalog\/\d|[?&](card|nm)=/.test(u.pathname + u.search)) {
+    try {
+      u = new URL(await resolveShort(url));
+    } catch {}
   }
   const host = u.hostname.replace(/^www\./, '');
   if (/(^|\.)(wildberries\.(ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru)$/.test(host)) {
