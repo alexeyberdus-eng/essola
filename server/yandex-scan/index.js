@@ -10,9 +10,86 @@
 const LLM_URL = 'https://llm.api.cloud.yandex.net/v1/chat/completions'; // OpenAI-compatible AI Studio API
 
 const SCAN = `Выпиши с фото состав косметики (после «Состав»/«Ingredients») по порядку, каждый ингредиент в INCI (русские переведи: «масло ши» → Butyrospermum Parkii Butter), группы раскрывай, опечатки исправляй, ничего не выдумывай. Ответ — только список через «; ». Нет состава — пустой ответ. Если это не косметика (средство для стирки, посуды или уборки, еда, лекарство) — ответь одной строкой «НЕ КОСМЕТИКА: что это». /no_think`;
-const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Если указано «Средство» (название с упаковки) — не угадывай тип, он известен: оцени, насколько состав эффективен именно для такого средства и его обещаний. Верни ТОЛЬКО JSON:
-{"lead":"1–2 предложения: что это за средство и насколько состав справляется со своей задачей","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"weak":"главная слабая сторона состава для этого средства, одно предложение до 18 слов, или пустая строка","use":["куда и как применять, до 12 слов"]}
-effects: 2–4 пункта, use: 1–3 пункта. Каждый ингредиент упоминай один раз. Без медицинских обещаний, без выдуманных ингредиентов.`;
+// «Что даёт средство»: the model answers in short codes (a few dozen tokens), the server expands them into the
+// same text the app shows — fixed effect names, templates with the ingredients the model listed, use and weak spots.
+const DESCRIBE = `Ты косметолог-технолог. По составу (по убыванию доли) и названию средства, если оно дано, опиши, что даёт средство. Отвечай строго строками-кодами, без пояснений и markdown:
+L:1–2 предложения — что это за средство и насколько состав справляется со своей задачей (если тип известен из названия — не угадывай его)
+E:КОД:ингредиенты по-русски через запятую (2–4 строки E, каждый ингредиент один раз)
+W:КОД или -
+U:КОДЫ через запятую (1–3)
+Коды E: HYD увлажнение, BAR барьер и питание, SOFT смягчение, SOO успокоение, BRI ровный тон, EXF обновление, AGE упругость, ANT антиоксиданты, SEB жирность и поры, CLN очищение, UV защита от солнца, HAIR гладкость волос, GROW кожа головы, TEX текстура.
+Коды W: FRAG отдушка, ALC сушащий спирт, SLS жёсткие ПАВ, COMED комедогенные масла, FEWACT мало активов для задачи, LOWACT активы в конце списка, IRR раздражающие компоненты, PRES спорный консервант.
+Коды U: FACE лицо, EYE вокруг глаз, BODY тело, HAND руки, LIP губы, HAIR волосы, SCALP кожа головы, AM утром, PM вечером, DAILY ежедневно, WEEK 1–2 раза в неделю, RINSE смыть, SPF с SPF днём, DRY сухая кожа, OILY жирная кожа, SENS чувствительная кожа.
+Без медицинских обещаний, без выдуманных ингредиентов.`;
+const EFFECT = {
+  HYD: ['Увлажнение', 'удержание влаги и увлажнение кожи'],
+  BAR: ['Барьер и питание', 'восстановление защитного барьера и питание'],
+  SOFT: ['Смягчение', 'смягчение и гладкость кожи'],
+  SOO: ['Успокоение', 'успокоение и меньше покраснений'],
+  BRI: ['Ровный тон', 'более ровный тон и сияние'],
+  EXF: ['Обновление', 'мягкое отшелушивание и обновление'],
+  AGE: ['Упругость', 'поддержка упругости и гладкости'],
+  ANT: ['Антиоксиданты', 'защита от окислительного стресса'],
+  SEB: ['Жирность и поры', 'меньше жирного блеска, чище поры'],
+  CLN: ['Очищение', 'мягкое очищение'],
+  UV: ['Защита от солнца', 'фильтрация ультрафиолета'],
+  HAIR: ['Гладкость волос', 'гладкость и лёгкое расчёсывание'],
+  GROW: ['Кожа головы', 'уход за кожей головы'],
+  TEX: ['Текстура', 'приятная текстура'],
+};
+const WEAK = {
+  FRAG: 'Есть отдушка — чувствительной коже возможны раздражения.',
+  ALC: 'Сушащий спирт высоко в составе — может стягивать кожу.',
+  SLS: 'Жёсткие ПАВ могут пересушивать кожу.',
+  COMED: 'Есть комедогенные масла — склонной к высыпаниям коже осторожнее.',
+  FEWACT: 'Мало активных компонентов для заявленной задачи.',
+  LOWACT: 'Активы в самом конце списка — их доля невелика.',
+  IRR: 'Есть потенциально раздражающие компоненты — сделайте тест на запястье.',
+  PRES: 'Спорный консервант — при чувствительной коже лучше избегать.',
+};
+const USE = {
+  FACE: 'на очищенную кожу лица', EYE: 'на кожу вокруг глаз', BODY: 'на кожу тела', HAND: 'на кожу рук', LIP: 'на губы',
+  HAIR: 'на волосы по длине', SCALP: 'на кожу головы', AM: 'утром', PM: 'вечером', DAILY: 'ежедневно', WEEK: '1–2 раза в неделю',
+  RINSE: 'затем смыть', SPF: 'днём — вместе с SPF', DRY: 'подходит сухой коже', OILY: 'подходит жирной коже', SENS: 'подходит чувствительной коже',
+};
+/** Coded answer → { lead, effects, weak, use } — the shape the app already shows. Old JSON answers pass through. */
+function decodeDescribe(text) {
+  if (text && typeof text === 'object') return text;
+  // A model that answered in the old JSON shape anyway.
+  const json = String(text || '').match(/\{[\s\S]*"lead"[\s\S]*\}/);
+  if (json) {
+    try {
+      return JSON.parse(json[0]);
+    } catch {}
+  }
+  const out = { lead: '', effects: [], weak: '', use: [] };
+  const where = [];
+  const how = [];
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim().replace(/^[-*•]\s*/, '');
+    const m = line.match(/^([LEWU])\s*:\s*(.*)$/i);
+    if (!m) continue;
+    const [k, v] = [m[1].toUpperCase(), m[2].trim()];
+    if (k === 'L') out.lead = v;
+    else if (k === 'E') {
+      const [code, ...rest] = v.split(':');
+      const e = EFFECT[code.trim().toUpperCase()];
+      const ings = rest.join(':').trim().replace(/\.$/, '');
+      if (e && ings && out.effects.length < 4) out.effects.push({ title: e[0], text: `${ings.charAt(0).toUpperCase()}${ings.slice(1)} — ${e[1]}.` });
+    } else if (k === 'W') out.weak = WEAK[v.toUpperCase()] || (v === '-' ? '' : v.length > 6 ? v : '');
+    else if (k === 'U') for (const c of v.split(/\s*,\s*/)) {
+      const t = USE[c.trim().toUpperCase()];
+      if (!t) continue;
+      (/^(подходит|затем|днём)/.test(t) ? how : where).push(t);
+    }
+  }
+  const place = where.filter((t) => t.startsWith('на ')).join(' или ');
+  const times = where.filter((t) => !t.startsWith('на '));
+  const when = times.length > 1 ? `${times.slice(0, -1).join(', ')} и ${times[times.length - 1]}` : times.join('');
+  if (place || when) out.use.push(`Наносить ${[place, when].filter(Boolean).join(' ')}`.trim());
+  for (const t of how) out.use.push(t.charAt(0).toUpperCase() + t.slice(1));
+  return out;
+}
 const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
 const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
@@ -770,7 +847,7 @@ async function handle(event, context) {
     // every new product card, so they have their own, larger allowance.
     const LIMIT = Number(process.env.DAILY_LIMIT) || 3;
     const CLUB_LIMIT = 10;
-    const DESCRIBE = [30, 100];
+    const DESCRIBE_LIMIT = [30, 100];
     const ip = String(event.requestContext?.identity?.sourceIp || h['x-forwarded-for'] || '').split(',')[0].trim();
     const allow = async (what, n = LIMIT, clubN = CLUB_LIMIT) => {
       if (await adminOk()) return true;
@@ -996,7 +1073,7 @@ async function handle(event, context) {
     // ---- Essola Club: free for now; membership lives on the account, the monthly promo code is set in the admin panel ----
     if (req.mode === 'club.get' || req.mode === 'club.join' || req.mode === 'club.leave') {
       const me = await sessionUid();
-      const terms = { limit: LIMIT, club: CLUB_LIMIT, describe: DESCRIBE[0], describeClub: DESCRIBE[1], price: 0 };
+      const terms = { limit: LIMIT, club: CLUB_LIMIT, describe: DESCRIBE_LIMIT[0], describeClub: DESCRIBE_LIMIT[1], price: 0 };
       if (!me) return reply(200, { member: false, signedIn: false, terms });
       const acc = await get(`accounts/${me}.json`, null);
       if (!acc) return reply(401, { error: 'no_account' });
@@ -1542,11 +1619,11 @@ async function handle(event, context) {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
       // One description per composition for everyone: opening the same product again costs no tokens.
-      const dk = `desc2/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
+      const dk = `desc3/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
       if (hit && hit.lead) return reply(200, hit);
-      if (!(await allow('describe', DESCRIBE[0], DESCRIBE[1]))) return reply(429, { error: 'limit' });
-      const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 650);
+      if (!(await allow('describe', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return reply(429, { error: 'limit' });
+      const out = decodeDescribe(await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 220, true));
       if (out && out.lead) await cachePut(dk, iam, out, true);
       return reply(200, out);
     }
@@ -1621,3 +1698,5 @@ async function handle(event, context) {
 }
 module.exports._keywordSearch = keywordSearch;
 module.exports._balanceReview = balanceReview;
+
+module.exports._decodeDescribe = decodeDescribe;
