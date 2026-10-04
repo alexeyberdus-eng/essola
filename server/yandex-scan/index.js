@@ -1327,6 +1327,7 @@ async function handle(event, context) {
       const brandVars = variants(brandWord);
       const sameBrand = (x) => brandVars.some((v) => norm(x.b).replace(/ /g, '').includes(v.replace(/ /g, '')) || ` ${norm(x.t)} `.includes(` ${v} `));
       const seenT = new Set();
+      console.log('byname', name.slice(0, 90), req.web ? 'web' : '');
       const found = keywordSearch(base, `${clean(req.brand, 80)} ${name}`, 0.7).filter((x) => !x.z && sameBrand(x) && !seenT.has(norm(x.t)) && seenT.add(norm(x.t))).slice(0, 3);
       if (found[0] && found[0]._score >= 0.75 && (found.length === 1 || found[1]._score < found[0]._score)) {
         const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
@@ -1350,6 +1351,7 @@ async function handle(event, context) {
       if (seen?.ingredients?.length >= 3) return reply(200, { shop: 'cache', title: seen.title, ingredients: seen.ingredients });
       const info = await fromMarketplace(String(req.url || ''));
       if (!info) return reply(400, { error: 'unsupported_shop' });
+      console.log('link', info.shop, String(info.title || '').slice(0, 90), 'composition', String(info.composition || '').length);
       const list = info.composition ? info.composition.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
       // The seller's own card is the product itself: its composition counts even when short («масло ши 100%»),
       // a similar product from the base or the web would be a different one.
