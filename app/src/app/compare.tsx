@@ -165,6 +165,12 @@ function Picker({ title, scans, onPick }: { title: string; scans: { id: string; 
   );
 }
 
+type Tier = 'pro' | 'lite';
+const TIERS: [Tier, string][] = [
+  ['pro', 'Технолог продвинутый'],
+  ['lite', 'Технолог обычный'],
+];
+
 function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis }) {
   const kb = new Set(rb.items.map(keyOf));
   const common = ra.items.filter((it) => kb.has(keyOf(it)));
@@ -173,16 +179,18 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
   const verdict = summaryOf(a, b, ra, rb, common.length);
   const overlap = Math.round((common.length / Math.max(1, Math.min(ra.items.length, rb.items.length))) * 100);
 
-  const [ai, setAi] = useState<{ busy?: boolean; text?: string; error?: string } | null>(null);
-  const ask = async () => {
+  // Test: two technologists side by side — the advanced one (big model) and the regular one (light model, coded answer).
+  type Ai = { busy?: boolean; text?: string; error?: string } | null;
+  const [ai, setAi] = useState<Record<Tier, Ai>>({ pro: null, lite: null });
+  const ask = async (tier: Tier) => {
     tap('medium');
-    setAi({ busy: true });
+    setAi((s) => ({ ...s, [tier]: { busy: true } }));
     try {
       const names = (r: Analysis) => r.items.map((it) => (it.match === 'unknown' || it.match === 'guess' ? it.raw : it.ing.inci));
-      const r = await aiCompare({ title: a.title, items: names(ra) }, { title: b.title, items: names(rb) });
-      setAi({ text: r.text });
+      const r = await aiCompare({ title: a.title, items: names(ra) }, { title: b.title, items: names(rb) }, tier);
+      setAi((s) => ({ ...s, [tier]: r.text ? { text: r.text } : { error: 'Технолог не ответил — попробуйте ещё раз.' } }));
     } catch (e) {
-      setAi({ error: isLimit(e) ? LIMIT_NOTE : 'Не получилось связаться с технологом — проверьте интернет.' });
+      setAi((s) => ({ ...s, [tier]: { error: isLimit(e) ? LIMIT_NOTE : 'Не получилось связаться с технологом — проверьте интернет.' } }));
     }
   };
 
@@ -210,23 +218,27 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
         </View>
       </View>
 
-      {aiEnabled && (
-        <View style={styles.card}>
-          {ai?.text ? (
-            <>
-              <Text style={styles.techKicker}>Технолог о разнице</Text>
-              <Text style={styles.techText}>{ai.text}</Text>
-            </>
-          ) : (
-            <Press onPress={ask} disabled={ai?.busy} style={styles.techBtn}>
-              <LinearGradient colors={['#9C8BF5', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-              {ai?.busy ? <ActivityIndicator color="#fff" /> : <Icon name="spark" size={17} color="#fff" />}
-              <Text style={styles.techBtnText}>{ai?.busy ? 'Технолог сравнивает…' : 'Технолог объяснит разницу'}</Text>
-            </Press>
-          )}
-          {!!ai?.error && <Text style={styles.muted}>{ai.error}</Text>}
-        </View>
-      )}
+      {aiEnabled &&
+        TIERS.map(([tier, label]) => {
+          const x = ai[tier];
+          return (
+            <View key={tier} style={styles.card}>
+              {x?.text ? (
+                <>
+                  <Text style={styles.techKicker}>{label}: вывод</Text>
+                  <Text style={styles.techText}>{x.text}</Text>
+                </>
+              ) : (
+                <Press onPress={() => ask(tier)} disabled={x?.busy} style={styles.techBtn}>
+                  <LinearGradient colors={tier === 'pro' ? ['#9C8BF5', '#7C66EE'] : ['#7FC9A0', '#4FAE7C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                  {x?.busy ? <ActivityIndicator color="#fff" /> : <Icon name="spark" size={17} color="#fff" />}
+                  <Text style={styles.techBtnText}>{x?.busy ? 'Технолог сравнивает…' : label}</Text>
+                </Press>
+              )}
+              {!!x?.error && <Text style={styles.muted}>{x.error}</Text>}
+            </View>
+          );
+        })}
 
       <View style={styles.card}>
         {ROWS.map(([k, label]) => {

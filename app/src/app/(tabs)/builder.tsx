@@ -43,7 +43,7 @@ export default function BuilderScreen() {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<Kind>('cream');
   const [items, setItems] = useState<Item[]>([]);
-  const [review, setReview] = useState<{ sig: string; data?: Review; busy?: boolean; error?: boolean; limit?: boolean } | null>(null);
+  const [review, setReview] = useState<{ sig: string; tier?: Tier; data?: Review; busy?: boolean; error?: boolean; limit?: boolean } | null>(null);
   const [volume, setVolume] = useState(50);
   const [q, setQ] = useState('');
   const [area, setArea] = useState<string>(AREAS[0]);
@@ -89,26 +89,27 @@ export default function BuilderScreen() {
   // What the person took from the technologist since the last review, and whether they changed anything themselves.
   const applied = useRef<string[]>([]);
   const edited = useRef(false);
-  const askReview = async () => {
+  // Test: the advanced technologist (big model) or the regular one (light model, a few times cheaper).
+  const askReview = async (tier: Tier = review?.tier ?? 'pro') => {
     tap('medium');
     const problems = list.filter((c) => !c.ok).map((c) => c.text);
     // Only the technologist's own advice was applied and the basic checks pass: the formula is finished —
     // said right here, without asking again (a new review would only invent the next «improvement»).
     if (review?.data && applied.current.length && !edited.current && !problems.length) {
       tap('success');
-      setReview({ sig, data: { verdict: `Формула готова: рекомендации технолога учтены (${applied.current.slice(0, 4).join(', ')}), сумма 100%. Можно сохранять рецепт и готовить.` } });
+      setReview({ sig, tier, data: { verdict: `Формула готова: рекомендации технолога учтены (${applied.current.slice(0, 4).join(', ')}), сумма 100%. Можно сохранять рецепт и готовить.` } });
       applied.current = [];
       return;
     }
     const done = edited.current ? [] : applied.current;
-    setReview({ sig, busy: true });
+    setReview({ sig, tier, busy: true });
     try {
-      const data = await aiReview(formula, purpose, problems, done);
+      const data = await aiReview(formula, purpose, problems, done, tier);
       applied.current = [];
       edited.current = false;
-      setReview({ sig, data });
+      setReview({ sig, tier, data });
     } catch (e) {
-      setReview({ sig, error: true, limit: isLimit(e) });
+      setReview({ sig, tier, error: true, limit: isLimit(e) });
     }
   };
   const layers = phaseSums(items);
@@ -380,19 +381,30 @@ export default function BuilderScreen() {
           <View style={{ marginTop: 12 }}>
             {shown?.data ? (
               <>
-                <ReviewCard r={shown.data} items={items} summary={summary} onAdd={addSuggested} onSetPct={setSuggestedPct} onRemove={removeSuggested} />
+                <ReviewCard r={shown.data} title={TIER_NAME[shown.tier ?? 'pro']} items={items} summary={summary} onAdd={addSuggested} onSetPct={setSuggestedPct} onRemove={removeSuggested} />
                 {stale && (
-                  <Press onPress={askReview} style={styles.refresh}>
+                  <Press onPress={() => askReview()} style={styles.refresh}>
                     <Icon name="spark" size={15} color={colors.violet} />
                     <Text style={styles.refreshText}>Формула изменилась — обновить оценку</Text>
                   </Press>
                 )}
+                <Press onPress={() => askReview(shown.tier === 'lite' ? 'pro' : 'lite')} style={styles.refresh}>
+                  <Icon name="spark" size={15} color={colors.violet} />
+                  <Text style={styles.refreshText}>Спросить: {TIER_NAME[shown.tier === 'lite' ? 'pro' : 'lite'].toLowerCase()}</Text>
+                </Press>
               </>
             ) : (
-              <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
-                {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
-                <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : `Оценка технолога · ${area.toLowerCase()}`}</Text>
-              </Press>
+              <View style={{ gap: 10 }}>
+                {(['pro', 'lite'] as Tier[]).map((tier) => {
+                  const busy = shown?.busy && shown.tier === tier;
+                  return (
+                    <Press key={tier} onPress={() => askReview(tier)} disabled={shown?.busy} style={[styles.reviewBtn, tier === 'lite' && { backgroundColor: colors.good }]}>
+                      {busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
+                      <Text style={styles.reviewBtnText}>{busy ? 'Технолог смотрит формулу…' : `${TIER_NAME[tier]} · ${area.toLowerCase()}`}</Text>
+                    </Press>
+                  );
+                })}
+              </View>
             )}
             {shown?.error && <Text style={styles.reviewErr}>{shown.limit ? 'На сегодня лимит советов технолога исчерпан — завтра он обновится.' : 'Не получилось связаться. Проверьте интернет и нажмите ещё раз.'}</Text>}
           </View>
@@ -456,7 +468,10 @@ const pctOf = (t?: string) => {
 };
 
 /** The technologist's verdict; every line has a big button on the left that applies it to the formula. */
-function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Review; items: Item[]; summary: Summary; onAdd: (name: string, pct?: string) => void; onSetPct: (key: string, to: number) => void; onRemove: (key: string) => void }) {
+type Tier = 'pro' | 'lite';
+const TIER_NAME: Record<Tier, string> = { pro: 'Технолог продвинутый', lite: 'Технолог обычный' };
+
+function ReviewCard({ r, title, items, summary, onAdd, onSetPct, onRemove }: { r: Review; title: string; items: Item[]; summary: Summary; onAdd: (name: string, pct?: string) => void; onSetPct: (key: string, to: number) => void; onRemove: (key: string) => void }) {
   const adds = (r.add ?? []).map((x) => {
     const row = rowFor(items, x.name);
     const to = pctOf(x.pct);
@@ -465,7 +480,7 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
   return (
     <FadeIn>
       <Card style={styles.review}>
-        <Text style={styles.reviewKicker}>Оценка технолога</Text>
+        <Text style={styles.reviewKicker}>{title}</Text>
         {!(r.add ?? []).length && !(r.reduce ?? []).length && !(r.remove ?? []).length && (
           <View style={styles.goodBadge}>
             <Icon name="check" size={16} color={colors.good} strokeWidth={2.6} />

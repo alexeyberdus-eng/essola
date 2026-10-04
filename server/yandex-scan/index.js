@@ -91,6 +91,63 @@ function decodeDescribe(text) {
   return out;
 }
 const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
+// «Технолог обычный»: the light model answers in codes, the server writes the comparison from fixed phrases.
+const COMPARE_LITE = `Ты косметолог-технолог. Сравни средство А и средство Б по названию и составу (по убыванию доли). Отвечай строго строками-кодами, без пояснений и markdown:
+Z:зона А,зона Б (коды FACE лицо, EYE вокруг глаз, BODY тело, HAND руки, LIP губы, HAIR волосы, SCALP кожа головы)
+A:коды действия, в которых А заметно сильнее Б (0–3) или -
+B:коды действия, в которых Б заметно сильнее А (0–3) или -
+WA:минус А (код) или -
+WB:минус Б (код) или -
+M:A, B или = — какое мягче для кожи
+FA:кому больше подходит А (1–2 кода)
+FB:кому больше подходит Б (1–2 кода)
+V:вывод до 15 слов, называй их «средство А» и «средство Б»
+Коды действия: HYD увлажнение, BAR барьер и питание, SOFT смягчение, SOO успокоение, BRI ровный тон, EXF обновление, AGE упругость, ANT антиоксиданты, SEB жирность и поры, CLN очищение, UV защита от солнца, HAIR гладкость волос, GROW кожа головы.
+Коды минусов: FRAG отдушка, ALC сушащий спирт, SLS жёсткие ПАВ, COMED комедогенные масла, FEWACT мало активов, LOWACT активы в конце, IRR раздражающие компоненты, PRES спорный консервант.
+Коды «кому»: DRY сухая кожа, OILY жирная, NORM нормальная, SENS чувствительная, ACNE склонная к высыпаниям, MATURE возрастная, DAMAGED повреждённые волосы, ALL всем.
+Не выдумывай того, чего нет в составе.`;
+const ZONE = { FACE: 'лица', EYE: 'кожи вокруг глаз', BODY: 'тела', HAND: 'рук', LIP: 'губ', HAIR: 'волос', SCALP: 'кожи головы' };
+const SKIN = { DRY: 'сухой', OILY: 'жирной', NORM: 'нормальной', SENS: 'чувствительной', MATURE: 'возрастной' };
+const FOR = { ACNE: 'коже, склонной к высыпаниям', DAMAGED: 'повреждённым волосам', ALL: 'всем' };
+const DOES = { HYD: 'увлажняет', BAR: 'укрепляет барьер', SOFT: 'смягчает', SOO: 'успокаивает', BRI: 'выравнивает тон', EXF: 'обновляет кожу', AGE: 'поддерживает упругость', ANT: 'защищает от окисления', SEB: 'снимает жирный блеск', CLN: 'очищает', UV: 'защищает от солнца', HAIR: 'разглаживает волосы', GROW: 'ухаживает за кожей головы' };
+const whom = (v) => {
+  const skin = codes(v, SKIN);
+  return [...(skin.length ? [`${andList(skin)} коже`] : []), ...codes(v, FOR)];
+};
+const codes = (v, dict) => String(v || '').split(/\s*[,;\s]\s*/).map((c) => dict[c.trim().toUpperCase()]).filter(Boolean);
+const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} и ${xs[xs.length - 1]}` : xs.join(''));
+/** Coded comparison → { text }: the same paragraph shape as the advanced technologist's answer. */
+function decodeCompare(text) {
+  const f = {};
+  for (const raw of String(text || '').split('\n')) {
+    const m = raw.trim().replace(/^[-*•]\s*/, '').match(/^(Z|A|B|WA|WB|M|FA|FB|V)\s*:\s*(.*)$/i);
+    if (m) f[m[1].toUpperCase()] ??= m[2].trim();
+  }
+  const out = [];
+  const [za, zb] = String(f.Z || '').split(/\s*,\s*/).map((z) => ZONE[z.trim().toUpperCase()]);
+  if (za && zb && za !== zb) out.push(`Назначение разное: средство А — для ${za}, средство Б — для ${zb}.`);
+  else if (za) out.push(`Оба средства — для ${za}.`);
+  const ea = codes(f.A, DOES);
+  const eb = codes(f.B, DOES);
+  if (ea.length && eb.length) out.push(`Средство А лучше ${andList(ea)}, а средство Б — ${andList(eb)}.`);
+  else if (ea.length) out.push(`Средство А лучше ${andList(ea)}.`);
+  else if (eb.length) out.push(`Средство Б лучше ${andList(eb)}.`);
+  if (!ea.length && !eb.length) out.push('По действию средства близки.');
+  for (const [k, n] of [['WA', 'А'], ['WB', 'Б']]) {
+    const w = WEAK[String(f[k] || '').trim().toUpperCase()];
+    if (w) out.push(`Средство ${n}: ${w.charAt(0).toLowerCase()}${w.slice(1)}`);
+  }
+  const soft = String(f.M || '').trim().toUpperCase();
+  out.push(/^(A|А)$/.test(soft) ? 'Мягче — средство А.' : /^(B|Б)$/.test(soft) ? 'Мягче — средство Б.' : 'По мягкости они похожи.');
+  const fa = whom(f.FA);
+  const fb = whom(f.FB);
+  if (fa.length && fb.length) out.push(`Средство А больше подойдёт ${andList(fa)}, средство Б — ${andList(fb)}.`);
+  else if (fa.length) out.push(`Средство А больше подойдёт ${andList(fa)}.`);
+  else if (fb.length) out.push(`Средство Б больше подойдёт ${andList(fb)}.`);
+  const v = String(f.V || '').replace(/\*\*/g, '').trim();
+  if (v.length > 8) out.push(`Вывод: ${v.charAt(0).toLowerCase()}${v.slice(1)}${/[.!?]$/.test(v) ? '' : '.'}`);
+  return { text: out.length > 1 ? out.join(' ') : '' };
+}
 const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
 + ингредиент (INCI) | доля | что даст, до 14 слов
@@ -1575,11 +1632,14 @@ async function handle(event, context) {
       // Advice the person already applied from earlier reviews: the technologist finishes instead of improving forever.
       const done = (req.done || []).slice(0, 12).map((x) => clean(x, 60)).filter(Boolean).join(', ');
       // The same formula gets the same answer for everyone, without a new model call.
-      const rk = `review3/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
+      // «Технолог обычный» answers the same coded lines with the light model: a few times cheaper.
+      const lite = req.tier === 'lite';
+      const rk = `${lite ? 'reviewL1' : 'review3'}/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
       if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || [], req.kind));
-      if (!(await allow('review'))) return reply(429, { error: 'limit' });
-      const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
+      if (lite) curMode = 'review.lite';
+      if (!(await (lite ? allow('review.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]) : allow('review')))) return reply(429, { error: 'limit' });
+      const text = await chat(lite ? textModel : process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
       const out = { add: [], reduce: [], remove: [], warn: [] };
       for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
         const [head, ...rest] = line.slice(1).split('|').map((x) => x.trim());
@@ -1601,9 +1661,18 @@ async function handle(event, context) {
       if (a.items.length < 2 || b.items.length < 2) return reply(400, { error: 'empty' });
       // The same pair in the same order (the answer says «А» and «Б») gets the same answer for everyone.
       const pair = `${a.title}|${a.items.join(',')}||${b.title}|${b.items.join(',')}`;
-      const ck = `compare2/${sha(pair)}.json`;
+      const lite = req.tier === 'lite';
+      const ck = `${lite ? 'compareL1' : 'compare2'}/${sha(pair)}.json`;
       const hit = await cacheGet(ck, iam);
       if (hit?.text) return reply(200, hit);
+      if (lite) {
+        // The cheap technologist: light model, a few dozen coded tokens, the text is assembled here.
+        curMode = 'compare.lite';
+        if (!(await allow('compare.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return reply(429, { error: 'limit' });
+        const out = decodeCompare(await chat(textModel, [{ role: 'system', content: COMPARE_LITE }, { role: 'user', content: `Средство А: ${a.title || 'без названия'}. Состав: ${a.items.join(', ')}\nСредство Б: ${b.title || 'без названия'}. Состав: ${b.items.join(', ')}` }], 160, true));
+        if (out.text) await cachePut(ck, iam, out, true);
+        return reply(200, { ...out, _usage: lastUsage });
+      }
       if (!(await allow('compare'))) return reply(429, { error: 'limit' });
       const text = await chat(
         process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
@@ -1700,3 +1769,4 @@ module.exports._keywordSearch = keywordSearch;
 module.exports._balanceReview = balanceReview;
 
 module.exports._decodeDescribe = decodeDescribe;
+module.exports._decodeCompare = decodeCompare;

@@ -176,7 +176,7 @@ document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
   ({ stats: loadStats, stories: loadStories, recipes: loadRecipes, club: loadClub, reports: loadReports })[t]();
 }));
 
-const MODE_NAMES = { scan: 'Фото состава', label: 'Фото этикетки', describe: 'Описание средства', review: 'Технолог (конструктор)', nk: 'Честный знак / штрихкод', 'barcode.web': 'Штрихкод в интернете', url: 'Ссылка на магазин', other: 'Прочее' };
+const MODE_NAMES = { scan: 'Фото состава', label: 'Фото этикетки', describe: 'Описание средства', review: 'Технолог (конструктор)', 'review.lite': 'Технолог обычный (конструктор)', compare: 'Технолог (сравнение)', 'compare.lite': 'Технолог обычный (сравнение)',nk: 'Честный знак / штрихкод', 'barcode.web': 'Штрихкод в интернете', url: 'Ссылка на магазин', other: 'Прочее' };
 
 async function loadStats() {
   const days = Number($('days').value);

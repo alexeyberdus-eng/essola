@@ -107,7 +107,8 @@ export type Review = {
   warn?: string[];
 };
 /** Technologist's advice on a builder formula ("Aqua 70%", …). */
-export const aiReview = (items: string[], kind: string, notes: string[], done: string[] = []) => cached<Review>('review7', { mode: 'review', items, kind, notes, done });
+export const aiReview = (items: string[], kind: string, notes: string[], done: string[] = [], tier: 'pro' | 'lite' = 'pro') =>
+  cached<Review>(tier === 'lite' ? 'reviewL1' : 'review7', { mode: 'review', items, kind, notes, done, tier });
 
 export type CachedProduct = { title?: string | null; ingredients: string[]; source?: string; image?: string | null; url?: string };
 
@@ -132,8 +133,8 @@ export const SHOP_LINK = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple
 
 /** A product name read from a shop page → the same product in our base, when it is clearly the same one. */
 /** Technologist's explanation of how two products differ (cached for everyone per pair). */
-export async function aiCompare(a: { title: string; items: string[] }, b: { title: string; items: string[] }): Promise<{ text: string }> {
-  return call({ mode: 'compare', a, b });
+export async function aiCompare(a: { title: string; items: string[] }, b: { title: string; items: string[] }, tier: 'pro' | 'lite' = 'pro'): Promise<{ text: string }> {
+  return call({ mode: 'compare', a, b, tier });
 }
 
 export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {
