@@ -1,0 +1,29 @@
+name: CosIng (EU cosmetic ingredients, © European Union)
+
+# Official open data of the European Commission (reuse with attribution, Decision 2011/833/EU):
+# the ingredient inventory with functions and the Annex II–VI lists (banned / restricted / colourants /
+# preservatives / UV filters). Built into one lookup the scan function serves to the app.
+on:
+  push:
+    paths: ['.github/workflows/cosing.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Which exports answer
+        run: |
+          A=https://api.tech.ec.europa.eu/cosing20/1.0/api
+          for P in annexes/II/export-csv annexes/III/export-csv annexes/IV/export-csv annexes/V/export-csv annexes/VI/export-csv \
+                   ingredients/export-csv substances/export-csv inventory/export-csv export-csv cosmetics/export-csv; do
+            CODE=$(curl -s -m 60 -A 'Mozilla/5.0 (compatible; EssolaBot/1.0; +https://essola.ru)' -o out.bin -w '%{http_code} %{size_download} %{content_type}' "$A/$P")
+            echo "== $P -> $CODE"
+            head -c 600 out.bin | tr -d '\r'; echo
+          done
+          echo "== search API"
+          curl -s -m 60 -X POST "$A/search?apiKey=285a77fd-1257-4271-8507-f0c6b2961203&text=*&pageSize=2&pageNumber=1" -H 'Content-Type: application/json' -d '{}' | head -c 1500; echo
