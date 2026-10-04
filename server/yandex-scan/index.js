@@ -524,7 +524,7 @@ async function fromMarketplace(url) {
     console.log('wb card', nm, String(c.imt_name || '').slice(0, 60), 'composition chars', String(comp || '').length);
     return { shop: 'wb', id: nm, title: String(c.imt_name || c.subj_name || '').trim(), brand: String(c.selling?.brand_name || '').trim(), composition: String(comp || '').trim() };
   }
-  if (/ozon\.ru$/.test(host)) {
+  if (/ozon\.(ru|by|kz|com)$/.test(host)) {
     // Ozon pages are behind bot protection: only the words of the link itself are used (the product slug).
     const slug = u.pathname.match(/product\/([^/]+?)(?:-\d+)?\/?$/)?.[1] || '';
     return { shop: 'ozon', title: slug.replace(/-/g, ' ').trim() };

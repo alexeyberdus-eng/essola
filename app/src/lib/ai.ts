@@ -125,7 +125,8 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
   return call<{ product: CachedProduct | null; error?: string }>({ mode: 'url', url });
 }
 
-export const SHOP_LINK = /https?:\/\/(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple\.ru|wildberries\.(?:ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru|ozon\.ru)\/\S+/i;
+// Share texts sometimes drop «https://» or use Ozon's other country sites; checkLink adds the scheme back.
+export const SHOP_LINK = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple\.ru|wildberries\.(?:ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru|ozon\.(?:ru|by|kz|com))\/[^\s"'«»<>]+/i;
 
 /** A product name read from a shop page → the same product in our base, when it is clearly the same one. */
 export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {

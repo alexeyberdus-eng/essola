@@ -283,12 +283,14 @@ export default function ScannerScreen() {
   const shopDone = useRef(false);
   const shopRun = useRef(0);
   const pageTitle = useRef('');
+  const pageFallback = useRef<CatalogItem | null>(null);
   // The page couldn't be read: the notice offers to open it by hand.
   const [stuck, setStuck] = useState<{ url: string; text: string } | null>(null);
 
-  const readPage = (url: string, label: string, known: string) => {
+  const readPage = (url: string, label: string, known: string, fallback?: CatalogItem) => {
     setShopName(label);
     pageTitle.current = known;
+    pageFallback.current = fallback ?? null;
     shopDone.current = false;
     setShopHidden(true);
     setBusy(true);
@@ -304,6 +306,7 @@ export default function ScannerScreen() {
     shopDone.current = true;
     setShop(null);
     const title = pageTitle.current;
+    if (pageFallback.current) return openFromBase(pageFallback.current);
     if (title) {
       const r = await productByName(title, undefined, true).catch(() => null);
       if (r?.item?.x) return openFromBase(r.item);
@@ -328,7 +331,9 @@ export default function ScannerScreen() {
       .catch(() => {});
   }, [focused]);
 
-  const checkLink = async (url: string) => {
+  const checkLink = async (link: string) => {
+    // «ozon.ru/t/…» without the scheme, or a link ending with the share text's punctuation.
+    const url = (/^https?:\/\//i.test(link) ? link : `https://${link}`).replace(/[).,;:!?\]]+$/, '');
     setClip(null);
     setBusy(true);
     setNotice(null);
@@ -346,7 +351,9 @@ export default function ScannerScreen() {
         // Wildberries gives the real name and brand from its card: the same product in our base is the answer.
         if (r.shop === 'wb' && r.item?.x) return openFromBase(r.item);
         // No open composition: read the product page in the background, the way a person would, without showing it.
-        return readPage(url, SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'), r.shop === 'wb' ? name : '');
+        // The name from the link and the base product it points to stay as the fallback if the page doesn't open
+        // (Ozon often shows a robot check to a page opened in the background).
+        return readPage(url, SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'), name, r.item?.x ? r.item : undefined);
       }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       // Not in our base yet: read the page in the background, the same way as Ozon / Wildberries.
