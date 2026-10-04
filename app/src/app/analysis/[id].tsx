@@ -38,7 +38,7 @@ const HERO: Record<'good' | 'caution' | 'avoid', [string, string, string]> = {
   avoid: ['#FFC9C9', '#FFD9E4', '#F3E3FF'],
 };
 
-type Filter = 'all' | 'active' | 'risk' | 'allergen';
+type Filter = 'all' | 'active' | 'risk' | 'allergen' | 'extract' | 'oil' | 'humectant' | 'acid' | 'peptide' | 'antioxidant' | 'uv' | 'preservative' | 'fragrance';
 const RISK = [
   { label: 'Безопасно', color: colors.good },
   { label: 'Низкий риск', color: '#8FA06A' },
@@ -139,6 +139,16 @@ export default function AnalysisScreen() {
     active: items.filter((it) => it.ing.act >= 2),
     risk: items.filter((it) => it.ing.risk >= 2 || (it.ing.risk >= 1 && it.ing.flags.some((f) => f !== 'allergen'))),
     allergen: items.filter((it) => it.ing.flags.includes('allergen')),
+    // Ingredient groups, the way people look for them: extracts, oils, acids, peptides…
+    extract: items.filter((it) => it.ing.fn.includes('extract') || /extract|ferment|filtrate|leaf juice/i.test(it.ing.inci)),
+    oil: items.filter((it) => /\b(oil|butter|squalane|squalene)\b/i.test(it.ing.inci)),
+    humectant: items.filter((it) => it.ing.fn.includes('humectant')),
+    acid: items.filter((it) => it.ing.fn.includes('exfoliant') || /\b(glycolic|lactic|salicylic|mandelic|azelaic|malic|tartaric|lactobionic) acid\b|gluconolactone/i.test(it.ing.inci)),
+    peptide: items.filter((it) => /peptide|palmitoyl (tri|tetra|penta|hexa|oligo)|acetyl hexapeptide|copper tripeptide/i.test(it.ing.inci)),
+    antioxidant: items.filter((it) => it.ing.fn.includes('antioxidant')),
+    uv: items.filter((it) => it.ing.fn.includes('uv')),
+    preservative: items.filter((it) => it.ing.fn.includes('preservative')),
+    fragrance: items.filter((it) => it.ing.fn.includes('fragrance') || /parfum|fragrance/i.test(it.ing.inci)),
   };
   const shown = groups[filter];
   const verdictTone = scores.overall >= 68 ? colors.good : scores.overall >= 50 ? colors.warn : colors.bad;
@@ -327,12 +337,26 @@ export default function AnalysisScreen() {
               setFilter(f);
               setOpen(null);
             }}
-            options={[
-              { key: 'all', label: `Все ${groups.all.length}` },
-              { key: 'active', label: `Активы ${groups.active.length}` },
-              { key: 'risk', label: `Риски ${groups.risk.length}` },
-              { key: 'allergen', label: `Аллергены ${groups.allergen.length}` },
-            ]}
+            options={(
+              [
+                ['all', 'Все'],
+                ['active', 'Активы'],
+                ['risk', 'Риски'],
+                ['allergen', 'Аллергены'],
+                ['extract', 'Экстракты'],
+                ['oil', 'Масла'],
+                ['humectant', 'Увлажнители'],
+                ['acid', 'Кислоты'],
+                ['peptide', 'Пептиды'],
+                ['antioxidant', 'Антиоксиданты'],
+                ['uv', 'УФ-фильтры'],
+                ['preservative', 'Консерванты'],
+                ['fragrance', 'Отдушки'],
+              ] as [Filter, string][]
+            )
+              // Empty groups are hidden, except the first four people always look at.
+              .filter(([k]) => ['all', 'active', 'risk', 'allergen'].includes(k) || groups[k].length > 0)
+              .map(([key, label]) => ({ key, label: `${label} ${groups[key].length}` }))}
           />
         </View>
 
@@ -340,7 +364,7 @@ export default function AnalysisScreen() {
           shown.map((it) => <Row key={it.position} item={it} eu={cosingFor(eu, euName(it))} open={open === it.position} onPress={() => setOpen(open === it.position ? null : it.position)} />)
         ) : (
           <T v="small" style={{ paddingVertical: 20, textAlign: 'center' }}>
-            {filter === 'active' ? 'Сильных активов в составе нет.' : 'Таких компонентов нет — отлично.'}
+            {filter === 'active' ? 'Сильных активов в составе нет.' : filter === 'risk' || filter === 'allergen' ? 'Таких компонентов нет — отлично.' : 'Таких компонентов в составе нет.'}
           </T>
         )}
         {euBanned.length > 0 && (

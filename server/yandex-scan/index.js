@@ -297,6 +297,16 @@ const cosingKeys = (name) => {
   const out = [n, n.replace(/\s*\(.*?\)\s*/g, ' ').trim(), ...n.split(/\s*\/\s*/)];
   return [...new Set(out.filter((x) => x.length > 1))];
 };
+// «Средства с ингредиентом»: product keys per ingredient, built by CI (scripts/build-ingr.ts), most popular first.
+const ingrLists = new Map();
+async function ingrList(slug, iam) {
+  if (ingrLists.has(slug)) return ingrLists.get(slug);
+  const keys = await cacheGet(`ingr/${slug}.json`, iam);
+  const set = new Set(Array.isArray(keys) ? keys : []);
+  if (ingrLists.size > 60) ingrLists.delete(ingrLists.keys().next().value);
+  ingrLists.set(slug, set);
+  return set;
+}
 const shards = new Map();
 const sortedMemo = new Map();
 async function letuShard(h, iam) {
@@ -947,11 +957,14 @@ async function handle(event, context) {
       const [obf, letuList] = await Promise.all([loadCatalog(iam), loadLetu(iam)]);
       const words = String(req.q || '').toLowerCase().split(/\s+/).filter((w) => w.length > 1);
       // Without a text query the filtered and sorted list is kept in memory: switching sort or paging is instant.
-      const memoKey = !words.length && `${letuList.length}|${obf.length}|${req.cat || ''}|${req.sort || ''}`;
+      const ing = String(req.ing || '').replace(/[^a-z0-9-]/g, '').slice(0, 80);
+      const withIng = ing ? await ingrList(ing, iam) : null;
+      const memoKey = !words.length && `${letuList.length}|${obf.length}|${req.cat || ''}|${req.sort || ''}|${ing}`;
       let list = memoKey && sortedMemo.get(memoKey);
       if (!list) {
         // Letual first: Russian shelf products the users actually buy; then Open Beauty Facts.
         list = [...letuList, ...obf];
+        if (withIng) list = list.filter((x) => withIng.has(x.k));
         if (req.cat) list = list.filter((x) => x.c === req.cat);
         if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
         // Products without a published composition (z) have no score: they go last when sorting by score.

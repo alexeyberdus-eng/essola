@@ -1,0 +1,54 @@
+name: Products by ingredient (index for «Средства с ингредиентом»)
+
+# Reads the product base already in Object Storage (Letual + INKEEDecoder compositions) and writes, for every
+# ingredient the app knows, the list of products that contain it. Run after the base is rebuilt; weekly anyway.
+on:
+  push:
+    paths: ['.github/workflows/ingr.yml', 'app/scripts/build-ingr.ts']
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download the base
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          echo "B=$B" >> "$GITHUB_ENV"
+          mkdir -p out/prev/letu-x out/prev/inci-x
+          for S in letu inci; do
+            curl -s -f -o out/prev/$S-index.json "$B/$S/index.json" -H "X-YaCloud-SubjectToken: $TOKEN"
+            node -e "const c=require('crypto');const i=require('./out/prev/$S-index.json');console.log([...new Set(i.map(x=>c.createHash('sha1').update(x.k).digest('hex').slice(0,3)))].join('\n'))" > out/prev/$S-shards.txt
+            cat out/prev/$S-shards.txt | xargs -P 24 -I{} sh -c 'curl -s -f --retry 4 --retry-all-errors -o out/prev/$2-x/{}.json "$0/$2/x/{}.json" -H "X-YaCloud-SubjectToken: $1" || true' "$B" "$TOKEN" "$S"
+            echo "$S: $(ls out/prev/$S-x | wc -l) shards"
+          done
+      - name: Build the ingredient lists
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          NODE_OPTIONS=--max-old-space-size=6144 npx --yes tsx scripts/build-ingr.ts ../out/prev ../out/build
+      - name: Upload to Object Storage
+        run: |
+          cd out/build
+          du -sh ingr
+          ls ingr | xargs -P 12 -I{} sh -c 'curl -s -f --retry 6 --retry-all-errors --retry-delay 3 -o /dev/null -X PUT "$B/ingr/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @ingr/{} || echo "fail {}"'
+          curl -sS -f -X PUT "$B/ingr/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @ingr-index.json -w 'index HTTP %{http_code}\n'

@@ -1,4 +1,5 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { onBaseIngredient } from '../../lib/baseIngredient';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductBase } from '../../components/ProductBase';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -19,6 +20,8 @@ type Mode = 'base' | 'shop';
 /** «Средства»: search the product base, or the Essola shop of ingredients. */
 export default function ShopScreen() {
   const [mode, setMode] = useState<Mode>('base');
+  // «Средства с этим ингредиентом» from an ingredient page opens the base.
+  useEffect(() => onBaseIngredient(() => setMode('base')), []);
   const toggle = (
     <View style={styles.toggle}>
       {(

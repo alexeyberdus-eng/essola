@@ -3,11 +3,12 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RecipeRow } from '../../components/RecipeRow';
 import { FadeIn, Glow } from '../../components/silk';
-import { IconButton } from '../../components/ui';
+import { IconButton, Press } from '../../components/ui';
 import { FN_ICON, FN_LABEL, ORIGIN_LABEL } from '../../data/ingredients';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon } from '../../components/Icon';
 import { ingredientById, recipesWith } from '../../lib/wiki';
+import { openBaseWith } from '../../lib/baseIngredient';
 import { colors, fonts, RISK_COLOR, space } from '../../theme';
 
 const RISK_LABEL = ['Безопасно', 'Низкий риск', 'Умеренный риск', 'Высокий риск'];
@@ -54,6 +55,12 @@ export default function IngredientScreen() {
             <Text style={styles.note}>{ing.note}</Text>
           </LinearGradient>
         </FadeIn>
+
+        <Press haptic={false} onPress={() => openBaseWith(ing)} style={styles.baseBtn}>
+          <Icon name="search" size={17} color={colors.violet} />
+          <Text style={styles.baseBtnText}>Средства с этим ингредиентом</Text>
+          <Icon name="arrowRight" size={15} color={colors.violet} />
+        </Press>
 
         {!!ing.about && (
           <FadeIn index={1}>
@@ -123,6 +130,8 @@ export default function IngredientScreen() {
 }
 
 const styles = StyleSheet.create({
+  baseBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 18, backgroundColor: colors.tint },
+  baseBtnText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14.5, color: colors.violetDeep },
   nav: { paddingHorizontal: space.gutter, paddingBottom: 10 },
   hero: { borderRadius: 26, padding: 18, borderWidth: 1, borderColor: '#EEEAF8' },
   heroIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

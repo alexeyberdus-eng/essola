@@ -172,10 +172,10 @@ export async function catalogSimilar(g: string): Promise<SimilarItem[] | null> {
   }
 }
 /** A page of our pre-scored catalog (built weekly from Open Beauty Facts); null when the server can't be reached. */
-export async function catalogPage(q: string, cat: string | undefined, sort: string, page: number): Promise<{ items: CatalogItem[]; total: number } | null> {
+export async function catalogPage(q: string, cat: string | undefined, sort: string, page: number, ing?: string): Promise<{ items: CatalogItem[]; total: number } | null> {
   if (!aiEnabled) return null;
   try {
-    return await call<{ items: CatalogItem[]; total: number }>({ mode: 'catalog', q, cat, sort, page, size: 40 });
+    return await call<{ items: CatalogItem[]; total: number }>({ mode: 'catalog', q, cat, sort, page, size: 40, ing });
   } catch {
     return null;
   }

@@ -7,7 +7,9 @@ import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, Te
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../context/LibraryContext';
 import { catalogPage, searchProducts } from '../lib/ai';
-import { analyze } from '../lib/analyze';
+import { BaseIngredient, ingredientSlug, onBaseIngredient, takePendingIngredient } from '../lib/baseIngredient';
+import { analyze, normalize } from '../lib/analyze';
+import { INGREDIENTS } from '../data/ingredients';
 import { personalize } from '../lib/personal';
 import { readJSON, writeJSON } from '../lib/storage';
 import { useProfile } from '../lib/profile';
@@ -97,9 +99,10 @@ export async function pageOBF(q: string, tag: string | undefined, page: number):
 }
 
 /** Feed page: our pre-scored catalog first (fast, sorted on the server), Open Beauty Facts when it has nothing. */
-export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular'): Promise<{ list: Found[]; sorted: boolean }> {
-  const c = await catalogPage(q, tag, sort, page);
-  if (c && (c.total > 0 || page > 1)) {
+export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular', ing?: string): Promise<{ list: Found[]; sorted: boolean }> {
+  const c = await catalogPage(q, tag, sort, page, ing);
+  // With an ingredient chosen only our base can answer (Open Beauty Facts has no such filter).
+  if (c && (c.total > 0 || page > 1 || ing)) {
     const list = c.items.map((x) => {
       const letu = x.k.startsWith('letu:');
       const inci = x.k.startsWith('inci:');
@@ -135,6 +138,18 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [end, setEnd] = useState(false);
   const [serverSorted, setServerSorted] = useState(false);
+  // «Средства с ингредиентом»: chosen here or handed over from an ingredient page.
+  const [ing, setIng] = useState<BaseIngredient | null>(() => takePendingIngredient());
+  const [ingQ, setIngQ] = useState<string | null>(null);
+  useEffect(() => onBaseIngredient((x) => {
+    takePendingIngredient();
+    setIng(x);
+  }), []);
+  const ingFound = useMemo(() => {
+    const n = normalize(ingQ ?? '');
+    if (n.length < 2) return [];
+    return INGREDIENTS.filter((i) => [i.ru, i.inci, ...i.aliases].some((t) => normalize(t).includes(n))).slice(0, 6);
+  }, [ingQ]);
   const seq = useRef(0);
   const tag = CATS.find((c) => c.key === cat)?.tag;
 
@@ -143,7 +158,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       const my = ++seq.current;
       setBusy(true);
       // First page: show the last saved copy at once, then refresh it from the server.
-      const cacheKey = `essola.base.${query}|${tag ?? ''}|${sort}`;
+      const cacheKey = `essola.base.${query}|${tag ?? ''}|${sort}${ing ? `|${ing.slug}` : ''}`;
       if (p === 1) {
         const saved = await readJSON<Found[] | null>(cacheKey, null);
         if (saved?.length && my === seq.current) {
@@ -153,12 +168,12 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
         }
       }
       const [ours, open] = await Promise.all([
-        p === 1 && query
+        p === 1 && query && !ing
           ? searchProducts(query).then((list) =>
               list.map((x) => ({ key: `our:${x.url ?? x.title}`, title: x.title ?? 'Средство', image: x.image ?? null, text: `Ingredients: ${x.ingredients.join(', ')}`, source: 'База essola' })),
             )
           : Promise.resolve([] as Found[]),
-        pageBase(query, tag, p, sort),
+        pageBase(query, tag, p, sort, ing?.slug),
       ]);
       if (my !== seq.current) return;
       setServerSorted(open.sorted);
@@ -172,7 +187,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       setPage(p);
       setBusy(false);
     },
-    [query, tag, sort],
+    [query, tag, sort, ing],
   );
 
   useEffect(() => {
@@ -242,6 +257,50 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
           </Press>
         ))}
       </ScrollView>
+      {ing ? (
+        <Press haptic={false} onPress={() => { tap(); setIng(null); }} style={styles.ingChip} accessibilityLabel="Убрать ингредиент">
+          <Text style={styles.ingChipText} numberOfLines={1}>С ингредиентом: {ing.label}</Text>
+          <Icon name="close" size={14} color="#fff" />
+        </Press>
+      ) : ingQ === null ? (
+        <Press haptic={false} onPress={() => { tap(); setIngQ(''); }} style={styles.ingAdd}>
+          <Icon name="plus" size={15} color={colors.violet} />
+          <Text style={styles.ingAddText}>Найти средства с ингредиентом</Text>
+        </Press>
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <View style={styles.search}>
+            <Icon name="flask" size={17} color={colors.muted} />
+            <TextInput
+              value={ingQ}
+              onChangeText={setIngQ}
+              autoFocus
+              placeholder="Ингредиент: ниацинамид, ретинол, пептиды…"
+              placeholderTextColor={colors.faint}
+              style={styles.input}
+            />
+            <Press haptic={false} onPress={() => setIngQ(null)} accessibilityLabel="Закрыть">
+              <Icon name="close" size={16} color={colors.muted} />
+            </Press>
+          </View>
+          {ingFound.map((i) => (
+            <Press
+              key={i.inci}
+              haptic={false}
+              onPress={() => {
+                tap();
+                Keyboard.dismiss();
+                setIng({ slug: ingredientSlug(i.inci), label: i.ru || i.inci });
+                setIngQ(null);
+              }}
+              style={styles.ingRow}
+            >
+              <Text style={styles.ingRowRu}>{i.ru}</Text>
+              <Text style={styles.ingRowInci} numberOfLines={1}>{i.inci}</Text>
+            </Press>
+          ))}
+        </View>
+      )}
       <View style={styles.sorts}>
         {(
           [
@@ -329,6 +388,13 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
   sorts: { flexDirection: 'row', gap: 16, marginTop: 12, marginBottom: 4 },
+  ingAdd: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, backgroundColor: colors.tint },
+  ingAddText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
+  ingChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', maxWidth: '100%', marginTop: 10, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 99, backgroundColor: colors.violet },
+  ingChipText: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 13, color: '#fff' },
+  ingRow: { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  ingRowRu: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  ingRowInci: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 1 },
   sort: { paddingVertical: 4 },
   sortOn: { borderBottomWidth: 2, borderColor: colors.violet },
   sortText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
