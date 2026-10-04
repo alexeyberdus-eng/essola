@@ -482,6 +482,53 @@ async function wbCard(nm) {
   console.log('wb card not found', nm, 'vol', vol, 'guess', guess);
   return null;
 }
+/**
+ * The technologist's changes must keep the formula at exactly 100%: what is added, raised, lowered or removed
+ * is summed, and the difference is taken from (or given back to) the ingredient with the largest share.
+ * Models are bad at this arithmetic, so it is done here, never left to the model.
+ */
+function balanceReview(out, items) {
+  const num = (v) => parseFloat(String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/)?.[0] ?? 'NaN');
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const cur = [];
+  for (const s of items) {
+    const m = String(s).match(/^(.+?)\s+(\d+(?:[.,]\d+)?)%/);
+    if (m) cur.push({ name: m[1].trim(), key: norm(m[1]), pct: num(m[2]) });
+  }
+  const find = (name) => {
+    const n = norm(name);
+    return n ? cur.find((c) => c.key === n || (n.length > 4 && (c.key.includes(n) || n.includes(c.key)))) : undefined;
+  };
+  // «Add» of something already in the formula is really a new share for it.
+  for (const a of [...out.add]) {
+    const c = find(a.name);
+    if (!c) continue;
+    out.add.splice(out.add.indexOf(a), 1);
+    if (!Number.isNaN(num(a.pct)) && !out.reduce.some((r) => find(r.name) === c)) out.reduce.push({ name: c.name, to: `${r1(num(a.pct))}%`, why: a.why });
+  }
+  const removed = new Set(out.remove.map((x) => find(x.name)).filter(Boolean));
+  let net = 0;
+  for (const a of out.add) net += num(a.pct) || 0;
+  for (const r of out.reduce) {
+    const c = find(r.name);
+    if (c && !Number.isNaN(num(r.to))) net += num(r.to) - c.pct;
+  }
+  for (const c of removed) net -= c.pct;
+  net = r1(net);
+  if (Math.abs(net) < 0.1) return out;
+  // The base takes the difference: the largest share that is kept, at its new value if the advice already changes it.
+  const donors = cur.filter((c) => !removed.has(c)).map((c) => ({ c, line: out.reduce.find((r) => find(r.name) === c) }));
+  donors.sort((x, y) => (y.line ? num(y.line.to) : y.c.pct) - (x.line ? num(x.line.to) : x.c.pct));
+  const d = donors[0];
+  if (!d) return out;
+  const now = d.line ? num(d.line.to) : d.c.pct;
+  const to = r1(now - net);
+  if (to < 0.1) return out;
+  if (d.line) d.line.to = `${to}%`;
+  else out.reduce.push({ name: d.c.name, to: `${to}%`, why: net > 0 ? 'чтобы сумма формулы осталась 100%' : 'дополнить формулу до 100%' });
+  return out;
+}
+
 /** Short share links (ozon.ru/t/…, wb.ru/…, clck…) only redirect to the product page: read where they point. */
 async function resolveShort(url) {
   let cur = url;
@@ -1406,12 +1453,14 @@ async function handle(event, context) {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
       const notes = (req.notes || []).slice(0, 6).join('; ');
+      // Advice the person already applied from earlier reviews: the technologist finishes instead of improving forever.
+      const done = (req.done || []).slice(0, 12).map((x) => clean(x, 60)).filter(Boolean).join(', ');
       // The same formula gets the same answer for everyone, without a new model call.
-      const rk = `review/${sha(`${req.kind || ''}|${list}|${notes}`)}.json`;
+      const rk = `review/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
       if (cachedReview && cachedReview.verdict !== undefined) return reply(200, cachedReview);
       if (!(await allow('review'))) return reply(429, { error: 'limit' });
-      const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}` }], 500, true);
+      const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
       const out = { add: [], reduce: [], remove: [], warn: [] };
       for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
         const [head, ...rest] = line.slice(1).split('|').map((x) => x.trim());
@@ -1421,6 +1470,7 @@ async function handle(event, context) {
         else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
         else if (line[0] === '!' && head) out.warn.push(head);
       }
+      balanceReview(out, req.items || []);
       await cachePut(rk, iam, out, true);
       return reply(200, { ...out, _usage: lastUsage });
     }
@@ -1506,3 +1556,4 @@ async function handle(event, context) {
   }
 }
 module.exports._keywordSearch = keywordSearch;
+module.exports._balanceReview = balanceReview;

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dropdown } from '../../components/Dropdown';
@@ -86,11 +86,26 @@ export default function BuilderScreen() {
   // The last review stays on screen while the formula changes (adding its suggestions shouldn't hide the rest).
   const shown = review;
   const stale = !!review?.data && review.sig !== sig;
+  // What the person took from the technologist since the last review, and whether they changed anything themselves.
+  const applied = useRef<string[]>([]);
+  const edited = useRef(false);
   const askReview = async () => {
     tap('medium');
+    const problems = list.filter((c) => !c.ok).map((c) => c.text);
+    // Only the technologist's own advice was applied and the basic checks pass: the formula is finished —
+    // said right here, without asking again (a new review would only invent the next «improvement»).
+    if (review?.data && applied.current.length && !edited.current && !problems.length) {
+      tap('success');
+      setReview({ sig, data: { verdict: `Формула готова: рекомендации технолога учтены (${applied.current.slice(0, 4).join(', ')}), сумма 100%. Можно сохранять рецепт и готовить.` } });
+      applied.current = [];
+      return;
+    }
+    const done = edited.current ? [] : applied.current;
     setReview({ sig, busy: true });
     try {
-      const data = await aiReview(formula, purpose, list.filter((c) => !c.ok).map((c) => c.text));
+      const data = await aiReview(formula, purpose, problems, done);
+      applied.current = [];
+      edited.current = false;
       setReview({ sig, data });
     } catch (e) {
       setReview({ sig, error: true, limit: isLimit(e) });
@@ -106,18 +121,24 @@ export default function BuilderScreen() {
   };
   const change = (key: string, delta: number) => {
     tap();
+    edited.current = true;
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, pct: Math.max(0, Math.round((i.pct + delta) * 10) / 10) } : i)));
   };
   const setPct = (key: string, text: string) => {
     const v = parseFloat(text.replace(',', '.'));
-    if (!Number.isNaN(v)) setItems((prev) => prev.map((i) => (i.key === key ? { ...i, pct: Math.min(100, Math.max(0, v)) } : i)));
+    if (!Number.isNaN(v)) {
+      edited.current = true;
+      setItems((prev) => prev.map((i) => (i.key === key ? { ...i, pct: Math.min(100, Math.max(0, v)) } : i)));
+    }
   };
   const remove = (key: string) => {
     tap();
+    edited.current = true;
     animate();
     setItems((prev) => prev.filter((i) => i.key !== key));
   };
   const add = (inci: string) => {
+    edited.current = true;
     const item = newItem(inci);
     tap('medium');
     animate();
@@ -126,8 +147,14 @@ export default function BuilderScreen() {
     setDrop((d) => d + 1);
   };
   // Keeps the formula at 100%: whatever goes over is taken from the water (or the base with the largest share).
-  const fit = (list: Item[], keep: string) => {
+  // `refill`: a technologist's change that lowers a share gives the difference back to the base, so the formula
+  // that was at 100% stays at 100%.
+  const fit = (list: Item[], keep: string, refill = false) => {
     let over = Math.round((total(list) - 100) * 10) / 10;
+    if (over < 0 && refill) {
+      const base = [...list].filter((i) => i.key !== keep && (i.phase === 'water' || i.phase === 'oil')).sort((a, b) => Number(b.phase === 'water') - Number(a.phase === 'water') || b.pct - a.pct)[0];
+      return base ? list.map((i) => (i.key === base.key ? { ...i, pct: Math.round((i.pct - over) * 10) / 10 } : i)) : list;
+    }
     if (over <= 0) return list;
     const donors = [...list].filter((i) => i.key !== keep && (i.phase === 'water' || i.phase === 'oil')).sort((a, b) => Number(b.phase === 'water') - Number(a.phase === 'water') || b.pct - a.pct);
     const next = list.map((i) => ({ ...i }));
@@ -146,6 +173,7 @@ export default function BuilderScreen() {
     const v = parseFloat((pct ?? '').replace(',', '.').match(/[\d.]+/)?.[0] ?? '');
     tap('medium');
     // Already in the formula (a second tap, or the same thing under another name): raise its share, no new row.
+    applied.current.push(hit?.ru || name);
     const existing = rowFor(items, name);
     if (existing) {
       if (v > existing.pct && v < 100) setItems((prev) => fit(prev.map((i) => (i.key === existing.key ? { ...i, pct: v } : i)), existing.key));
@@ -161,7 +189,19 @@ export default function BuilderScreen() {
   // "−/+" next to a technologist's "change share" line: set that ingredient to the suggested share.
   const setSuggestedPct = (key: string, to: number) => {
     tap('medium');
-    setItems((prev) => fit(prev.map((i) => (i.key === key ? { ...i, pct: to } : i)), key));
+    const row = items.find((i) => i.key === key);
+    if (row) applied.current.push(`${row.name} ${to}%`);
+    const wasFull = Math.abs(total(items) - 100) < 0.05;
+    setItems((prev) => fit(prev.map((i) => (i.key === key ? { ...i, pct: to } : i)), key, wasFull));
+  };
+  // «Убрать» from the technologist: the freed share goes back to the base.
+  const removeSuggested = (key: string) => {
+    tap();
+    animate();
+    const row = items.find((i) => i.key === key);
+    if (row) applied.current.push(`без ${row.name}`);
+    const wasFull = Math.abs(total(items) - 100) < 0.05;
+    setItems((prev) => fit(prev.filter((i) => i.key !== key), key, wasFull));
   };
   const fillWater = () => {
     tap('success');
@@ -346,7 +386,7 @@ export default function BuilderScreen() {
           <View style={{ marginTop: 12 }}>
             {shown?.data ? (
               <>
-                <ReviewCard r={shown.data} items={items} summary={summary} onAdd={addSuggested} onSetPct={setSuggestedPct} onRemove={remove} />
+                <ReviewCard r={shown.data} items={items} summary={summary} onAdd={addSuggested} onSetPct={setSuggestedPct} onRemove={removeSuggested} />
                 {stale && (
                   <Press onPress={askReview} style={styles.refresh}>
                     <Icon name="spark" size={15} color={colors.violet} />
