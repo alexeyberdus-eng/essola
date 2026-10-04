@@ -30,6 +30,7 @@ import { ingredientId } from '../../lib/wiki';
 import { useProfile } from '../../lib/profile';
 import { ScoreBadge } from '../../components/ScoreBadge';
 import { ShareCard } from '../../components/ShareCard';
+import { cosingFor, EuEntry, euFunction, euLine, useCosing } from '../../lib/cosing';
 
 const HERO: Record<'good' | 'caution' | 'avoid', [string, string, string]> = {
   good: ['#BFF0D8', '#D9E8FF', '#EDE3FF'],
@@ -61,6 +62,10 @@ export default function AnalysisScreen() {
   // for that product instead of guessing what it is.
   const named = scan && !/^Состав №/.test(scan.title) ? scan.title : undefined;
   const summary = useAiSummary(special ? [] : result?.items.map((i) => i.ing.inci) ?? [], named, local);
+  // EU facts (CosIng) for every ingredient: what it does and whether EU rules ban or limit it.
+  const euName = (it: AnalyzedItem) => (it.match !== 'unknown' && it.match !== 'guess' ? it.ing.inci : it.raw);
+  const eu = useCosing(useMemo(() => (result ? result.items.map(euName) : []), [result]));
+  const euBanned = useMemo(() => (result ? result.items.filter((it) => cosingFor(eu, euName(it))?.a?.some((a) => a.k === 'banned')) : []), [result, eu]);
   // Analogs by composition from our base (Letual), matched by the composition fingerprint.
   const [similar, setSimilar] = useState<SimilarItem[] | null | undefined>(undefined);
   const sig = useMemo(() => (result ? signature(result) : ''), [result]);
@@ -332,15 +337,28 @@ export default function AnalysisScreen() {
         </View>
 
         {shown.length ? (
-          shown.map((it) => <Row key={it.position} item={it} open={open === it.position} onPress={() => setOpen(open === it.position ? null : it.position)} />)
+          shown.map((it) => <Row key={it.position} item={it} eu={cosingFor(eu, euName(it))} open={open === it.position} onPress={() => setOpen(open === it.position ? null : it.position)} />)
         ) : (
           <T v="small" style={{ paddingVertical: 20, textAlign: 'center' }}>
             {filter === 'active' ? 'Сильных активов в составе нет.' : 'Таких компонентов нет — отлично.'}
           </T>
         )}
+        {euBanned.length > 0 && (
+          <View style={styles.euAlert}>
+            <Icon name="alert" size={18} color={colors.bad} />
+            <Text style={styles.euAlertText}>
+              В составе есть {euBanned.length === 1 ? 'вещество, запрещённое' : 'вещества, запрещённые'} в косметике ЕС: {euBanned.map((it) => it.ing.ru || it.raw).join(', ')}. Проверьте название на упаковке — возможно, ошибка распознавания.
+            </Text>
+          </View>
+        )}
         {result.unknown > 0 && (
           <T v="small" style={{ marginTop: 12 }}>
             {result.unknown} компонент(ов) пока нет в базе — они учтены в оценке с пониженным весом.
+          </T>
+        )}
+        {Object.keys(eu).length > 0 && (
+          <T v="small" style={{ marginTop: 8, color: colors.faint }}>
+            Функции и нормы ЕС — по данным базы CosIng (© Европейский союз), в переводе и обработке essola.
           </T>
         )}
 
@@ -450,10 +468,13 @@ function AnalogBody({ a, dark }: { a: Similar; dark?: boolean }) {
   );
 }
 
-function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPress: () => void }) {
+function Row({ item, eu, open, onPress }: { item: AnalyzedItem; eu?: EuEntry; open: boolean; onPress: () => void }) {
   const { ing } = item;
   const risk = RISK[ing.risk];
   const known = item.match !== 'unknown';
+  const rule = euLine(eu);
+  // Our own base doesn't know it: CosIng still tells what it is for.
+  const euFn = !known && eu?.f?.length ? euFunction(eu.f[0]) : null;
   return (
     <View style={styles.rowWrap}>
       <Press haptic={false} onPress={onPress} style={styles.row}>
@@ -472,13 +493,26 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
           <Text style={styles.inci} numberOfLines={1}>
             {known && item.match !== 'guess' ? ing.inci : item.raw}
           </Text>
+          {rule && rule.tone !== 'neutral' && <Text style={[styles.euRow, { color: rule.tone === 'bad' ? colors.bad : colors.warn }]} numberOfLines={open ? undefined : 1}>ЕС: {rule.text}</Text>}
         </View>
-        <Text style={[styles.fn, ing.fn[0] && known && { color: FN_ICON[ing.fn[0]].color }]}>{ing.fn[0] ? FN_LABEL[ing.fn[0]] : '—'}</Text>
+        <Text style={[styles.fn, ing.fn[0] && known && { color: FN_ICON[ing.fn[0]].color }]} numberOfLines={1}>{known && ing.fn[0] ? FN_LABEL[ing.fn[0]] : euFn ?? (ing.fn[0] ? FN_LABEL[ing.fn[0]] : '—')}</Text>
         <View style={[styles.dot, { backgroundColor: known ? risk.color : colors.line }]} />
       </Press>
       {open && (
         <View style={styles.detail}>
-          <Text style={styles.detailLead}>{ing.note}</Text>
+          {known ? (
+            <Text style={styles.detailLead}>{ing.note}</Text>
+          ) : eu?.f?.length ? (
+            <Text style={styles.detailLead}>По данным CosIng: {eu.f.map(euFunction).join(', ')}.</Text>
+          ) : (
+            <Text style={styles.detailLead}>{ing.note}</Text>
+          )}
+          {rule && (
+            <Text style={styles.euDetail}>
+              Нормы ЕС: {rule.text}
+              {eu?.a?.find((a) => a.p)?.p ? ` (${eu.a.find((a) => a.p)!.p})` : ''}.
+            </Text>
+          )}
           {known && (
             <Press haptic={false} onPress={() => router.push(`/ingredient/${ingredientId(ing)}`)} style={styles.more}>
               <Text style={styles.moreText}>Подробнее об ингредиенте</Text>
@@ -504,6 +538,10 @@ function Row({ item, open, onPress }: { item: AnalyzedItem; open: boolean; onPre
 }
 
 const styles = StyleSheet.create({
+  euAlert: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 12, padding: 14, borderRadius: 16, backgroundColor: '#FDECEE' },
+  euAlertText: { flex: 1, fontFamily: fonts.medium, fontSize: 13.5, lineHeight: 19, color: colors.ink },
+  euRow: { fontFamily: fonts.medium, fontSize: 11.5, marginTop: 1 },
+  euDetail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 6 },
   buy: { height: 56, marginTop: 14, borderRadius: 18, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, shadowColor: '#7C66EE', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
   buyText: { fontFamily: fonts.bold, fontSize: 17, color: '#fff', letterSpacing: 0.2 },
   soft: { flex: 1, height: 52, borderRadius: 16, backgroundColor: '#EEE9FF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },

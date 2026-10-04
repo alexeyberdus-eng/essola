@@ -283,6 +283,20 @@ async function loadLetu(iam) {
   if (Array.isArray(data)) [letu, letuAt] = [[...data, ...(Array.isArray(inci) ? inci : [])], Date.now()];
   return letu || [];
 }
+// CosIng (© European Union): INCI name → functions and EU Annex entries, rebuilt monthly by CI.
+let cosing = null;
+let cosingAt = 0;
+async function loadCosing(iam) {
+  if (cosing && Date.now() - cosingAt < 24 * 3600e3) return cosing;
+  const data = await cacheGet('cosing/index.json', iam);
+  if (data && typeof data === 'object') [cosing, cosingAt] = [data, Date.now()];
+  return cosing || {};
+}
+const cosingKeys = (name) => {
+  const n = String(name || '').toLowerCase().replace(/\s*\(\s*[\d.,]+\s*%\s*\)/g, '').replace(/[*.]+$/g, '').replace(/\s+/g, ' ').trim();
+  const out = [n, n.replace(/\s*\(.*?\)\s*/g, ' ').trim(), ...n.split(/\s*\/\s*/)];
+  return [...new Set(out.filter((x) => x.length > 1))];
+};
 const shards = new Map();
 const sortedMemo = new Map();
 async function letuShard(h, iam) {
@@ -1014,6 +1028,16 @@ async function handle(event, context) {
       }
       const withX = await withCompositions(top.map(({ x: { g, ...x } }) => x), iam);
       return reply(200, { items: withX.map((x, i) => ({ ...x, match: Math.round(top[i].sim * 100), common: top[i].hit })) });
+    }
+    if (req.mode === 'cosing') {
+      // EU facts for a composition: functions and Annex entries (banned, restricted, allowed colourants/preservatives/UV filters).
+      const db = await loadCosing(iam);
+      const items = {};
+      for (const name of (Array.isArray(req.names) ? req.names : []).slice(0, 150)) {
+        const key = cosingKeys(name).find((k) => db[k]);
+        if (key) items[String(name).slice(0, 120)] = db[key];
+      }
+      return reply(200, { items });
     }
     if (req.mode === 'search') {
       return reply(200, { items: await searchCache(req.q, iam) });
