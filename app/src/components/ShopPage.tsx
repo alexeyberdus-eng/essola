@@ -26,7 +26,7 @@ const FIND = `
         var els = document.querySelectorAll('button, [role="tab"], [role="button"], summary, li, div, span, a');
         for (var i = 0; i < els.length; i++) {
           var t = (els[i].textContent || '').trim().toLowerCase();
-          if (t === 'состав' || t === 'ingredients' || t === 'состав продукта' || t === 'состав и описание' || t === 'описание и состав') { els[i].click(); clicked++; break; }
+          if (t === 'состав' || t === 'ingredients' || t === 'состав продукта' || t === 'состав и описание' || t === 'описание и состав' || t === 'характеристики и описание' || t === 'все характеристики и описание' || t === 'все характеристики') { els[i].click(); clicked++; break; }
         }
       }
       var found = pick();
@@ -43,11 +43,11 @@ true;
 `;
 
 /**
- * Opens a Gold Apple / Letual product page inside the app, on screen: the shop's device check passes like for
+ * Opens a Letual / Gold Apple / Wildberries / Ozon product page inside the app, on screen: the shop's device check passes like for
  * any visitor, and the ingredient list is read automatically as soon as it appears (the script also opens the
  * «Состав» tab). The user can scroll, open the tab by hand, or fall back to a screenshot of it.
  */
-export function ShopPage({ url, onFound, onClose, onScreenshot }: { url: string | null; onFound: (p: { title: string; text: string }) => void; onClose: () => void; onScreenshot: () => void }) {
+export function ShopPage({ url, name, onFound, onClose, onScreenshot }: { url: string | null; name?: string; onFound: (p: { title: string; text: string }) => void; onClose: () => void; onScreenshot: () => void }) {
   const insets = useSafeAreaInsets();
   const done = useRef(false);
   const web = useRef<WebView>(null);
@@ -60,7 +60,7 @@ export function ShopPage({ url, onFound, onClose, onScreenshot }: { url: string 
     return () => clearTimeout(t);
   }, [url]);
   if (!url) return null;
-  const shop = /letu/i.test(url) ? 'Летуаль' : 'Золотое Яблоко';
+  const shop = name ?? (/letu/i.test(url) ? 'Летуаль' : 'Золотое Яблоко');
   return (
     <View style={[styles.sheet, { paddingTop: insets.top + 6 }]}>
       <View style={styles.head}>
@@ -92,7 +92,14 @@ export function ShopPage({ url, onFound, onClose, onScreenshot }: { url: string 
             if (data.text) {
               done.current = true;
               tap('success');
-              onFound({ title: data.title.replace(/\s*[—|-]\s*(Золотое Яблоко|Gold Apple|Л'Этуаль|ЛЭТУАЛЬ|letu).*$/i, '').trim(), text: data.text.replace(/\\n/g, ' ') });
+              onFound({
+                title: data.title
+                  .replace(/\s*[—|-]\s*(Золотое Яблоко|Gold Apple|Л'Этуаль|ЛЭТУАЛЬ|letu).*$/i, '')
+                  .replace(/\s*(купить|—|\|).*(ozon|озон|wildberries|вайлдберриз).*$/i, '')
+                  .replace(/^купить\s+/i, '')
+                  .trim(),
+                text: data.text.replace(/\\n/g, ' '),
+              });
             }
           } catch {
             // ignore malformed messages

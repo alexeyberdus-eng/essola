@@ -266,6 +266,7 @@ export default function ScannerScreen() {
   // A Gold Apple / Letual link copied from the shop app: offer to check it right away.
   const [clip, setClip] = useState<string | null>(null);
   const [shop, setShop] = useState<string | null>(null);
+  const [shopName, setShopName] = useState('Летуаль');
   useEffect(() => {
     if (!focused || !aiEnabled) return;
     Clipboard.hasUrlAsync?.()
@@ -286,27 +287,18 @@ export default function ScannerScreen() {
         const SHOP: Record<string, string> = { wb: 'Wildberries', ozon: 'Ozon', goldapple: 'Золотое Яблоко' };
         const name = [r.brand, r.title].filter(Boolean).join(' ');
         if (r.ingredients && r.ingredients.length >= 3) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
-        if (r.item?.x) {
-          tap('success');
-          const a = analyze(r.item.x);
-          const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: sourceOf(r.item.k), image: r.item.i || null, url: r.item.u });
-          router.push(`/analysis/${scan.id}`);
-          return;
-        }
-        if (r.candidates?.length) {
-          setLookup({ code: '', state: 'missing', name: name || null });
-          setFindQ(name);
-          setMatches(r.candidates.filter((x) => x.x));
-          return;
-        }
         if (r.limited) return setNotice(LIMIT_NOTE);
-        setNotice(name ? `Нашли «${name}», но состав в открытом доступе не нашёлся. Сфотографируйте состав на упаковке или сделайте скриншот со страницы товара.` : 'Не получилось прочитать ссылку. Сделайте скриншот состава со страницы товара и загрузите через «Галерея».');
+        // No open composition: open the product page itself in the app and read the name and «Состав» from it,
+        // the way a person would (the shop shows its page to the visitor as usual).
+        setShopName(SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'));
+        setShop(url);
         return;
       }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
         // Not in our base yet: open the page in the app and read it there.
         setBusy(false);
+        setShopName(/goldapple/i.test(url) ? 'Золотое Яблоко' : 'Летуаль');
         setShop(url);
         return;
       }
@@ -596,7 +588,7 @@ export default function ScannerScreen() {
               {aiEnabled && !lookup && (
                 <Press onPress={pasteLink} style={styles.action}>
                   <View style={styles.actionIcon}><Icon name="external" size={19} color={colors.violet} /></View>
-                  <Text style={styles.actionText}>Ссылка</Text>
+                  <Text style={styles.actionText}>Ссылка WB, Ozon, Летуаль</Text>
                 </Press>
               )}
             </View>
@@ -757,6 +749,7 @@ export default function ScannerScreen() {
       </Modal>
       <ShopPage
         url={shop}
+        name={shopName}
         onClose={() => {
           setShop(null);
           setBusy(false);
@@ -772,7 +765,7 @@ export default function ScannerScreen() {
           setBusy(false);
           const list = text.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
           saveProduct(url, title, list);
-          finish(`Состав: ${text}`, title || undefined, { source: 'Летуаль' }, true);
+          finish(`Состав: ${text}`, title || undefined, { source: shopName }, true);
         }}
       />
       {busy && <Reading />}

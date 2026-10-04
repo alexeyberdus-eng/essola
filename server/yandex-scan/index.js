@@ -1313,6 +1313,9 @@ async function handle(event, context) {
     if (req.mode === 'link') {
       // Wildberries / Ozon / Gold Apple link: the shop's composition when it is open, otherwise the product
       // found in our base by the words of its name (or of the link), then the web.
+      // Someone already read this page in the app: the saved composition answers at once.
+      const seen = await cacheGet(keyFor({ url: String(req.url || '') }), iam);
+      if (seen?.ingredients?.length >= 3) return reply(200, { shop: 'cache', title: seen.title, ingredients: seen.ingredients });
       const info = await fromMarketplace(String(req.url || ''));
       if (!info) return reply(400, { error: 'unsupported_shop' });
       const list = info.composition ? info.composition.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
