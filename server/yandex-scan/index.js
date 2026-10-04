@@ -478,13 +478,17 @@ async function fromMarketplace(url) {
     return null;
   }
   const host = u.hostname.replace(/^www\./, '');
-  if (/wildberries\.ru$|wb\.ru$/.test(host)) {
-    const nm = Number(u.pathname.match(/catalog\/(\d+)/)?.[1] || u.searchParams.get('card') || 0);
+  if (/(^|\.)(wildberries\.(ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru)$/.test(host)) {
+    // App and site links differ (/catalog/<id>/detail.aspx, ?card=, ?nm=, short forms): take the article number.
+    const nm = Number(u.pathname.match(/catalog\/(\d{5,12})/)?.[1] || u.searchParams.get('card') || u.searchParams.get('nm') || u.pathname.match(/(\d{6,12})/)?.[1] || 0);
+    console.log('wb link', host, nm);
     if (!nm) return { shop: 'wb' };
     const c = await wbCard(nm);
     if (!c) return { shop: 'wb', id: nm };
     const opts = [...(c.options || []), ...((c.grouped_options || []).flatMap((g) => g.options || []))];
-    const comp = opts.find((o) => /состав/i.test(o.name || ''))?.value || (c.compositions || []).map((x) => x.name).join(', ');
+    const fromDesc = String(c.description || '').match(/(?:состав|ingredients|inci)\s*[:：-]\s*([^\n]{20,3000})/i)?.[1] || '';
+    const comp = opts.find((o) => /состав|ingredients/i.test(o.name || ''))?.value || fromDesc || (c.compositions || []).map((x) => x.name).join(', ');
+    console.log('wb card', nm, String(c.imt_name || '').slice(0, 60), 'composition chars', String(comp || '').length);
     return { shop: 'wb', id: nm, title: String(c.imt_name || c.subj_name || '').trim(), brand: String(c.selling?.brand_name || '').trim(), composition: String(comp || '').trim() };
   }
   if (/ozon\.ru$/.test(host)) {

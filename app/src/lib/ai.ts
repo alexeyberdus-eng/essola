@@ -125,7 +125,7 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
   return call<{ product: CachedProduct | null; error?: string }>({ mode: 'url', url });
 }
 
-export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:letu\.ru|goldapple\.ru|wildberries\.ru|wb\.ru|ozon\.ru)\/\S+/i;
+export const SHOP_LINK = /https?:\/\/(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple\.ru|wildberries\.(?:ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru|ozon\.ru)\/\S+/i;
 
 /** Wildberries / Ozon / Gold Apple link → the shop's open composition, our product, close candidates, or the web. */
 export async function linkLookup(url: string): Promise<{ shop?: string; title?: string; brand?: string; ingredients?: string[]; item?: CatalogItem; candidates?: CatalogItem[]; limited?: boolean; none?: boolean }> {
