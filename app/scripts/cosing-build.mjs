@@ -51,10 +51,12 @@ console.log('total', total);
 if (total < 1000) throw new Error('search service is not answering');
 const seen = new Map();
 let inRanges = 0;
+const taken = [];
 async function take(lo, hi) {
   const n = await count(ranged(lo, hi));
   if (n <= 0) return 0;
   inRanges += n;
+  taken.push({ range: { substanceId: { gte: lo, lt: hi } } });
   await collect(ranged(lo, hi), seen);
   console.log('ids', JSON.stringify(lo), '…', JSON.stringify(hi), n, '→', seen.size);
   return n;
@@ -68,6 +70,22 @@ async function prefix(p) {
   for (const d of '0123456789') await prefix(p + d);
 }
 for (const d of '0123456789') await prefix(d);
+// Some ids fall outside every prefix range (the service's own comparison): the rest is «everything not taken
+// yet», split by filters the search accepts until each part fits under 10 000.
+const SPLIT = [{ terms: { functionName: ['SKIN CONDITIONING'] } }, { terms: { status: ['Active'] } }, { terms: { perfuming: ['Y'] } }];
+async function rest(must, mustNot, level) {
+  const q = { bool: { must: [ING, ...must], must_not: [...taken, ...mustNot] } };
+  const n = await count(q);
+  if (n <= 0) return;
+  if (n > 9500 && level < SPLIT.length) {
+    await rest([...must, SPLIT[level]], mustNot, level + 1);
+    await rest(must, [...mustNot, SPLIT[level]], level + 1);
+    return;
+  }
+  await collect(q, seen);
+  console.log('rest', level, n, '→', seen.size);
+}
+await rest([], [], 0);
 console.log('inventory', seen.size, 'of', total, '(in id ranges', inRanges, ')');
 
 // Annex tables: reference → conditions (product type, maximum concentration, warnings).
