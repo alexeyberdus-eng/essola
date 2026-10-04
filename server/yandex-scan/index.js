@@ -300,8 +300,13 @@ let letu = null, letuAt = 0;
 // Both use the same card layout; their compositions sit in letu/x/… and inci/x/… by key hash.
 async function loadLetu(iam) {
   if (letu && Date.now() - letuAt < 6 * 3600e3) return letu;
-  const [data, inci] = await Promise.all([cacheGet('letu/index.json', iam), cacheGet('inci/index.json', iam)]);
-  if (Array.isArray(data)) [letu, letuAt] = [[...data, ...(Array.isArray(inci) ? inci : [])], Date.now()];
+  let [data, inci] = await Promise.all([cacheGet('letu/index.json', iam), cacheGet('inci/index.json', iam)]);
+  // The indexes are large: one read can fail. Retry once; a half-loaded base is kept only for two minutes.
+  if (!Array.isArray(inci)) inci = await cacheGet('inci/index.json', iam);
+  if (!Array.isArray(data)) data = await cacheGet('letu/index.json', iam);
+  const whole = Array.isArray(data) && Array.isArray(inci);
+  if (Array.isArray(data) || Array.isArray(inci)) [letu, letuAt] = [[...(Array.isArray(data) ? data : []), ...(Array.isArray(inci) ? inci : [])], whole ? Date.now() : Date.now() - 6 * 3600e3 + 120e3];
+  if (!whole) console.log('base loaded partly: letu', Array.isArray(data), 'inci', Array.isArray(inci));
   // Search text for every product, built once per load (keyword search reads it).
   for (const x of letu || []) x._h ??= ` ${norm(`${x.b || ''} ${x.t || ''}`)} `;
   return letu || [];
@@ -1315,7 +1320,12 @@ async function handle(event, context) {
       const name = [info.brand, info.title].filter(Boolean).join(' ');
       if (!name) return reply(200, { shop: info.shop, none: true });
       const base = await loadLetu(iam);
-      const found = keywordSearch(base, name).filter((x) => !x.z).slice(0, 5);
+      // A link names the brand first (Ozon slug: «epilprofi uvlazhnyayushchiy krem…»): a candidate of another brand
+      // is a different product, however similar the words.
+      const brandWord = keywords(info.brand || info.title || '')[0] || '';
+      const brandVars = variants(brandWord);
+      const sameBrand = (x) => !brandWord || brandVars.some((v) => norm(x.b).replace(/ /g, '').includes(v.replace(/ /g, '')) || ` ${norm(x.t)} `.includes(` ${v} `));
+      const found = keywordSearch(base, name).filter((x) => !x.z && sameBrand(x)).slice(0, 5);
       if (found[0] && found[0]._score >= 0.8 && (!found[1] || found[1]._score < found[0]._score)) {
         const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
         return reply(200, { shop: info.shop, title: info.title, brand: info.brand, item });
@@ -1324,7 +1334,7 @@ async function handle(event, context) {
         const items = await withCompositions(found.map(({ g, _h, _score, ...x }) => x), iam);
         return reply(200, { shop: info.shop, title: info.title, brand: info.brand, candidates: items });
       }
-      const more = await findByLabel(info.brand || '', info.title || '', '', iam, textModel, () => allow('web')).catch(() => ({}));
+      const more = await findByLabel(info.brand || brandWord, info.brand ? info.title || '' : (info.title || '').split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web')).catch(() => ({}));
       return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ...more });
     }
     if (req.mode === 'url') {
