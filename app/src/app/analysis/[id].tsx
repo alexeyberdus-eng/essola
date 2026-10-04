@@ -65,7 +65,7 @@ export default function AnalysisScreen() {
   // EU facts (CosIng) for every ingredient: what it does and whether EU rules ban or limit it.
   const euName = (it: AnalyzedItem) => (it.match !== 'unknown' && it.match !== 'guess' ? it.ing.inci : it.raw);
   const eu = useCosing(useMemo(() => (result ? result.items.map(euName) : []), [result]));
-  const euBanned = useMemo(() => (result ? result.items.filter((it) => cosingFor(eu, euName(it))?.a?.some((a) => a.k === 'banned')) : []), [result, eu]);
+  const euBanned = useMemo(() => (result ? result.items.filter((it) => euLine(cosingFor(eu, euName(it)))?.tone === 'bad') : []), [result, eu]);
   // Analogs by composition from our base (Letual), matched by the composition fingerprint.
   const [similar, setSimilar] = useState<SimilarItem[] | null | undefined>(undefined);
   const sig = useMemo(() => (result ? signature(result) : ''), [result]);

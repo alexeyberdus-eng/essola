@@ -40,9 +40,10 @@ const KIND: Record<EuAnnex['k'], string> = {
 export function euLine(e?: EuEntry | null): { text: string; tone: 'bad' | 'warn' | 'neutral' } | null {
   const a = e?.a;
   if (!a?.length) return null;
-  const banned = a.find((x) => x.k === 'banned');
-  if (banned) return { text: KIND.banned, tone: 'bad' };
-  const r = a.find((x) => x.k === 'restricted') ?? a[0];
+  // Banned only when no annex allows it under conditions (some substances are banned in one form, allowed in another).
+  const allowed = a.filter((x) => x.k !== 'banned');
+  if (!allowed.length) return { text: KIND.banned, tone: 'bad' };
+  const r = allowed.find((x) => x.k === 'restricted') ?? allowed[0];
   const max = r.m ? `, не более ${r.m.replace(/\s*%/g, '%')}` : '';
   return { text: `${KIND[r.k]}${max}`, tone: r.k === 'restricted' ? 'warn' : 'neutral' };
 }

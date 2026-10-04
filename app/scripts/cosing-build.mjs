@@ -42,17 +42,37 @@ async function collect(query) {
   }
 }
 
-const base = { bool: { must: [{ terms: { itemType: ['ingredient'] } }] } };
-let { seen, total } = await collect(base);
+const ING = { terms: { itemType: ['ingredient'] } };
+let { seen, total } = await collect({ bool: { must: [ING] } });
+const first = await page({ bool: { must: [ING] } }, 1, 1);
+total = first?.totalResults ?? total;
 console.log('collected', seen.size, 'of', total);
-if (seen.size < total * 0.95) {
-  for (const p of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789']) {
-    const q = { bool: { must: [{ terms: { itemType: ['ingredient'] } }, { prefix: { inciName: p.toLowerCase() } }] } };
-    const part = await collect(q);
-    for (const [k, v] of part.seen) seen.set(k, v);
-    console.log('prefix', p, part.seen.size, '→', seen.size);
+// The service stops at 10 000 results per query: split the inventory by the first letters of the INCI name.
+const filters = (p) => [{ prefix: { inciName: p.toLowerCase() } }, { prefix: { inciName: p } }, { wildcard: { inciName: `${p}*` } }, { wildcard: { inciName: `${p.toLowerCase()}*` } }];
+let working = null;
+async function part(p) {
+  for (const f of working ? [working(p)] : filters(p)) {
+    const q = { bool: { must: [ING, f] } };
+    const head = await page(q, 1, 1);
+    const n = head?.totalResults ?? 0;
+    if (!n) continue;
+    if (!working) {
+      const i = filters(p).findIndex((x) => JSON.stringify(x) === JSON.stringify(f));
+      working = (x) => filters(x)[i];
+      console.log('partition filter', JSON.stringify(f));
+    }
+    if (n > 9900 && p.length < 3) {
+      for (const c of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -(,']) await part(p + c);
+      return;
+    }
+    const got = await collect(q);
+    for (const [k, v] of got.seen) seen.set(k, v);
+    console.log('prefix', JSON.stringify(p), n, '→', seen.size);
+    return;
   }
 }
+if (seen.size < total * 0.98) for (const p of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789']) await part(p);
+console.log('inventory', seen.size, 'of', total);
 
 // Annex tables: reference → conditions (product type, maximum concentration, warnings).
 const parseCsv = (text) => {
@@ -77,7 +97,9 @@ const parseCsv = (text) => {
   if (cell || row.length) rows.push([...row, cell]);
   return rows;
 };
+const KIND = { II: 'banned', III: 'restricted', IV: 'colorant', V: 'preservative', VI: 'uv' };
 const annex = {};
+const byName = {};
 for (const a of ['II', 'III', 'IV', 'V', 'VI']) {
   const r = await fetch(`${ANNEX}/${a}/export-csv`, { headers: { 'User-Agent': UA } });
   const rows = parseCsv(await r.text());
@@ -85,31 +107,33 @@ for (const a of ['II', 'III', 'IV', 'V', 'VI']) {
   const cols = rows[head];
   const col = (re) => cols.findIndex((c) => re.test(c));
   const [cRef, cType, cMax, cOther, cWarn] = [col(/^Reference Number/), col(/Product Type/), col(/Maximum concentration/), col(/^Other$/), col(/Wording of conditions/)];
+  const cNames = [col(/Common Ingredients Glossary/), col(/Identified INGREDIENTS/), col(/^Chemical name/)].filter((i) => i >= 0);
   let n = 0;
   for (const x of rows.slice(head + 1)) {
     if (!x[cRef]) continue;
     const clip = (i) => (i >= 0 ? String(x[i] || '').replace(/\s+/g, ' ').trim().slice(0, 300) : '');
-    annex[`${a}/${x[cRef].trim()}`] = { p: clip(cType), m: clip(cMax), o: clip(cOther), w: clip(cWarn) };
+    const entry = { r: `${a}/${x[cRef].trim()}`, k: KIND[a], p: clip(cType), m: clip(cMax), o: clip(cOther), w: clip(cWarn) };
+    annex[entry.r] = entry;
+    // Names the row covers (INCI glossary names, identified ingredients): the ingredient lookup is by these.
+    for (const ci of cNames)
+      for (const nm of String(x[ci] || '').split(/\s*[;,]\s*(?![^()]*\))|\n/)) {
+        const key = nm.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (key.length > 2 && key.length < 120 && key !== '-') (byName[key] ??= []).push(entry);
+      }
     n++;
   }
   console.log('annex', a, n);
   await sleep(500);
 }
 
-const KIND = { II: 'banned', III: 'restricted', IV: 'colorant', V: 'preservative', VI: 'uv' };
 const index = {};
 let withAnnex = 0;
 for (const m of seen.values()) {
   const name = String(m.inciName?.[0] || '').trim();
   if (!name) continue;
   const refs = (m.annexNo || []).flatMap((s) => String(s).split(/[,;]\s*/)).map((s) => s.trim()).filter(Boolean);
-  const a = refs
-    .map((ref) => {
-      const [an] = ref.split('/');
-      const d = annex[ref] || {};
-      return { r: ref, k: KIND[an] || 'other', ...(d.p && { p: d.p }), ...(d.m && { m: d.m }), ...(d.o && { o: d.o }), ...(d.w && { w: d.w }) };
-    })
-    .filter((x) => x.k !== 'other');
+  const found = [...refs.map((r) => annex[r]).filter(Boolean), ...(byName[name.toLowerCase().replace(/\s+/g, ' ')] || [])];
+  const a = [...new Map(found.map((e) => [e.r, Object.fromEntries(Object.entries(e).filter(([, v]) => v))])).values()];
   if (a.length) withAnnex++;
   const entry = { f: (m.functionName || []).map((f) => String(f).toUpperCase()) };
   if (a.length) entry.a = a;
