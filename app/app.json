@@ -53,7 +53,22 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -81,7 +96,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Essola открывает фото, чтобы распознать на нём состав косметики."
+          "photosPermission": "Essola открывает фото, чтобы распознать на нём состав косметики.",
+          "microphonePermission": false,
+          "cameraPermission": "Essola использует камеру, чтобы сфотографировать состав косметики и разобрать его."
         }
       ]
     ],
