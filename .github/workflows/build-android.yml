@@ -6,6 +6,11 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      store:
+        description: 'Сборка для RuStore (обновления только через «Выпустить обновление»)'
+        type: boolean
+        default: false
   push:
     branches: [claude/awesome-mccarthy-dlbgor]
     paths: ['.github/workflows/build-android.yml']
@@ -29,6 +34,8 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
       VK_ID: ${{ secrets.VK_CLIENT_ID }}
+      # The store build listens to the «production» channel: people get only the updates released on purpose.
+      CHANNEL: ${{ inputs.store && 'production' || 'preview' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,12 +60,15 @@ jobs:
             app.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};
             fs.writeFileSync('app.json',JSON.stringify(app,null,2));
             const eas=JSON.parse(fs.readFileSync('eas.json','utf8'));
-            eas.build.apk={distribution:'internal',channel:'preview',android:{buildType:'apk'},env:{
+            eas.build.apk={distribution:process.env.CHANNEL==='production'?'store':'internal',channel:process.env.CHANNEL,autoIncrement:true,android:{buildType:'apk'},env:{
               EXPO_PUBLIC_SCAN_URL:'https://functions.yandexcloud.net/d4eikcrvo6v275frt26v',
               EXPO_PUBLIC_SCAN_KEY:'$KEY',
               EXPO_PUBLIC_VK_ID:process.env.VK_ID||''}};
             fs.writeFileSync('eas.json',JSON.stringify(eas,null,2));
           "
+
+      - name: Release channel
+        run: npx --yes eas-cli@latest channel:create "$CHANNEL" --non-interactive || true
 
       - name: Build APK in the Expo cloud
         id: build
@@ -81,7 +91,7 @@ jobs:
             const { URL, PAGE } = process.env;
             const qr = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=16&data=${encodeURIComponent(URL)}`;
             const body = [
-              '## Android: установочный файл (APK)',
+              process.env.CHANNEL === 'production' ? '## RuStore: файл для публикации (APK)' : '## Android: установочный файл (APK)',
               '',
               'Наведите камеру Android-телефона на QR-код или откройте ссылку на телефоне, скачайте файл и установите его',
               '(телефон спросит разрешение на установку из браузера — разрешите).',
