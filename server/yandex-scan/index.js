@@ -302,6 +302,8 @@ async function loadLetu(iam) {
   if (letu && Date.now() - letuAt < 6 * 3600e3) return letu;
   const [data, inci] = await Promise.all([cacheGet('letu/index.json', iam), cacheGet('inci/index.json', iam)]);
   if (Array.isArray(data)) [letu, letuAt] = [[...data, ...(Array.isArray(inci) ? inci : [])], Date.now()];
+  // Search text for every product, built once per load (keyword search reads it).
+  for (const x of letu || []) x._h ??= ` ${norm(`${x.b || ''} ${x.t || ''}`)} `;
   return letu || [];
 }
 // CosIng (© European Union): INCI name → functions and EU Annex entries, rebuilt monthly by CI.
@@ -416,7 +418,7 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
       pick = n > 0 && n <= top.length ? top[n - 1] : null;
     }
     if (pick) {
-      const [item] = await withCompositions([(({ g, ...x }) => x)(pick)], iam);
+      const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(pick)], iam);
       if (item.x) return { item };
       return { item, none: true };
     }
@@ -1114,7 +1116,7 @@ async function handle(event, context) {
       }
       const size = Math.min(Number(req.size) || 40, 40);
       const page = Math.max(Number(req.page) || 1, 1);
-      return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam), total: list.length });
+      return reply(200, { items: await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, _h, _score, ...x }) => x), iam), total: list.length });
     }
     if (req.mode === 'match') {
       // «Подбор средств»: catalog cards filtered by category, goal tags (any) and free-from tags (all), computed at build time.
@@ -1137,7 +1139,7 @@ async function handle(event, context) {
       else list = [...list].sort((a, b) => cover(b) - cover(a) || b.s - a.s || b.p - a.p);
       const size = Math.min(Number(req.size) || 30, 40);
       const page = Math.max(Number(req.page) || 1, 1);
-      const items = await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, ...x }) => x), iam);
+      const items = await withCompositions(list.slice((page - 1) * size, page * size).map(({ g, _h, _score, ...x }) => x), iam);
       return reply(200, { items, total: list.length, untagged: !tagged });
     }
     if (req.mode === 'similar') {
@@ -1179,7 +1181,7 @@ async function handle(event, context) {
         top.push(s);
         if (top.length >= 8) break;
       }
-      const withX = await withCompositions(top.map(({ x: { g, ...x } }) => x), iam);
+      const withX = await withCompositions(top.map(({ x: { g, _h, _score, ...x } }) => x), iam);
       return reply(200, { items: withX.map((x, i) => ({ ...x, match: Math.round(top[i].sim * 100), common: top[i].hit })) });
     }
     if (req.mode === 'cosing') {
@@ -1211,7 +1213,7 @@ async function handle(event, context) {
         if (mine?.ingredients?.length >= 3) return reply(200, { found: true, gtin, title: mine.title || '', brand: '', ingredients: mine.ingredients, source: 'essola' });
       }
       const obfHit = (await loadCatalog(iam)).find((x) => codes.includes(String(x.k)));
-      if (obfHit?.x) return reply(200, { found: true, gtin, item: (({ g, ...x }) => x)(obfHit), title: obfHit.t, brand: obfHit.b, ingredients: [] });
+      if (obfHit?.x) return reply(200, { found: true, gtin, item: (({ g, _h, _score, ...x }) => x)(obfHit), title: obfHit.t, brand: obfHit.b, ingredients: [] });
       if (!process.env.NK_API_KEY) return reply(200, { found: false, reason: 'no_key' });
       const nkUrl = `https://xn--80aqu.xn----7sbabas4ajkhfocclk9d3cvfsa.xn--p1ai/v3/product?gtin=${gtin}&apikey=${encodeURIComponent(process.env.NK_API_KEY)}`;
       // The catalog sometimes drops a connection (one quick retry) and can hang on unknown codes: then we move on.
