@@ -66,7 +66,7 @@ jobs:
           npx --yes eas-cli@latest build --platform android --profile apk --non-interactive --wait --json > /tmp/build.json
           cat /tmp/build.json
           URL=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/build.json','utf8'))[0].artifacts.buildUrl")
-          PAGE=$(node -p "const b=JSON.parse(require('fs').readFileSync('/tmp/build.json','utf8'))[0]; 'https://expo.dev/accounts/'+b.project.ownerAccount.name+'/projects/'+b.project.slug+'/builds/'+b.id")
+          PAGE=$(node -p "const b=JSON.parse(require('fs').readFileSync('/tmp/build.json','utf8'))[0]; 'https://expo.dev/accounts/'+b.app.ownerAccount.name+'/projects/'+b.app.slug+'/builds/'+b.id")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "page=$PAGE" >> "$GITHUB_OUTPUT"
           echo "APK: $URL"
