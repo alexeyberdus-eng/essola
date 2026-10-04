@@ -13,7 +13,7 @@ const SCAN = `Выпиши с фото состав косметики (посл
 const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Если указано «Средство» (название с упаковки) — не угадывай тип, он известен: оцени, насколько состав эффективен именно для такого средства и его обещаний. Верни ТОЛЬКО JSON:
 {"lead":"1–2 предложения: что это за средство и насколько состав справляется со своей задачей","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"weak":"главная слабая сторона состава для этого средства, одно предложение до 18 слов, или пустая строка","use":["куда и как применять, до 12 слов"]}
 effects: 2–4 пункта, use: 1–3 пункта. Каждый ингредиент упоминай один раз. Без медицинских обещаний, без выдуманных ингредиентов.`;
-const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй средства «А» и «Б» или по коротким названиям. Не выдумывай того, чего нет в составе.`;
+const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
 const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
 + ингредиент (INCI) | доля | что даст, до 14 слов
@@ -485,16 +485,21 @@ async function wbCard(nm) {
 }
 /**
  * The technologist's changes must keep the formula at exactly 100%: what is added, raised, lowered or removed
- * is summed, and the difference is taken from (or given back to) the ingredient with the largest share.
+ * is summed, and the difference is taken from (or given to) the formula's BASE — water or a hydrosol, or the base
+ * oil in an anhydrous product — never an active. With no base in the formula, the base is added as a new line.
  * Models are bad at this arithmetic, so it is done here, never left to the model.
  */
-function balanceReview(out, items) {
+function balanceReview(out, items, kind = '') {
   const num = (v) => parseFloat(String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/)?.[0] ?? 'NaN');
   const r1 = (x) => Math.round(x * 10) / 10;
+  const anhydrous = /масл|бальзам|баттер|oil|balm|butter/i.test(String(kind).split('.')[0]);
+  const WATER = /\b(aqua|water|вода)\b|hydrosol|гидролат|flower water|leaf water|цветочн.{0,4}вод/i;
+  const OIL = /oil|масло|butter|баттер|triglyceride|squalane|сквалан|триглицерид/i;
+  const isBase = (name, role = '') => (anhydrous ? OIL.test(name) || /основа|смягч|эмолент/i.test(role) : WATER.test(name) || /основа|растворит|водн/i.test(role));
   const cur = [];
   for (const s of items) {
-    const m = String(s).match(/^(.+?)\s+(\d+(?:[.,]\d+)?)%/);
-    if (m) cur.push({ name: m[1].trim(), key: norm(m[1]), pct: num(m[2]) });
+    const m = String(s).match(/^(.+?)\s+(\d+(?:[.,]\d+)?)%\s*(?:\(([^)]*)\))?/);
+    if (m) cur.push({ name: m[1].trim(), key: norm(m[1]), pct: num(m[2]), role: m[3] || '' });
   }
   const find = (name) => {
     const n = norm(name);
@@ -507,31 +512,51 @@ function balanceReview(out, items) {
     out.add.splice(out.add.indexOf(a), 1);
     if (!Number.isNaN(num(a.pct)) && !out.reduce.some((r) => find(r.name) === c)) out.reduce.push({ name: c.name, to: `${r1(num(a.pct))}%`, why: a.why });
   }
+  // A «change share» line for something not in the formula is an addition (with a share) or noise (without one);
+  // a line that leaves the share as it is changes nothing.
+  for (const r of [...out.reduce]) {
+    const c = find(r.name);
+    const to = num(r.to);
+    if (!c) {
+      out.reduce.splice(out.reduce.indexOf(r), 1);
+      if (!Number.isNaN(to) && to > 0) out.add.push({ name: r.name, pct: `${r1(to)}%`, why: r.why });
+    } else if (Number.isNaN(to) || Math.abs(to - c.pct) < 0.05) out.reduce.splice(out.reduce.indexOf(r), 1);
+  }
   const removed = new Set(out.remove.map((x) => find(x.name)).filter(Boolean));
   let net = 0;
   for (const a of out.add) net += num(a.pct) || 0;
-  for (const r of out.reduce) {
-    const c = find(r.name);
-    if (c && !Number.isNaN(num(r.to))) net += num(r.to) - c.pct;
-  }
+  for (const r of out.reduce) net += num(r.to) - find(r.name).pct;
   for (const c of removed) net -= c.pct;
-  // The formula itself may not be at 100% yet (88% + advice): the advice has to finish it.
+  // The formula itself may not be at 100% yet (5% of actives + advice): the advice has to finish it.
   const sum = r1(cur.reduce((a, c) => a + c.pct, 0));
-  if (cur.length && Math.abs(sum - 100) >= 0.1 && /хорош|сбаланс|стабильн|готов/i.test(out.verdict || '') && !out.add.length && !out.reduce.length) {
+  if (cur.length && Math.abs(sum - 100) >= 0.1 && /хорош|сбаланс|стабильн|готов/i.test(out.verdict || '')) {
     out.verdict = `Сейчас сумма формулы ${String(sum).replace('.', ',')}%, а должна быть ровно 100%. Доведите её до 100% — как показано ниже — и формула будет завершена.`;
   }
   net = r1(net + sum - 100);
   if (Math.abs(net) < 0.1) return out;
-  // The base takes the difference: the largest share that is kept, at its new value if the advice already changes it.
-  const donors = cur.filter((c) => !removed.has(c)).map((c) => ({ c, line: out.reduce.find((r) => find(r.name) === c) }));
-  donors.sort((x, y) => (y.line ? num(y.line.to) : y.c.pct) - (x.line ? num(x.line.to) : x.c.pct));
-  const d = donors[0];
-  if (!d) return out;
-  const now = d.line ? num(d.line.to) : d.c.pct;
-  const to = r1(now - net);
-  if (to < 0.1) return out;
-  if (d.line) d.line.to = `${to}%`;
-  else out.reduce.push({ name: d.c.name, to: `${to}%`, why: net > 0 ? 'чтобы сумма формулы осталась 100%' : 'дополнить формулу до 100%' });
+  // 1) a base already in the formula (at its new share if the advice changes it), the largest one;
+  const bases = cur.filter((c) => !removed.has(c) && isBase(c.name, c.role)).map((c) => ({ c, line: out.reduce.find((r) => find(r.name) === c) }));
+  bases.sort((x, y) => (y.line ? num(y.line.to) : y.c.pct) - (x.line ? num(x.line.to) : x.c.pct));
+  const d = bases[0];
+  if (d) {
+    const to = r1((d.line ? num(d.line.to) : d.c.pct) - net);
+    if (to >= 0.1) {
+      if (d.line) d.line.to = `${to}%`;
+      else out.reduce.push({ name: d.c.name, to: `${to}%`, why: net > 0 ? 'основа уступает место новым компонентам — сумма остаётся 100%' : 'основа дополняет формулу до 100%' });
+      return out;
+    }
+  }
+  // 2) a base the advice itself adds;
+  const added = out.add.find((a) => isBase(a.name));
+  if (added && r1((num(added.pct) || 0) - net) >= 0.1) {
+    added.pct = `${r1((num(added.pct) || 0) - net)}%`;
+    return out;
+  }
+  // 3) no base at all: it is the missing piece, added with exactly the share that completes the formula.
+  if (net < 0)
+    out.add.push(anhydrous
+      ? { name: 'Caprylic/Capric Triglyceride', pct: `${r1(-net)}%`, why: 'базовое масло — основа формулы, дополняет её до 100%' }
+      : { name: 'Aqua', pct: `${r1(-net)}%`, why: 'вода — основа формулы, дополняет её до 100%' });
   return out;
 }
 
@@ -1465,9 +1490,9 @@ async function handle(event, context) {
       // Advice the person already applied from earlier reviews: the technologist finishes instead of improving forever.
       const done = (req.done || []).slice(0, 12).map((x) => clean(x, 60)).filter(Boolean).join(', ');
       // The same formula gets the same answer for everyone, without a new model call.
-      const rk = `review2/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
+      const rk = `review3/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
-      if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || []));
+      if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || [], req.kind));
       if (!(await allow('review'))) return reply(429, { error: 'limit' });
       const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
       const out = { add: [], reduce: [], remove: [], warn: [] };
@@ -1479,7 +1504,7 @@ async function handle(event, context) {
         else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
         else if (line[0] === '!' && head) out.warn.push(head);
       }
-      balanceReview(out, req.items || []);
+      balanceReview(out, req.items || [], req.kind);
       await cachePut(rk, iam, out, true);
       return reply(200, { ...out, _usage: lastUsage });
     }
@@ -1489,9 +1514,9 @@ async function handle(event, context) {
       const a = side(req.a);
       const b = side(req.b);
       if (a.items.length < 2 || b.items.length < 2) return reply(400, { error: 'empty' });
-      // The same pair (in either order) gets the same answer for everyone, without a new model call.
-      const pair = [`${a.title}|${a.items.join(',')}`, `${b.title}|${b.items.join(',')}`].sort().join('||');
-      const ck = `compare/${sha(pair)}.json`;
+      // The same pair in the same order (the answer says «А» and «Б») gets the same answer for everyone.
+      const pair = `${a.title}|${a.items.join(',')}||${b.title}|${b.items.join(',')}`;
+      const ck = `compare2/${sha(pair)}.json`;
       const hit = await cacheGet(ck, iam);
       if (hit?.text) return reply(200, hit);
       if (!(await allow('compare'))) return reply(429, { error: 'limit' });

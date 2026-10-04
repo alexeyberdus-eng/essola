@@ -105,7 +105,7 @@ export type Review = {
   warn?: string[];
 };
 /** Technologist's advice on a builder formula ("Aqua 70%", …). */
-export const aiReview = (items: string[], kind: string, notes: string[], done: string[] = []) => cached<Review>('review6', { mode: 'review', items, kind, notes, done });
+export const aiReview = (items: string[], kind: string, notes: string[], done: string[] = []) => cached<Review>('review7', { mode: 'review', items, kind, notes, done });
 
 export type CachedProduct = { title?: string | null; ingredients: string[]; source?: string; image?: string | null; url?: string };
 

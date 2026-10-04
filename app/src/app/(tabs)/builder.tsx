@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Dropdown } from '../../components/Dropdown';
 import { Hero } from '../../components/Hero';
@@ -113,10 +113,8 @@ export default function BuilderScreen() {
   };
   const layers = phaseSums(items);
 
-  const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(240, 'easeInEaseOut', 'opacity'));
   const choose = (k: Kind) => {
     tap();
-    animate();
     setKind(k);
   };
   const change = (key: string, delta: number) => {
@@ -134,14 +132,12 @@ export default function BuilderScreen() {
   const remove = (key: string) => {
     tap();
     edited.current = true;
-    animate();
     setItems((prev) => prev.filter((i) => i.key !== key));
   };
   const add = (inci: string) => {
     edited.current = true;
     const item = newItem(inci);
     tap('medium');
-    animate();
     setItems((prev) => [...prev, item]);
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
@@ -181,7 +177,6 @@ export default function BuilderScreen() {
     }
     const item = newItem(hit ? hit.inci : name);
     if (v > 0 && v < 100) item.pct = v;
-    animate();
     setItems((prev) => (rowFor(prev, name) ? prev : fit([...prev, item], item.key)));
     setDropColor(PHASE_COLOR[item.phase]);
     setDrop((d) => d + 1);
@@ -197,7 +192,6 @@ export default function BuilderScreen() {
   // «Убрать» from the technologist: the freed share goes back to the base.
   const removeSuggested = (key: string) => {
     tap();
-    animate();
     const row = items.find((i) => i.key === key);
     if (row) applied.current.push(`без ${row.name}`);
     const wasFull = Math.abs(total(items) - 100) < 0.05;
@@ -226,7 +220,7 @@ export default function BuilderScreen() {
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.gutter, paddingBottom: TAB_SPACE + 10 }} keyboardShouldPersistTaps="handled">
         <View style={styles.top}>
           <Text style={styles.h1}>Конструктор</Text>
-          {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => { animate(); setItems([]); }} />}
+          {items.length > 0 && <IconButton icon="history" label="Очистить" onPress={() => setItems([])} />}
         </View>
         <Hero kicker="Конструктор essola" title="Соберите своё средство" text={`${INGREDIENTS.length}+ ингредиентов: посчитаем граммы, опишем эффект, а технолог подскажет, что улучшить.`} tone="rose" style={{ marginTop: 6 }} />
 
@@ -521,13 +515,8 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
             <Text style={styles.reviewGroup}>Изменить долю</Text>
             {(r.reduce ?? []).map((x) => {
               const row = rowFor(items, x.name);
-              // Lines that balance the formula («до 100%», «за счёт воды») are counted here from the actual sum and the
-              // additions still to be made — the model often gets that number wrong or leaves it out.
-              const pending = adds.reduce((sum, a) => sum + (a.row ? 0 : a.to ?? 0), 0);
-              const sum = total(items);
-              const balancing = row?.phase === 'water' && (/100|баланс|довед|освобод|за сч[её]т|мест|компенс|сумм/i.test(x.why ?? '') || !pctOf(x.to) || Math.abs(sum - 100) > 0.5);
-              let to = row && balancing ? Math.max(0.1, Math.round((row.pct + 100 - sum - pending) * 10) / 10) : pctOf(x.to) ?? (row ? Math.max(0.1, Math.round(row.pct * 0.67 * 10) / 10) : null);
-              if (row && to !== null && Math.abs(to - row.pct) < 0.05) to = row.pct;
+              // The server already balances the advice to exactly 100% with the base, so its share is used as is.
+              const to = pctOf(x.to) ?? null;
               const can = row && to !== null && Math.abs(row.pct - to) > 0.01;
               const up = can && to! > row!.pct;
               return (

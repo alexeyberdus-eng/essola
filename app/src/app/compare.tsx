@@ -63,9 +63,9 @@ export default function CompareScreen() {
         </View>
 
         <View style={styles.heads}>
-          <Head side={a} result={ra} onChange={() => { setA(null); setB(b); }} />
+          <Head letter="А" side={a} result={ra} onChange={() => { setA(null); setB(b); }} />
           <Text style={styles.vs}>vs</Text>
-          <Head side={b} result={rb} onChange={() => setB(null)} />
+          <Head letter="Б" side={b} result={rb} onChange={() => setB(null)} />
         </View>
 
         {picking ? (
@@ -78,16 +78,18 @@ export default function CompareScreen() {
   );
 }
 
-function Head({ side, result, onChange }: { side: Side | null; result: Analysis | null; onChange: () => void }) {
+function Head({ letter, side, result, onChange }: { letter: string; side: Side | null; result: Analysis | null; onChange: () => void }) {
   if (!side || !result)
     return (
       <View style={[styles.head, styles.headEmpty]}>
+        <Text style={styles.letter}>{letter}</Text>
         <Icon name="plus" size={22} color={colors.violet} />
         <Text style={styles.headHint}>Выберите средство</Text>
       </View>
     );
   return (
-    <Press haptic={false} onPress={onChange} style={styles.head} accessibilityLabel="Заменить средство">
+    <Press haptic={false} onPress={onChange} style={styles.head} accessibilityLabel={`Заменить средство ${letter}`}>
+      <Text style={styles.letter}>{letter}</Text>
       <View style={styles.photo}>
         {side.image ? <Image source={{ uri: side.image }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="memory-disk" /> : <Icon name="drop" size={26} color={colors.faint} />}
       </View>
@@ -241,8 +243,8 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
           );
         })}
         <View style={styles.legend}>
-          <Text style={styles.legendText} numberOfLines={1}>← {short(a.title)}</Text>
-          <Text style={styles.legendText} numberOfLines={1}>{short(b.title)} →</Text>
+          <Text style={styles.legendText} numberOfLines={1}>← средство А</Text>
+          <Text style={[styles.legendText, { textAlign: 'right' }]} numberOfLines={1}>средство Б →</Text>
         </View>
       </View>
       <Text style={styles.muted}>Оценки и сводка считаются по составу в телефоне. Порядок ингредиентов учитывается: то, что ближе к началу, весит больше.</Text>
@@ -252,9 +254,9 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
 
 /** A short plain-words summary of the difference, from the analyzer alone (no AI). */
 function summaryOf(a: Side, b: Side, ra: Analysis, rb: Analysis, common: number): { title: string; lines: string[] } {
-  const short = (t: string) => `«${t.split(' · ').pop()!.slice(0, 34)}»`;
+  // The cards are signed А and Б: the summary names them the same way instead of repeating long titles.
   const diff = ra.scores.overall - rb.scores.overall;
-  const [lead, lag, leadName, lagName] = diff >= 0 ? [ra, rb, short(a.title), short(b.title)] : [rb, ra, short(b.title), short(a.title)];
+  const [lead, lag, leadName, lagName] = diff >= 0 ? [ra, rb, 'Средство А', 'Средство Б'] : [rb, ra, 'Средство Б', 'Средство А'];
   const wins = (Object.keys(ROW_WORD) as (keyof Analysis['scores'])[]).filter((k) => lead.scores[k] - lag.scores[k] >= 8).map((k) => ROW_WORD[k]);
   const title = Math.abs(diff) < 4 ? 'Составы примерно на одном уровне' : `${leadName} сильнее по составу${wins.length ? `: ${wins.slice(0, 3).join(', ')}` : ''}`;
   const lines: string[] = [];
@@ -265,8 +267,8 @@ function summaryOf(a: Side, b: Side, ra: Analysis, rb: Analysis, common: number)
   };
   const aOnly = actives(ra, rb);
   const bOnly = actives(rb, ra);
-  if (aOnly.length) lines.push(`Только в ${short(a.title)}: ${aOnly.join(', ')}.`);
-  if (bOnly.length) lines.push(`Только в ${short(b.title)}: ${bOnly.join(', ')}.`);
+  if (aOnly.length) lines.push(`Только в средстве А: ${aOnly.join(', ')}.`);
+  if (bOnly.length) lines.push(`Только в средстве Б: ${bOnly.join(', ')}.`);
   // Watch-outs that differ: fragrance, drying alcohol, risky components.
   const flags = (r: Analysis) => ({
     perfume: r.items.some((it) => it.ing.inci === 'Parfum' || it.ing.flags.includes('allergen')),
@@ -275,11 +277,11 @@ function summaryOf(a: Side, b: Side, ra: Analysis, rb: Analysis, common: number)
   });
   const fa = flags(ra);
   const fb = flags(rb);
-  if (fa.perfume !== fb.perfume) lines.push(`Отдушка или аллергены есть только в ${fa.perfume ? short(a.title) : short(b.title)}.`);
-  if (fa.alcohol !== fb.alcohol) lines.push(`Сушащий спирт — только в ${fa.alcohol ? short(a.title) : short(b.title)}.`);
+  if (fa.perfume !== fb.perfume) lines.push(`Отдушка или аллергены есть только в ${fa.perfume ? 'средстве А' : 'средстве Б'}.`);
+  if (fa.alcohol !== fb.alcohol) lines.push(`Сушащий спирт — только в ${fa.alcohol ? 'средстве А' : 'средстве Б'}.`);
   if (fa.risk !== fb.risk) lines.push(`Спорных компонентов: ${fa.risk} против ${fb.risk}.`);
   if (!lines.length) lines.push(common ? 'Ключевые компоненты почти одинаковые — выбирайте по текстуре и цене.' : 'Составы совсем разные — сравните, для чего вам нужно средство.');
-  if (Math.abs(diff) >= 4 && lagName) lines.push(`Итог: ${leadName} — ${lead.scores.overall}, ${lagName} — ${lag.scores.overall} из 100.`);
+  if (Math.abs(diff) >= 4 && lagName) lines.push(`Итог: ${leadName.toLowerCase()} — ${lead.scores.overall}, ${lagName.toLowerCase()} — ${lag.scores.overall} из 100.`);
   return { title, lines: lines.slice(0, 5) };
 }
 
@@ -303,6 +305,7 @@ const styles = StyleSheet.create({
   headEmpty: { justifyContent: 'center', minHeight: 190, borderStyle: 'dashed', borderColor: '#CFC6F2', backgroundColor: '#F7F4FF' },
   headHint: { fontFamily: fonts.medium, fontSize: 13, color: colors.violet },
   photo: { width: 74, height: 74, borderRadius: 14, backgroundColor: '#F6F4FA', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  letter: { position: 'absolute', top: 8, left: 10, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.violet, color: '#fff', textAlign: 'center', lineHeight: 26, fontFamily: fonts.semibold, fontSize: 13, overflow: 'hidden' },
   headTitle: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, color: colors.ink, textAlign: 'center', minHeight: 34 },
   change: { fontFamily: fonts.medium, fontSize: 12, color: colors.violet },
   section: { fontFamily: fonts.display, fontSize: 21, letterSpacing: -0.5, color: colors.ink },
