@@ -1,12 +1,12 @@
 name: Products by ingredient (index for «Средства с ингредиентом»)
 
 # Reads the product base already in Object Storage (Letual + INKEEDecoder compositions) and writes, for every
-# ingredient the app knows, the list of products that contain it. Run after the base is rebuilt; weekly anyway.
+# ingredient the app knows, the list of products that contain it. Run after the base is rebuilt; monthly anyway, after the Letual refresh.
 on:
   push:
-    paths: ['.github/workflows/ingr.yml', 'app/scripts/build-ingr.ts']
+    paths: ['app/scripts/build-ingr.ts']
   schedule:
-    - cron: '41 5 * * 1'
+    - cron: '41 5 3 * *'
   workflow_dispatch:
 
 permissions:
