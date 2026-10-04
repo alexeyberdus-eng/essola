@@ -1,0 +1,98 @@
+# Builds an installable Android app (APK) in the Expo cloud (EAS Build) and posts the download link to the
+# issue "📱 Essola в Expo Go". Run it from Actions → «Android APK» → Run workflow. The APK takes interface
+# updates from the same "preview" channel as Expo Go, so it stays current without a rebuild; a new APK is
+# needed only after native changes (new modules, permissions, icons).
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/workflows/build-android.yml']
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      VK_ID: ${{ secrets.VK_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link Expo project and build settings
+        run: |
+          npx --yes eas-cli@latest init --non-interactive --force
+          PROJECT_ID=$(node -p "require('./app.json').expo.extra.eas.projectId")
+          KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          # Same update server and channel as Expo Go; the scan server address goes into the build itself.
+          node -e "
+            const fs=require('fs');
+            const app=JSON.parse(fs.readFileSync('app.json','utf8'));
+            app.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};
+            fs.writeFileSync('app.json',JSON.stringify(app,null,2));
+            const eas=JSON.parse(fs.readFileSync('eas.json','utf8'));
+            eas.build.apk={distribution:'internal',channel:'preview',android:{buildType:'apk'},env:{
+              EXPO_PUBLIC_SCAN_URL:'https://functions.yandexcloud.net/d4eikcrvo6v275frt26v',
+              EXPO_PUBLIC_SCAN_KEY:'$KEY',
+              EXPO_PUBLIC_VK_ID:process.env.VK_ID||''}};
+            fs.writeFileSync('eas.json',JSON.stringify(eas,null,2));
+          "
+
+      - name: Build APK in the Expo cloud
+        id: build
+        run: |
+          npx --yes eas-cli@latest build --platform android --profile apk --non-interactive --wait --json > /tmp/build.json
+          cat /tmp/build.json
+          URL=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/build.json','utf8'))[0].artifacts.buildUrl")
+          PAGE=$(node -p "const b=JSON.parse(require('fs').readFileSync('/tmp/build.json','utf8'))[0]; 'https://expo.dev/accounts/'+b.project.ownerAccount.name+'/projects/'+b.project.slug+'/builds/'+b.id")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "page=$PAGE" >> "$GITHUB_OUTPUT"
+          echo "APK: $URL"
+
+      - name: Post the link
+        uses: actions/github-script@v7
+        env:
+          URL: ${{ steps.build.outputs.url }}
+          PAGE: ${{ steps.build.outputs.page }}
+        with:
+          script: |
+            const { URL, PAGE } = process.env;
+            const qr = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=16&data=${encodeURIComponent(URL)}`;
+            const body = [
+              '## Android: установочный файл (APK)',
+              '',
+              'Наведите камеру Android-телефона на QR-код или откройте ссылку на телефоне, скачайте файл и установите его',
+              '(телефон спросит разрешение на установку из браузера — разрешите).',
+              '',
+              `<img src="${qr}" width="240" alt="QR-код APK">`,
+              '',
+              `[Скачать APK](${URL}) · [страница сборки](${PAGE})`,
+              '',
+              `Сборка \`${context.sha.slice(0, 7)}\`, ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК.`,
+            ].join('\n');
+            const { data: issues } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', per_page: 100 });
+            const issue = issues.find((i) => i.title === '📱 Essola в Expo Go' && !i.pull_request);
+            if (issue) await github.rest.issues.createComment({ ...context.repo, issue_number: issue.number, body });
+            await core.summary.addRaw(body).write();
