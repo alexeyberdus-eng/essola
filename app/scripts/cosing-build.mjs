@@ -41,29 +41,33 @@ async function collect(query, seen) {
 }
 
 // The service returns at most 10 000 results per query, so the inventory is read in ranges of substance id,
-// each split in two until it fits (the only partition filter the search accepts, see cosing-probe.yml).
+// the only partition filter the search accepts (see cosing-probe.yml). Ids compare as text, so the ranges are
+// id prefixes: «1» covers 1, 10…, 1234…; a prefix too large is split into its ten longer prefixes.
 const ING = { terms: { itemType: ['ingredient'] } };
-const ranged = (lo, hi) => ({ bool: { must: [ING, { range: { substanceId: { gte: String(lo), lte: String(hi) } } }] } });
+const ranged = (lo, hi) => ({ bool: { must: [ING, { range: { substanceId: { gte: lo, lt: hi } } }] } });
 const count = async (q) => (await page(q, 1, 1))?.totalResults ?? -1;
 const total = await count({ bool: { must: [ING] } });
 console.log('total', total);
 if (total < 1000) throw new Error('search service is not answering');
 const seen = new Map();
 let inRanges = 0;
-async function range(lo, hi) {
+async function take(lo, hi) {
   const n = await count(ranged(lo, hi));
-  if (n <= 0) return;
-  if (n > 9500 && hi > lo) {
-    const mid = Math.floor((lo + hi) / 2);
-    await range(lo, mid);
-    await range(mid + 1, hi);
-    return;
-  }
+  if (n <= 0) return 0;
   inRanges += n;
   await collect(ranged(lo, hi), seen);
-  console.log('range', lo, hi, n, '→', seen.size);
+  console.log('ids', JSON.stringify(lo), '…', JSON.stringify(hi), n, '→', seen.size);
+  return n;
 }
-await range(0, 2_000_000);
+async function prefix(p) {
+  const next = p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1);
+  const n = await count(ranged(p, next));
+  if (n <= 0) return;
+  if (n <= 9500 || p.length >= 6) return void (await take(p, next));
+  await take(p, `${p}0`); // the id that is exactly the prefix
+  for (const d of '0123456789') await prefix(p + d);
+}
+for (const d of '0123456789') await prefix(d);
 console.log('inventory', seen.size, 'of', total, '(in id ranges', inRanges, ')');
 
 // Annex tables: reference → conditions (product type, maximum concentration, warnings).
