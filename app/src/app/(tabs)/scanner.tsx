@@ -837,6 +837,8 @@ export default function ScannerScreen() {
         }}
         onFound={async ({ title, text }) => {
           if (shopDone.current) return;
+          // Not an ingredient list after all (a description sentence): keep waiting for the base by name or the timeout.
+          if (analyze(text).recognised < 2) return;
           const url = shop!;
           // The name first: our base has the checked composition and the photo.
           const hit = title ? await productByName(title).catch(() => null) : null;

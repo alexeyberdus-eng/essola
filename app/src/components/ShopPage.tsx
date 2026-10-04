@@ -10,15 +10,56 @@ import { WebView } from 'react-native-webview';
 const FIND = `
 (function () {
   var clicked = 0;
+  // A real ingredient list: several short comma-separated items with typical ingredient words, not a sentence
+  // from the description («Состав подобран для…»). Shops put many texts near the word «Состав».
+  var MARK = /(aqua|water|вода|glycer|глицер|extract|экстракт|\\boil\\b|масл|acid|кислот|parfum|fragrance|отдушк|alcohol|спирт|sodium|натри|\\bci ?\\d|tocopher|токофер|panthen|пантен|butter|сорбат|benzo|бензо|phenoxy|феноксиэт|cetearyl|цетеарил|glycol|гликол|hyaluron|гиалурон|niacin|ниацин|squal|сквал|vitamin|витамин|laur|лаур|xanthan|ксантан|carbomer|карбомер|dimethicon|диметикон|citric|лимонн|ceramide|керамид|allantoin|аллантоин|urea|мочевин|lanolin|ланолин|cera|воск)/gi;
+  var PROSE = /(примен|способ|рекоменд|подходит|идеальн|помогает|позволяет|подобран|разработан|обеспечива|для ухода|наносить|кожа станет)/i;
+  function clean(t) {
+    t = String(t || '').replace(/\\s+/g, ' ').trim();
+    var cut = t.search(/(способ применения|применение|срок годности|условия хранения|объ[её]м|страна|производитель|артикул|меры предосторожности)/i);
+    if (cut > 20) t = t.slice(0, cut);
+    return t.replace(/^[\\s:：-]+/, '').trim();
+  }
+  function score(t) {
+    if (!t || t.length < 12 || t.length > 4000) return 0;
+    var parts = t.split(/\\s*[,;]\\s*/).filter(function (x) { return x.length > 1; });
+    if (parts.length < 3) return 0;
+    var long = parts.filter(function (x) { return x.length > 60; }).length;
+    if (long > parts.length / 3) return 0;
+    if (PROSE.test(t.slice(0, 120))) return 0;
+    var marks = (t.match(MARK) || []).length;
+    if (marks < 2) return 0;
+    return marks * 3 + Math.min(parts.length, 40);
+  }
   function pick() {
+    var cands = [];
+    // 1) The «Состав» field itself: a label element followed by its value (characteristics tables, tabs, dt/dd).
+    var els = document.querySelectorAll('dt, dd, th, td, span, div, p, h2, h3, h4, b, strong, li');
+    for (var i = 0; i < els.length && cands.length < 40; i++) {
+      var own = (els[i].textContent || '').trim().toLowerCase().replace(/[:：]$/, '');
+      if (own !== 'состав' && own !== 'ingredients' && own !== 'inci' && own !== 'состав (inci)' && own !== 'состав продукта' && own !== 'полный состав') continue;
+      var el = els[i];
+      for (var up = 0; up < 3 && el; up++) {
+        var next = el.nextElementSibling;
+        if (next) cands.push(clean(next.innerText || next.textContent));
+        el = el.parentElement;
+      }
+    }
+    // 2) «Состав: …» inside a text block.
     var text = document.body ? document.body.innerText : '';
-    var m = text.match(/(?:состав|ingredients|inci)\\s*[:：]?\\s*\\n*\\s*((?:aqua|water|вода|[a-zа-яё][^\\n]{2,60}),[^\\n]{20,3000})/i);
-    if (m) return m[1];
+    var re = /(?:^|\\n|\\.\\s)(?:полный\\s+)?(?:состав|ingredients|inci)\\s*(?:\\(inci\\))?\\s*[:：]?\\s*\\n?([^\\n]{12,4000})/gi;
+    var m;
+    while ((m = re.exec(text)) && cands.length < 60) cands.push(clean(m[1]));
+    // 3) Data embedded in the page.
     var html = document.documentElement ? document.documentElement.innerHTML : '';
-    var h = html.match(/(?:Состав|Ingredients|INCI)[^<]{0,40}<\\/[^>]+>(?:\\s*<[^>]+>){0,4}\\s*([^<]{30,3000})/i);
-    if (h && h[1].indexOf(',') > 0) return h[1];
-    var j = html.match(/"(?:composition|ingredients|sostav)"\\s*:\\s*"([^"]{30,3000})"/i);
-    return j ? j[1] : null;
+    var j = html.match(/"(?:composition|ingredients|sostav)"\\s*:\\s*"([^"]{12,4000})"/i);
+    if (j) cands.push(clean(j[1]));
+    var best = null, top = 0;
+    for (var k = 0; k < cands.length; k++) {
+      var sc = score(cands[k]);
+      if (sc > top) { top = sc; best = cands[k]; }
+    }
+    return best;
   }
   var ticks = 0;
   var sentTitle = false;

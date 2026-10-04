@@ -29,7 +29,7 @@ const CATS: [string, RegExp][] = [
   ['toothpastes', /toothpaste|dentifrice|oral|mouth/],
 ];
 
-type Item = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; p: number };
+type Item = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; p: number; u?: string };
 
 function categoryOf(tags: string) {
   const t = tags.toLowerCase();
@@ -39,7 +39,7 @@ function categoryOf(tags: string) {
 
 const why: Record<string, number> = { noTitle: 0, noText: 0, unreadable: 0, few: 0, dup: 0, rescued: 0 };
 /** `texts`: the list in every language the dump has; the first one our analyzer reads well is kept. */
-function add(out: Map<string, Item>, code: string, title: string, brand: string, image: string, texts: string | string[], tags: string, pop: number) {
+function add(out: Map<string, Item>, code: string, title: string, brand: string, image: string, texts: string | string[], tags: string, pop: number, url?: string) {
   title = title.trim();
   const list = (Array.isArray(texts) ? texts : [texts]).map((t) => t.trim()).filter((t) => t.length >= 20);
   if (!code || !title) return void why.noTitle++;
@@ -56,7 +56,7 @@ function add(out: Map<string, Item>, code: string, title: string, brand: string,
     }
   }
   if (!a) return void (analyze(list[0]).unreadable ? why.unreadable++ : why.few++);
-  out.set(code, { k: code, t: title.slice(0, 120), b: brand.split(',')[0].trim().slice(0, 60), i: image, x: text.slice(0, 1800), c: categoryOf(tags), s: a.scores.overall, n: a.items.length, p: pop });
+  out.set(code, { k: code, t: title.slice(0, 120), b: brand.split(',')[0].trim().slice(0, 60), i: image, x: text.slice(0, 1800), c: categoryOf(tags), s: a.scores.overall, n: a.items.length, p: pop, ...(url ? { u: url } : {}) });
 }
 
 async function main() {
@@ -91,8 +91,9 @@ async function main() {
   // Products users resolved from shop links.
   const shopFile = process.argv[3];
   if (shopFile && existsSync(shopFile)) {
-    const shop = JSON.parse(readFileSync(shopFile, 'utf8')) as { k: string; t: string; i?: string; x: string; c?: string }[];
-    for (const p of shop) add(out, p.k, p.t, '', p.i || '', p.x, p.c || '', 1000);
+    const shop = JSON.parse(readFileSync(shopFile, 'utf8')) as { k: string; t: string; b?: string; i?: string; u?: string; x: string; c?: string }[];
+    // The title stands in for category tags: «Крем для лица…» lands among face creams.
+    for (const p of shop) add(out, p.k, p.t, p.b || '', p.i || '', p.x, p.c || p.t, 1000, p.u);
     console.log('shop items', shop.length, 'total', out.size);
   }
 

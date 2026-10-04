@@ -95,11 +95,11 @@ async function cachePut(key, iam, data, raw = false) {
 }
 
 // Products resolved from shop links, merged into the catalog by the daily catalog build.
-async function shopAdd(iam, key, title, image, ingredients, source) {
-  if (!title || !ingredients || ingredients.length < 4) return;
+async function shopAdd(iam, key, title, image, ingredients, source, brand = '', url = '') {
+  if (!title || !ingredients || ingredients.length < 3) return;
   const list = (await cacheGet('shop.json', iam)) || [];
   const next = (Array.isArray(list) ? list : []).filter((x) => x.k !== key);
-  next.push({ k: key, t: String(title).slice(0, 160), i: image || '', x: `Ingredients: ${ingredients.join(', ')}`, s: source || '' });
+  next.push({ k: key, t: String(title).slice(0, 160), b: String(brand || '').slice(0, 60), i: image || '', u: url || '', x: `Ingredients: ${ingredients.join(', ')}`, s: source || '' });
   await cachePut('shop.json', iam, next.slice(-20000), true);
 }
 
@@ -471,7 +471,10 @@ async function wbCard(nm) {
     const url = `https://basket-${String(h).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nm}/info/ru/card.json`;
     const r = await fetch(url, { signal: AbortSignal.timeout(4000) }).catch(() => null);
     const c = r && r.ok ? await r.json().catch(() => null) : null;
-    if (c) wbHostOf.set(vol, h);
+    if (c) {
+      wbHostOf.set(vol, h);
+      c._image = `https://basket-${String(h).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nm}/images/big/1.webp`;
+    }
     return c;
   };
   const first = await get(hosts[0]);
@@ -600,7 +603,7 @@ async function fromMarketplace(url) {
     const fromDesc = String(c.description || '').match(/(?:состав|ingredients|inci)\s*[:：-]\s*([^\n]{20,3000})/i)?.[1] || '';
     const comp = opts.find((o) => /состав|ingredients/i.test(o.name || ''))?.value || fromDesc || (c.compositions || []).map((x) => x.name).join(', ');
     console.log('wb card', nm, String(c.imt_name || '').slice(0, 60), 'composition chars', String(comp || '').length);
-    return { shop: 'wb', id: nm, title: String(c.imt_name || c.subj_name || '').trim(), brand: String(c.selling?.brand_name || '').trim(), composition: String(comp || '').trim() };
+    return { shop: 'wb', id: nm, title: String(c.imt_name || c.subj_name || '').trim(), brand: String(c.selling?.brand_name || '').trim(), image: c._image, url: `https://www.wildberries.ru/catalog/${nm}/detail.aspx`, composition: String(comp || '').trim() };
   }
   if (/ozon\.(ru|by|kz|com)$/.test(host)) {
     // Ozon pages are behind bot protection: only the words of the link itself are used (the product slug).
@@ -1396,7 +1399,8 @@ async function handle(event, context) {
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
       if (!req.url || ingredients.length < 3) return reply(400, { error: 'bad_product' });
       await cachePut(keyFor({ url: req.url }), iam, { title: String(req.title || '').slice(0, 200), url: req.url, ingredients, source: 'shop' });
-      await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), null, ingredients, 'shop').catch(() => {});
+      const host = (() => { try { return new URL(req.url).hostname.replace(/^www\./, ''); } catch { return 'shop'; } })();
+      await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), String(req.image || '').slice(0, 400) || null, ingredients, host, clean(req.brand, 60), req.url).catch(() => {});
       return reply(200, { ok: true });
     }
     if (req.mode === 'byname') {
@@ -1436,7 +1440,11 @@ async function handle(event, context) {
       const list = info.composition ? info.composition.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
       // The seller's own card is the product itself: its composition counts even when short («масло ши 100%»),
       // a similar product from the base or the web would be a different one.
-      if (list.length >= 4 || (info.shop === 'wb' && list.length >= 1)) return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ingredients: list });
+      if (list.length >= 4 || (info.shop === 'wb' && list.length >= 1)) {
+        // A product read from the seller's card joins the shared base (the daily catalog build scores it).
+        if (info.title) await shopAdd(iam, keyFor({ url: info.url || String(req.url || '') }), info.title, info.image || '', list, info.shop, info.brand, info.url || String(req.url || '')).catch(() => {});
+        return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ingredients: list });
+      }
       const name = [info.brand, info.title].filter(Boolean).join(' ');
       if (!name) return reply(200, { shop: info.shop, none: true });
       const base = await loadLetu(iam);
