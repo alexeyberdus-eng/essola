@@ -311,6 +311,11 @@ export default function AnalysisScreen() {
             <Text style={styles.softText}>Поделиться</Text>
           </Press>
         </View>
+        {/* Compared on the phone by the same analyzer: no AI request. */}
+        <Press onPress={() => router.push(`/compare?a=${scan.id}`)} style={[styles.soft, { flex: 0, marginTop: 8 }]}>
+          <Icon name="swap" size={17} color={colors.violetDeep} />
+          <Text style={styles.softText}>Сравнить с другим средством</Text>
+        </Press>
 
         <View style={styles.offscreen} pointerEvents="none">
           <View ref={card} collapsable={false}>
