@@ -1325,8 +1325,10 @@ async function handle(event, context) {
       const brandWord = keywords(info.brand || info.title || '')[0] || '';
       const brandVars = variants(brandWord);
       const sameBrand = (x) => !brandWord || brandVars.some((v) => norm(x.b).replace(/ /g, '').includes(v.replace(/ /g, '')) || ` ${norm(x.t)} `.includes(` ${v} `));
-      const found = keywordSearch(base, name).filter((x) => !x.z && sameBrand(x)).slice(0, 5);
-      if (found[0] && found[0]._score >= 0.8 && (!found[1] || found[1]._score < found[0]._score)) {
+      // The same product listed twice (another volume or a re-listing) counts once.
+      const seenT = new Set();
+      const found = keywordSearch(base, name).filter((x) => !x.z && sameBrand(x) && !seenT.has(norm(x.t)) && seenT.add(norm(x.t))).slice(0, 5);
+      if (found[0] && (found.length === 1 || (found[0]._score >= 0.8 && found[1]._score < found[0]._score))) {
         const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
         return reply(200, { shop: info.shop, title: info.title, brand: info.brand, item });
       }
