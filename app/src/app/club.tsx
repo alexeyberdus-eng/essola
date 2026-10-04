@@ -9,7 +9,7 @@ import { Glow } from '../components/silk';
 import { Button, IconButton, Press, tap } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { cloud } from '../lib/cloud';
-import { colors, fonts, LAVENDER, space } from '../theme';
+import { colors, fonts, space } from '../theme';
 
 type Terms = { limit: number; club: number; describe: number; describeClub: number; price: number };
 type ClubState = { member: boolean; since: string | null; signedIn: boolean; terms: Terms; promo: { code: string; text?: string; until?: string } | null };
@@ -71,7 +71,7 @@ export default function Club() {
     ['Поиск средств в интернете и по ссылкам', `${t.limit} в день`, `${t.club} в день`],
     ['Разборы «что даёт средство»', `${t.describe} в день`, `${t.describeClub} в день`],
     ['Промокод на косметику Essola каждый месяц', '—', '✓'],
-    ['Значок участника клуба в профиле', '—', '✓'],
+    ['Значок участника в профиле', '—', '✓'],
   ];
 
   return (
@@ -84,11 +84,11 @@ export default function Club() {
         </View>
 
         <View style={styles.hero}>
-          <LinearGradient colors={['#5B47C9', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['#8E7BEF', '#B48AE6', '#E59BC8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <View style={styles.circle} />
           <View style={styles.circle2} />
-          <Text style={styles.kicker}>{member ? 'вы в клубе' : 'для тех, кто любит уход'}</Text>
-          <Text style={styles.title}>Essola Клуб</Text>
+          <Text style={styles.kicker}>{member ? 'вы в Essola Club' : 'для тех, кто любит уход'}</Text>
+          <Text style={styles.title}>Essola Club</Text>
           <Text style={styles.lead}>Больше сканов и советов технолога и ежемесячные промокоды на косметику Essola.</Text>
           <View style={styles.price}>
             <Text style={styles.priceN}>0 ₽</Text>
@@ -104,7 +104,7 @@ export default function Club() {
               <Icon name="check" size={20} color="#fff" strokeWidth={2.4} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.memberTitle}>Вы участник клуба</Text>
+              <Text style={styles.memberTitle}>Вы в Essola Club</Text>
               {!!state.since && <Text style={styles.memberText}>с {new Date(state.since).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>}
             </View>
           </View>
@@ -135,7 +135,7 @@ export default function Club() {
           </View>
         )}
 
-        <Text style={styles.h2}>Что даёт клуб</Text>
+        <Text style={styles.h2}>Что даёт Essola Club</Text>
         {(
           [
             ['scan', 'Втрое больше распознаваний', 'Сканируйте всю полку и все покупки — фото составов, этикетки, поиск по коду и ссылкам.'],
@@ -155,38 +155,29 @@ export default function Club() {
           </View>
         ))}
 
-        <Text style={styles.h2}>Без клуба и с клубом</Text>
+        <Text style={styles.h2}>Сравнение</Text>
         <View style={styles.table}>
-          <View style={[styles.tr, styles.thead]}>
-            <Text style={[styles.td, styles.tdName, styles.th]}> </Text>
-            <Text style={[styles.td, styles.th]}>Без клуба</Text>
-            <View style={[styles.td, styles.clubCol, styles.clubHead]}>
-              <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 14, borderTopRightRadius: 14 }]} />
-              <Text style={[styles.th, { color: '#fff' }]}>Клуб</Text>
+          <View style={styles.tr}>
+            <View style={{ flex: 1 }} />
+            <Text style={[styles.col, styles.th]}>Обычный</Text>
+            <View style={[styles.col, styles.clubHead]}>
+              <LinearGradient colors={['#8E7BEF', '#B48AE6', '#E59BC8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 10 }]} />
+              <Text style={[styles.th, { color: '#fff' }]}>Essola Club</Text>
             </View>
           </View>
-          {rows.map(([name, free, club], i) => (
-            <View key={name} style={[styles.tr, i < rows.length - 1 && styles.trLine]}>
-              <Text style={[styles.td, styles.tdName]}>{name}</Text>
-              <Text style={[styles.td, styles.tdVal, free === '—' && styles.dash]}>{free}</Text>
-              <View style={[styles.td, styles.clubCol, i === rows.length - 1 && styles.clubLast]}>
-                <Text style={[styles.tdVal, styles.tdClub]}>{club}</Text>
-              </View>
+          {[...rows, ['Стоимость', '0 ₽', '0 ₽'] as [string, string, string]].map(([name, free, club]) => (
+            <View key={name} style={[styles.tr, styles.trLine]}>
+              <Text style={styles.name}>{name}</Text>
+              <Text style={[styles.col, styles.val, free === '—' && styles.dash]}>{free}</Text>
+              <Text style={[styles.col, styles.val, styles.valClub]}>{club}</Text>
             </View>
           ))}
-          <View style={[styles.tr, styles.trTop]}>
-            <Text style={[styles.td, styles.tdName, styles.th]}>Стоимость</Text>
-            <Text style={[styles.td, styles.tdVal]}>0 ₽</Text>
-            <View style={[styles.td, styles.clubCol, styles.clubLast]}>
-              <Text style={[styles.tdVal, styles.tdClub]}>0 ₽</Text>
-            </View>
-          </View>
         </View>
-        <Text style={styles.note}>Лимиты обновляются каждый день. Всё основное — разбор составов, рецепты, конструктор, база средств — остаётся доступным без клуба.</Text>
+        <Text style={styles.note}>Лимиты обновляются каждый день. Всё основное — разбор составов, рецепты, конструктор, база средств — остаётся доступным и без Essola Club.</Text>
 
         {member && (
           <Press haptic={false} onPress={leave} disabled={busy} style={styles.leave}>
-            <Text style={styles.leaveText}>Выйти из клуба</Text>
+            <Text style={styles.leaveText}>Выйти из Essola Club</Text>
           </Press>
         )}
       </ScrollView>
@@ -224,20 +215,16 @@ const styles = StyleSheet.create({
   perkIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
   perkTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
   perkText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 3 },
-  table: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: '#EAE6F7', paddingHorizontal: 12, paddingBottom: 4 },
-  tr: { flexDirection: 'row', alignItems: 'stretch' },
-  thead: { paddingTop: 10 },
-  trLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E6E1FA' },
-  trTop: { borderTopWidth: 1, borderTopColor: '#E6E1FA' },
-  td: { width: 78, paddingVertical: 11, paddingHorizontal: 4, justifyContent: 'center' },
-  tdName: { flex: 1, width: undefined, fontFamily: fonts.medium, fontSize: 13, lineHeight: 17, color: colors.ink, paddingRight: 8 },
-  th: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.muted, textAlign: 'center' },
-  tdVal: { fontFamily: fonts.medium, fontSize: 12.5, lineHeight: 16, color: colors.muted, textAlign: 'center', textAlignVertical: 'center' },
+  table: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: '#EEE8FB', paddingHorizontal: 14, paddingVertical: 8 },
+  tr: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+  trLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E6E1FA' },
+  name: { flex: 1, fontFamily: fonts.medium, fontSize: 13.5, lineHeight: 18, color: colors.ink },
+  col: { width: 86, textAlign: 'center' },
+  th: { fontFamily: fonts.semibold, fontSize: 12, color: colors.muted, textAlign: 'center' },
+  clubHead: { height: 30, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  val: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17, color: colors.muted },
+  valClub: { fontFamily: fonts.bold, color: '#7A62DE' },
   dash: { color: '#C7C1DD' },
-  clubCol: { backgroundColor: colors.tint, alignItems: 'center' },
-  clubHead: { borderTopLeftRadius: 14, borderTopRightRadius: 14, overflow: 'hidden' },
-  clubLast: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
-  tdClub: { fontFamily: fonts.semibold, color: colors.violetDeep },
   note: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18, color: colors.muted, marginTop: 10 },
   leave: { alignSelf: 'center', marginTop: 26, padding: 8 },
   leaveText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },

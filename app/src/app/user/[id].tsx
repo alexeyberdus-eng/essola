@@ -75,7 +75,7 @@ export default function UserScreen() {
               <Text style={styles.nick}>@{user.nick}</Text>
               {user.club && (
                 <View style={styles.clubBadge}>
-                  <Text style={styles.clubBadgeText}>✦ Essola Клуб</Text>
+                  <Text style={styles.clubBadgeText}>✦ Essola Club</Text>
                 </View>
               )}
               {!!user.name && <Text style={styles.name}>{user.name}</Text>}

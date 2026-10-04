@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Hero } from './Hero';
+import { SOFT } from './SoftHero';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -13,7 +14,7 @@ import { INGREDIENTS } from '../data/ingredients';
 import { personalize } from '../lib/personal';
 import { readJSON, writeJSON } from '../lib/storage';
 import { useProfile } from '../lib/profile';
-import { colors, fonts, LAVENDER, space, TAB_SPACE } from '../theme';
+import { colors, fonts, space, TAB_SPACE } from '../theme';
 import { Icon } from './Icon';
 import { ScoreBadge } from './ScoreBadge';
 import { Brand, Glow } from './silk';
@@ -233,7 +234,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       {toggle}
       <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Очень много кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
       <Press onPress={() => { tap(); router.push('/match' as never); }} style={styles.matchBtn} accessibilityLabel="Подбор средств">
-        <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={SOFT.button} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <Icon name="spark" size={17} color="#fff" />
         <Text style={styles.matchText}>Подбор средств под мои цели</Text>
       </Press>

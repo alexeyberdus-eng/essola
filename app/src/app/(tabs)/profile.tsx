@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useIsAdmin } from '../../lib/admin';
 import { myId, saveMe } from '../../lib/social';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { play, setSounds, soundsOn } from '../../lib/sound';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../../components/Icon';
 import { RecipeRow } from '../../components/RecipeRow';
@@ -120,15 +121,19 @@ export default function ProfileScreen() {
 
         <View style={styles.socialRow}>
           <Press haptic={false} onPress={async () => router.push(`/user/${await myId()}` as never)} style={styles.socialTile}>
-            <Icon name="user" size={20} color={colors.violet} strokeWidth={2} />
-            <Text style={styles.socialTitle}>Мой аккаунт</Text>
-            <Text style={styles.socialText}>как его видят другие · подписчики</Text>
+            <View style={styles.socialIcon}>
+              <Icon name="user" size={19} color="#7A62DE" strokeWidth={2} />
+            </View>
+            <Text style={styles.socialTitle} numberOfLines={1}>Мой аккаунт</Text>
+            <Text style={styles.socialText} numberOfLines={2}>как его видят другие, подписчики</Text>
           </Press>
           <Press haptic={false} onPress={() => router.push('/club' as never)} style={[styles.socialTile, styles.clubTile]}>
-            <LinearGradient colors={['#6A55D8', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 20 }]} />
-            <Icon name="spark" size={20} color="#fff" strokeWidth={2} />
-            <Text style={[styles.socialTitle, { color: '#fff' }]}>Essola Клуб</Text>
-            <Text style={[styles.socialText, { color: 'rgba(255,255,255,0.88)' }]}>бонусы · сейчас 0 ₽</Text>
+            <LinearGradient colors={['#F3ECFF', '#FCE9F3', '#EAF3FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <View style={styles.socialIcon}>
+              <Icon name="spark" size={19} color="#C0679E" strokeWidth={2} />
+            </View>
+            <Text style={styles.socialTitle} numberOfLines={1}>Essola Club</Text>
+            <Text style={styles.socialText} numberOfLines={2}>бонусы и промокоды, сейчас 0 ₽</Text>
           </Press>
         </View>
 
@@ -211,6 +216,7 @@ function AccountLinks({ signedIn, onDeleted }: { signedIn: boolean; onDeleted: (
         <Text style={styles.linkText}>Правила, данные и условия</Text>
         <Icon name="arrowRight" size={15} color={colors.muted} />
       </Press>
+      <SoundRow />
       {blocked.length > 0 && (
         <Press haptic={false} onPress={() => Alert.alert('Скрытые пользователи', `Скрыто: ${blocked.length}. Показать их сообщения снова?`, [{ text: 'Отмена', style: 'cancel' }, { text: 'Показать', onPress: unblockAll }])} style={styles.linkRow}>
           <Icon name="user" size={18} color={colors.violet} />
@@ -360,10 +366,11 @@ const styles = StyleSheet.create({
   importRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC4F7', marginBottom: 10 },
   importText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
   socialRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  socialTile: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7' },
-  clubTile: { borderWidth: 0, overflow: 'hidden' },
+  socialTile: { flex: 1, alignItems: 'flex-start', gap: 4, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: '#EAE6F7', overflow: 'hidden' },
+  socialIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 4, borderWidth: 1, borderColor: '#EFEAFB' },
+  clubTile: { borderColor: '#F0E2F3' },
   socialTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },
-  socialText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+  socialText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
   nick: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet },
   me: { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: '#E4DCFF', overflow: 'hidden' },
   meIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
@@ -419,3 +426,24 @@ const styles = StyleSheet.create({
   shelfName: { fontFamily: fonts.semibold, fontSize: 13.5, lineHeight: 17, color: colors.ink, marginTop: 2 },
   shelfLeft: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 3 },
 });
+
+/** Interface sounds on/off (they are quiet and follow the mute switch anyway). */
+function SoundRow() {
+  const [on, setOn] = useState(soundsOn());
+  return (
+    <View style={styles.linkRow}>
+      <Icon name="bell" size={18} color={colors.violet} />
+      <Text style={styles.linkText}>Звуки в приложении</Text>
+      <Switch
+        value={on}
+        onValueChange={(v) => {
+          setOn(v);
+          setSounds(v);
+          if (v) play('success');
+        }}
+        trackColor={{ true: '#B9A6F5', false: '#E4E1F1' }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}

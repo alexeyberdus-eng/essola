@@ -349,6 +349,55 @@ async function withCompositions(items, iam) {
 
 const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
 
+// ---- Search by keywords: names differ between shops, packs and our base (word order, Latin vs Cyrillic, endings),
+// so a product matches when most of the meaningful words do, in either script.
+const RU2LAT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+const LAT2RU = [['shch', 'щ'], ['sch', 'щ'], ['zh', 'ж'], ['kh', 'х'], ['ts', 'ц'], ['ch', 'ч'], ['sh', 'ш'], ['yu', 'ю'], ['ya', 'я'], ['yo', 'е'], ['iy', 'ий'], ['yy', 'ый'], ['a', 'а'], ['b', 'б'], ['v', 'в'], ['g', 'г'], ['d', 'д'], ['e', 'е'], ['z', 'з'], ['i', 'и'], ['y', 'ы'], ['k', 'к'], ['l', 'л'], ['m', 'м'], ['n', 'н'], ['o', 'о'], ['p', 'п'], ['r', 'р'], ['s', 'с'], ['t', 'т'], ['u', 'у'], ['f', 'ф'], ['h', 'х'], ['c', 'к'], ['w', 'в'], ['x', 'кс'], ['q', 'к'], ['j', 'дж']];
+const toLat = (w) => [...w].map((c) => RU2LAT[c] ?? c).join('');
+const toRu = (w) => {
+  let o = '';
+  let i = 0;
+  outer: while (i < w.length) {
+    for (const [l, r] of LAT2RU) if (w.startsWith(l, i)) {
+      o += r;
+      i += l.length;
+      continue outer;
+    }
+    o += w[i++];
+  }
+  return o;
+};
+const STOP = new Set(['для', 'и', 'с', 'со', 'на', 'в', 'во', 'от', 'по', 'из', 'без', 'the', 'and', 'for', 'with', 'of', 'to', 'in', 'мл', 'ml', 'гр', 'шт', 'купить', 'цена', 'отзывы', 'оригинал', 'new', 'новинка']);
+function keywords(q) {
+  return [...new Set(norm(q).split(' ').filter((w) => w.length > 1 && !STOP.has(w) && !/^\d+(мл|ml|г|g|гр|шт|pcs)?$/.test(w)))].slice(0, 12);
+}
+// Each word gets its spellings: as typed, transliterated, and a stem (Russian endings vary).
+function variants(w) {
+  const cyr = /[а-я]/.test(w);
+  const alt = cyr ? toLat(w) : toRu(w);
+  const out = [w, alt];
+  // Brands written in Cyrillic by ear: «сераве» → serave/cerave, «кьюрел» → kyurel/curel.
+  const lat = cyr ? alt : w;
+  out.push(lat.replace(/s/g, 'c'), lat.replace(/k/g, 'c'), lat.replace(/kyu|ky/g, 'cu'));
+  for (const x of [w, alt]) if (/[а-я]/.test(x) && x.length > 5) out.push(x.slice(0, Math.max(4, x.length - 3)));
+  return [...new Set(out.filter((x) => x.length > 1))];
+}
+/** Products whose brand + title contain most of the query's words, best first. */
+function keywordSearch(list, q, min = 0.6) {
+  const words = keywords(q).map(variants);
+  if (!words.length) return [];
+  const need = words.length <= 2 ? words.length : Math.ceil(words.length * min);
+  const out = [];
+  for (const x of list) {
+    const hay = (x._h ??= ` ${norm(`${x.b || ''} ${x.t || ''}`)} `);
+    let hit = 0;
+    for (const vs of words) if (vs.some((v) => hay.includes(v))) hit++;
+    if (hit >= need) out.push([hit, x]);
+  }
+  out.sort((a, b) => b[0] - a[0] || (a[1].z || 0) - (b[1].z || 0) || (b[1].p || 0) - (a[1].p || 0));
+  return out.map(([hit, x]) => Object.assign(x, { _score: hit / words.length }));
+}
+
 /** Brand + name read from the pack → the product in our Letual base (titles there are Russian, packs often English,
  * so a small text model picks among the brand's products), or a composition found on the web. */
 async function findByLabel(brand, name, kind, iam, model, canWeb = async () => true) {
@@ -394,6 +443,58 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
   const found = { ingredients, web: true };
   await cachePut(ck, iam, found, true).catch(() => {});
   return found;
+}
+
+// ---- Links from Wildberries and Ozon ----
+// Wildberries publishes each card as a static JSON file on its CDN (name, brand, characteristics incl. «Состав»).
+// The CDN host number depends on the article; try the likely one first, then the rest in small batches.
+const WB_RANGES = [143, 287, 431, 719, 1007, 1061, 1115, 1169, 1313, 1601, 1655, 1919, 2045, 2189, 2405, 2621, 2837, 3053, 3269, 3485, 3701, 3917, 4133, 4349, 4565, 4877, 5189, 5501, 5813, 6125, 6437, 6749, 7061, 7373, 7685, 7997, 8309, 8621, 8933, 9245];
+async function wbCard(nm) {
+  const vol = Math.floor(nm / 1e5);
+  const part = Math.floor(nm / 1e3);
+  const guess = WB_RANGES.findIndex((x) => vol <= x) + 1 || WB_RANGES.length;
+  const hosts = [guess, ...Array.from({ length: 40 }, (_, i) => i + 1).filter((i) => i !== guess)];
+  const get = async (h) => {
+    const url = `https://basket-${String(h).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nm}/info/ru/card.json`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(4000) }).catch(() => null);
+    return r && r.ok ? r.json().catch(() => null) : null;
+  };
+  const first = await get(hosts[0]);
+  if (first) return first;
+  for (let i = 1; i < hosts.length; i += 10) {
+    const found = (await Promise.all(hosts.slice(i, i + 10).map(get))).find(Boolean);
+    if (found) return found;
+  }
+  return null;
+}
+/** Shop link → what the shop tells about the product: name, brand, composition when it is published openly. */
+async function fromMarketplace(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^www\./, '');
+  if (/wildberries\.ru$|wb\.ru$/.test(host)) {
+    const nm = Number(u.pathname.match(/catalog\/(\d+)/)?.[1] || u.searchParams.get('card') || 0);
+    if (!nm) return { shop: 'wb' };
+    const c = await wbCard(nm);
+    if (!c) return { shop: 'wb', id: nm };
+    const opts = [...(c.options || []), ...((c.grouped_options || []).flatMap((g) => g.options || []))];
+    const comp = opts.find((o) => /состав/i.test(o.name || ''))?.value || (c.compositions || []).map((x) => x.name).join(', ');
+    return { shop: 'wb', id: nm, title: String(c.imt_name || c.subj_name || '').trim(), brand: String(c.selling?.brand_name || '').trim(), composition: String(comp || '').trim() };
+  }
+  if (/ozon\.ru$/.test(host)) {
+    // Ozon pages are behind bot protection: only the words of the link itself are used (the product slug).
+    const slug = u.pathname.match(/product\/([^/]+?)(?:-\d+)?\/?$/)?.[1] || '';
+    return { shop: 'ozon', title: slug.replace(/-/g, ' ').trim() };
+  }
+  if (/goldapple\.ru$/.test(host)) {
+    const slug = u.pathname.split('/').filter(Boolean).pop() || '';
+    return { shop: 'goldapple', title: slug.replace(/^\d+-/, '').replace(/-/g, ' ').trim() };
+  }
+  return null;
 }
 
 /** One page's text around its ingredient list (what a reader sees, without markup). */
@@ -967,9 +1068,14 @@ async function handle(event, context) {
         if (req.on) data.likes.push(me);
         await put(key, data);
       }
+      // Product reviews: one per person (a new one replaces the old), with the person's stars next to it.
+      const product = String(req.key || '').startsWith('product:');
       if (req.mode === 'social.comment' && me && clean(req.text, 500)) {
         await ensureUser(get, put, me, req.nick);
-        data.comments = [...data.comments, { id: Date.now().toString(36), user: me, nick: clean(req.nick, 24) || 'user', text: clean(req.text, 500), at: new Date().toISOString() }].slice(-200);
+        const n = Math.round(Number(req.stars));
+        if (product && n >= 1 && n <= 5) data.rates = { ...(data.rates || {}), [me]: n };
+        const prev = product ? data.comments.filter((c) => c.user !== me) : data.comments;
+        data.comments = [...prev, { id: Date.now().toString(36), user: me, nick: clean(req.nick, 24) || 'user', text: clean(req.text, 500), at: new Date().toISOString() }].slice(-200);
         await put(key, data);
       }
       if (req.mode === 'social.rate' && me) {
@@ -981,7 +1087,7 @@ async function handle(event, context) {
       }
       const votes = Object.values(data.rates || {});
       const rating = { avg: votes.length ? Math.round((votes.reduce((a, b) => a + b, 0) / votes.length) * 10) / 10 : 0, count: votes.length, mine: (data.rates || {})[me] || 0 };
-      return reply(200, { likes: data.likes.length, liked: data.likes.includes(me), comments: data.comments.slice(-50), rating });
+      return reply(200, { likes: data.likes.length, liked: data.likes.includes(me), comments: data.comments.slice(-50).map((c) => ({ ...c, stars: (data.rates || {})[c.user] || 0 })), rating });
     }
     if (req.mode === 'catalog') {
       // Ready-made catalog built weekly by CI (scripts/build-catalog.ts), kept warm between calls.
@@ -997,7 +1103,7 @@ async function handle(event, context) {
         list = [...letuList, ...obf];
         if (withIng) list = list.filter((x) => withIng.has(x.k));
         if (req.cat) list = list.filter((x) => x.c === req.cat);
-        if (words.length) list = list.filter((x) => words.every((w) => `${x.t} ${x.b}`.toLowerCase().includes(w)));
+        if (words.length) list = keywordSearch(list, String(req.q));
         // Products without a published composition (z) have no score: they go last when sorting by score.
         if (req.sort === 'best') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || b.s - a.s);
         else if (req.sort === 'worst') list = [...list].sort((a, b) => (a.z || 0) - (b.z || 0) || a.s - b.s);
@@ -1018,7 +1124,10 @@ async function handle(event, context) {
       const base = await loadLetu(iam);
       // Before the catalog has been rebuilt with tags, filter by category only and let the app check the compositions.
       const tagged = base.some((x) => x.m);
-      let list = base.filter((x) => !x.z && (!tagged || x.m) && (!cats.size || cats.has(x.c)));
+      // Chosen ingredients: the product must contain all of them (lists built by CI, see ingrList).
+      const ingSlugs = (Array.isArray(req.ings) ? req.ings : []).map((x) => String(x).replace(/[^a-z0-9-]/g, '').slice(0, 80)).filter(Boolean).slice(0, 6);
+      const ingSets = await Promise.all(ingSlugs.map((x) => ingrList(x, iam)));
+      let list = base.filter((x) => !x.z && (!tagged || x.m) && (!cats.size || cats.has(x.c)) && ingSets.every((set) => set.has(x.k)));
       if (tagged && goals) list = list.filter((x) => [...goals].some((g) => x.m.includes(g)));
       if (tagged && free) list = list.filter((x) => [...free].every((f) => x.m.includes(f)));
       // How many of the chosen goals a product covers comes first, then the chosen order.
@@ -1170,6 +1279,28 @@ async function handle(event, context) {
       await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), null, ingredients, 'shop').catch(() => {});
       return reply(200, { ok: true });
     }
+    if (req.mode === 'link') {
+      // Wildberries / Ozon / Gold Apple link: the shop's composition when it is open, otherwise the product
+      // found in our base by the words of its name (or of the link), then the web.
+      const info = await fromMarketplace(String(req.url || ''));
+      if (!info) return reply(400, { error: 'unsupported_shop' });
+      const list = info.composition ? info.composition.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
+      if (list.length >= 4) return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ingredients: list });
+      const name = [info.brand, info.title].filter(Boolean).join(' ');
+      if (!name) return reply(200, { shop: info.shop, none: true });
+      const base = await loadLetu(iam);
+      const found = keywordSearch(base, name).filter((x) => !x.z).slice(0, 5);
+      if (found[0] && found[0]._score >= 0.8 && (!found[1] || found[1]._score < found[0]._score)) {
+        const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
+        return reply(200, { shop: info.shop, title: info.title, brand: info.brand, item });
+      }
+      if (found.length) {
+        const items = await withCompositions(found.map(({ g, _h, _score, ...x }) => x), iam);
+        return reply(200, { shop: info.shop, title: info.title, brand: info.brand, candidates: items });
+      }
+      const more = await findByLabel(info.brand || '', info.title || '', '', iam, textModel, () => allow('web')).catch(() => ({}));
+      return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ...more });
+    }
     if (req.mode === 'url') {
       let host = '';
       try {
@@ -1292,3 +1423,4 @@ async function handle(event, context) {
     return reply(500, { error: 'failed', detail: String(e && e.message || e).slice(0, 400) });
   }
 }
+module.exports._keywordSearch = keywordSearch;

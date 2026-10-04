@@ -1,3 +1,4 @@
+import { play } from '../lib/sound';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode, useRef } from 'react';
@@ -11,6 +12,9 @@ export function T({ v = 'body', style, ...rest }: TextProps & { v?: keyof typeof
 
 export function tap(kind: 'light' | 'medium' | 'success' = 'light') {
   if (Platform.OS === 'web') return;
+  // A soft chime for results (found, saved, recognised); light taps stay silent.
+  if (kind === 'success') play('success');
+  else if (kind === 'medium') play('tap');
   if (kind === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   else Haptics.impactAsync(kind === 'medium' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }

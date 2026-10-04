@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Hint } from '../components/Hint';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { ScoreBadge } from '../components/ScoreBadge';
 import { useLibrary } from '../context/LibraryContext';
@@ -18,7 +18,10 @@ import type { Profile } from '../lib/profile';
 import { CatalogItem, matchProducts } from '../lib/ai';
 import { FREE_TAGS, GOAL_TAGS, productTags } from '../lib/tags';
 import { Dropdown } from '../components/Dropdown';
-import { Hero } from '../components/Hero';
+import { SOFT, SoftHero } from '../components/SoftHero';
+import { LinearGradient } from 'expo-linear-gradient';
+import { normalize } from '../lib/analyze';
+import { BaseIngredient, ingredientSlug } from '../lib/baseIngredient';
 import { Icon } from '../components/Icon';
 import { RECIPE_INCI } from '../lib/wiki';
 import { colors, fonts, space } from '../theme';
@@ -85,6 +88,14 @@ export default function Match() {
   const [cats, setCats] = useState<string[]>([]);
   const [pg, setPg] = useState<string[]>([]);
   const [free, setFree] = useState<string[]>([]);
+  // Ingredients the product must contain (all of them).
+  const [ings, setIngs] = useState<BaseIngredient[]>([]);
+  const [ingQ, setIngQ] = useState('');
+  const ingFound = useMemo(() => {
+    const n = normalize(ingQ);
+    if (n.length < 2) return [];
+    return INGREDIENTS.filter((i) => !ings.some((x) => x.slug === ingredientSlug(i.inci)) && [i.ru, i.inci, ...i.aliases].some((t) => normalize(t).includes(n))).slice(0, 6);
+  }, [ingQ, ings]);
   const [useMe, setUseMe] = useState(profile.done);
   const [sort, setSort] = useState<(typeof SORTS)[number][0]>('score');
   const [found, setFound] = useState<{ items: CatalogItem[]; total: number; page: number; exact: boolean } | null>(null);
@@ -101,8 +112,8 @@ export default function Match() {
     const me = useMe && profile.done ? profileTags(profile) : { goals: new Set<string>(), free: new Set<string>() };
     const g = new Set([...pg, ...[...me.goals].filter((x) => area.goals.includes(x as keyof typeof GOAL_TAGS))]);
     const f = new Set([...free, ...me.free]);
-    return { cats: cats.length ? cats : area.cats.map((c) => c[0]), goals: [...g].join(''), free: [...f].join(''), sort };
-  }, [area, cats, pg, free, useMe, profile, sort]);
+    return { cats: cats.length ? cats : area.cats.map((c) => c[0]), goals: [...g].join(''), free: [...f].join(''), sort, ings: ings.map((x) => x.slug) };
+  }, [area, cats, pg, free, useMe, profile, sort, ings]);
   const qKey = JSON.stringify(query);
   // The search runs only on the button: filters can be changed freely without a request per tap.
   const [runKey, setRunKey] = useState<string | null>(null);
@@ -207,7 +218,7 @@ export default function Match() {
         <View style={styles.top}>
           <IconButton icon="arrowLeft" label="Назад" onPress={() => router.back()} />
         </View>
-        <Hero kicker="Подбор essola" title="Подбор под ваши цели" text="Средства из нашей базы с оценкой состава или рецепты, которые можно сварить дома." tone="sky" style={{ marginTop: 4 }} />
+        <SoftHero kicker="Подбор essola" title="Подбор под ваши цели" text="Средства из нашей базы с оценкой состава или рецепты, которые можно сварить дома." style={{ marginTop: 4 }} />
 
         <View style={styles.switch}>
           {(
@@ -217,6 +228,7 @@ export default function Match() {
             ] as const
           ).map(([k, l]) => (
             <Press key={k} haptic={false} onPress={() => { tap(); setWhat(k); }} style={[styles.sw, what === k && styles.swOn]}>
+              {what === k && <LinearGradient colors={SOFT.button} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 12 }]} />}
               <Text style={[styles.swText, what === k && styles.swTextOn]}>{l}</Text>
             </Press>
           ))}
@@ -250,6 +262,41 @@ export default function Match() {
               <Dropdown label="Сортировка" options={SORTS.map(([k, l]) => ({ key: k, label: l }))} value={sort} onChange={(v) => v && setSort(v as (typeof SORTS)[number][0])} />
             </View>
 
+            <View style={styles.ingBox}>
+              <Text style={styles.ingLabel}>С ингредиентами</Text>
+              {ings.length > 0 && (
+                <View style={styles.ingChips}>
+                  {ings.map((x) => (
+                    <Press key={x.slug} haptic={false} onPress={() => { tap(); setIngs(ings.filter((y) => y.slug !== x.slug)); }} style={styles.ingChip} accessibilityLabel={`Убрать ${x.label}`}>
+                      <Text style={styles.ingChipText}>{x.label}</Text>
+                      <Icon name="close" size={12} color="#6B55D6" />
+                    </Press>
+                  ))}
+                </View>
+              )}
+              {ings.length < 6 && (
+                <View style={styles.ingInputRow}>
+                  <Icon name="plus" size={15} color={colors.muted} />
+                  <TextInput value={ingQ} onChangeText={setIngQ} placeholder={ings.length ? 'Ещё ингредиент' : 'Ниацинамид, пептиды, церамиды…'} placeholderTextColor={colors.faint} style={styles.ingInput} />
+                </View>
+              )}
+              {ingFound.map((i) => (
+                <Press
+                  key={i.inci}
+                  haptic={false}
+                  onPress={() => {
+                    tap();
+                    setIngs([...ings, { slug: ingredientSlug(i.inci), label: i.ru || i.inci }]);
+                    setIngQ('');
+                  }}
+                  style={styles.ingRow}
+                >
+                  <Text style={styles.ingRowRu}>{i.ru}</Text>
+                  <Text style={styles.ingRowInci} numberOfLines={1}>{i.inci}</Text>
+                </Press>
+              ))}
+            </View>
+
             <Press
               onPress={() => {
                 if (busy) return;
@@ -257,6 +304,7 @@ export default function Match() {
               }}
               style={[styles.go, busy && { opacity: 0.7 }]}
             >
+              <LinearGradient colors={SOFT.button} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
               {busy && !found ? <ActivityIndicator color="#fff" /> : <Text style={styles.goText}>{found && !stale ? 'Подобрать заново' : 'Подобрать'}</Text>}
             </Press>
             {runKey && !stale && (busy || found) ? (
@@ -324,14 +372,14 @@ const styles = StyleSheet.create({
   chipPick: { backgroundColor: colors.violet, borderColor: colors.violet },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },
-  switch: { flexDirection: 'row', marginTop: 18, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
+  switch: { flexDirection: 'row', marginTop: 18, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EEE8FB' },
   sw: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  swOn: { backgroundColor: colors.accent },
+  swOn: { overflow: 'hidden' },
   swText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
   swTextOn: { fontFamily: fonts.semibold, color: '#fff' },
-  me: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 12, borderRadius: 18, backgroundColor: '#F6F7FD', borderWidth: 1, borderColor: '#E6E8F6' },
+  me: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 12, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EEE8FB' },
   box: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#C9CDE0', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  boxOn: { backgroundColor: colors.violet, borderColor: colors.violet },
+  boxOn: { backgroundColor: '#A48BF0', borderColor: '#A48BF0' },
   meTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink },
   meText: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 17, color: colors.muted, marginTop: 1 },
   prod: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginTop: 8, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EAE6F7' },
@@ -339,7 +387,17 @@ const styles = StyleSheet.create({
   prodBrand: { fontFamily: fonts.semibold, fontSize: 11.5, color: colors.violet, textTransform: 'uppercase' },
   prodTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink },
   meta: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
-  go: { height: 54, marginTop: 22, borderRadius: 18, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
+  go: { height: 54, marginTop: 22, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', shadowColor: '#B48BE8', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } },
+  ingBox: { marginTop: 12, padding: 14, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EEE8FB' },
+  ingLabel: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.ink },
+  ingChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  ingChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 99, backgroundColor: '#F1ECFF' },
+  ingChipText: { fontFamily: fonts.semibold, fontSize: 13, color: '#6B55D6' },
+  ingInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingHorizontal: 12, height: 42, borderRadius: 14, backgroundColor: '#F8F6FE' },
+  ingInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
+  ingRow: { paddingVertical: 9, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  ingRowRu: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  ingRowInci: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 1 },
   goText: { fontFamily: fonts.semibold, fontSize: 16, color: '#fff' },
   staleNote: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, marginTop: 14, marginBottom: 4 },
   more: { height: 46, marginTop: 12, borderRadius: 16, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },

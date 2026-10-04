@@ -128,7 +128,7 @@ export function LinkHelp({ inline }: { inline?: boolean }) {
               <Icon name="close" size={18} color={colors.ink} />
             </Press>
           </View>
-          <Text style={styles.lead}>Скопируйте ссылку на товар из Летуаль — мы сами найдём состав и оценим его.</Text>
+          <Text style={styles.lead}>Скопируйте ссылку на товар из Летуаль, Wildberries, Ozon или Золотого Яблока — мы сами найдём состав и оценим его.</Text>
           <View style={styles.seg}>
             {(
               [

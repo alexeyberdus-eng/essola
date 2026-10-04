@@ -35,7 +35,7 @@ export async function myId() {
 
 export type PublicUser = { id: string; nick: string; name?: string; bio?: string; /** Essola Club member */ club?: boolean };
 export type CommunityItem = { user: PublicUser; recipe: Recipe; at: string };
-export type Social = { likes: number; liked: boolean; comments: { id: string; user: string; nick: string; text: string; at: string }[]; rating?: { avg: number; count: number; mine: number } };
+export type Social = { likes: number; liked: boolean; comments: { id: string; user: string; nick: string; text: string; at: string; stars?: number }[]; rating?: { avg: number; count: number; mine: number } };
 
 export async function saveMe(nick: string, name?: string | null) {
   if (!socialEnabled) return;
@@ -72,8 +72,8 @@ export async function like(key: string, on: boolean): Promise<Social> {
 export async function rate(key: string, stars: number): Promise<Social> {
   return call<Social>({ mode: 'social.rate', key, stars, id: await myId() });
 }
-export async function comment(key: string, nick: string, text: string): Promise<Social> {
-  return call<Social>({ mode: 'social.comment', key, nick, text, id: await myId() });
+export async function comment(key: string, nick: string, text: string, stars?: number): Promise<Social> {
+  return call<Social>({ mode: 'social.comment', key, nick, text, stars, id: await myId() });
 }
 
 

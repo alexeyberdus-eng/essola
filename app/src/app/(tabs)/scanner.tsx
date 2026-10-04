@@ -15,7 +15,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiLabel, aiScan, isLimit, LIMIT_NOTE, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiLabel, aiScan, isLimit, LIMIT_NOTE, linkLookup, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -27,7 +27,7 @@ import { colors, fonts, radius, scoreColor, shadow, space } from '../../theme';
 const webOcr = !nativeOcr && Platform.OS !== 'web';
 const native = Platform.OS !== 'web';
 
-const LINK_NOTICE = 'Скопируйте ссылку на товар в приложении или на сайте Летуаль и нажмите «Ссылка Летуаль» ещё раз. Для других магазинов сделайте скриншот состава и загрузите его через «Галерея».';
+const LINK_NOTICE = 'Скопируйте ссылку на товар в Летуаль, Wildberries, Ozon или Золотом Яблоке и нажмите «Ссылка» ещё раз. Если ссылки нет — сделайте скриншот состава и загрузите его через «Галерея».';
 
 type Mode = 'barcode' | 'label' | 'front' | 'cz';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
@@ -279,6 +279,30 @@ export default function ScannerScreen() {
     setBusy(true);
     setNotice(null);
     try {
+      if (!/letu\.ru/i.test(url)) {
+        // Wildberries, Ozon, Gold Apple: the shop's composition if it's open, else our base by the product's name.
+        const r = await linkLookup(url);
+        setBusy(false);
+        const SHOP: Record<string, string> = { wb: 'Wildberries', ozon: 'Ozon', goldapple: 'Золотое Яблоко' };
+        const name = [r.brand, r.title].filter(Boolean).join(' ');
+        if (r.ingredients && r.ingredients.length >= 3) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
+        if (r.item?.x) {
+          tap('success');
+          const a = analyze(r.item.x);
+          const scan = saveScan({ title: [r.item.b, r.item.t].filter(Boolean).join(' · '), text: r.item.x, overall: a.scores.overall, source: sourceOf(r.item.k), image: r.item.i || null, url: r.item.u });
+          router.push(`/analysis/${scan.id}`);
+          return;
+        }
+        if (r.candidates?.length) {
+          setLookup({ code: '', state: 'missing', name: name || null });
+          setFindQ(name);
+          setMatches(r.candidates.filter((x) => x.x));
+          return;
+        }
+        if (r.limited) return setNotice(LIMIT_NOTE);
+        setNotice(name ? `Нашли «${name}», но состав в открытом доступе не нашёлся. Сфотографируйте состав на упаковке или сделайте скриншот со страницы товара.` : 'Не получилось прочитать ссылку. Сделайте скриншот состава со страницы товара и загрузите через «Галерея».');
+        return;
+      }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
         // Not in our base yet: open the page in the app and read it there.
@@ -288,8 +312,8 @@ export default function ScannerScreen() {
       }
       setBusy(false);
       finish(`Состав: ${product.ingredients.join(', ')}`, product.title ?? undefined, { source: product.source }, true);
-    } catch {
-      setNotice('Не получилось открыть ссылку — проверьте интернет.');
+    } catch (e) {
+      setNotice(isLimit(e) ? LIMIT_NOTE : 'Не получилось открыть ссылку — проверьте интернет.');
       setBusy(false);
     }
   };
@@ -572,7 +596,7 @@ export default function ScannerScreen() {
               {aiEnabled && !lookup && (
                 <Press onPress={pasteLink} style={styles.action}>
                   <View style={styles.actionIcon}><Icon name="external" size={19} color={colors.violet} /></View>
-                  <Text style={styles.actionText}>Ссылка Летуаль</Text>
+                  <Text style={styles.actionText}>Ссылка</Text>
                 </Press>
               )}
             </View>

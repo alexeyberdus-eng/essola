@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { ago } from '../data/community';
-import { comment, rate, social, Social, socialEnabled } from '../lib/social';
+import { comment, myId, social, Social, socialEnabled } from '../lib/social';
 import { ensureRules, moderate, postError, useBlocked } from '../lib/moderation';
 import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
@@ -27,35 +27,43 @@ function Stars({ value, size = 18, onPick }: { value: number; size?: number; onP
   );
 }
 
-/** Users' star ratings and short reviews of one product, shared through our community storage. */
+/** Reviews of one product: one per person — stars and a few words — shared through our community storage. */
 export function ProductReviews({ id }: { id: string }) {
   const { user } = useAuth();
   const key = `product:${id}`;
   const [data, setData] = useState<Social | null>(null);
+  const [me, setMe] = useState<string | null>(null);
+  const [stars, setStars] = useState(0);
   const [text, setText] = useState('');
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const { isBlocked } = useBlocked();
   useEffect(() => {
+    myId().then(setMe);
     if (socialEnabled) social(key).then(setData).catch(() => {});
   }, [key]);
   if (!socialEnabled) return null;
   const r = data?.rating;
+  const mine = data?.comments.find((c) => c.user === me) ?? null;
+  const others = (data?.comments ?? []).filter((c) => c.user !== me && !isBlocked(c.user)).slice().reverse().slice(0, 20);
+  const form = !mine || editing;
 
-  const pick = async (n: number) => {
-    if (!user) return router.push('/auth');
-    tap('light');
-    setData((d) => (d ? { ...d, rating: { avg: r?.count ? r.avg : n, count: r?.count || 1, mine: n } } : d));
-    rate(key, n).then(setData).catch(() => {});
+  const startEdit = () => {
+    tap();
+    setStars(mine?.stars || r?.mine || 0);
+    setText(mine?.text ?? '');
+    setEditing(true);
   };
   const send = async () => {
     if (!user) return router.push('/auth');
-    if (!text.trim() || busy) return;
+    if (!stars || !text.trim() || busy) return;
     if (!(await ensureRules())) return;
     tap('medium');
     setBusy(true);
     try {
-      setData(await comment(key, user.nick || user.name || 'гость', text.trim()));
+      setData(await comment(key, user.nick || user.name || 'гость', text.trim(), stars));
       setText('');
+      setEditing(false);
     } catch (e) {
       postError(e);
     }
@@ -67,7 +75,7 @@ export function ProductReviews({ id }: { id: string }) {
       <View style={styles.head}>
         <View>
           <Text style={styles.title}>Отзывы</Text>
-          <Text style={styles.sub}>{r?.count ? `${r.count} ${r.count === 1 ? 'оценка' : r.count < 5 ? 'оценки' : 'оценок'}` : 'Оценок пока нет — будьте первой'}</Text>
+          <Text style={styles.sub}>{r?.count ? `${r.count} ${r.count === 1 ? 'отзыв' : r.count < 5 ? 'отзыва' : 'отзывов'}` : 'Отзывов пока нет — будьте первой'}</Text>
         </View>
         {!!r?.count && (
           <View style={{ alignItems: 'flex-end' }}>
@@ -76,37 +84,55 @@ export function ProductReviews({ id }: { id: string }) {
           </View>
         )}
       </View>
-      <View style={styles.mine}>
-        <Text style={styles.mineText}>{r?.mine ? 'Ваша оценка' : 'Пользовались? Оцените'}</Text>
-        <Stars value={r?.mine ?? 0} size={26} onPick={pick} />
-      </View>
-      {data?.comments
-        .filter((c) => !isBlocked(c.user))
-        .slice()
-        .reverse()
-        .slice(0, 20)
-        .map((c) => (
-          <View key={c.id} style={styles.comment}>
-            <View style={styles.meta}>
-              <Press haptic={false} onPress={() => router.push(`/user/${c.user}` as never)} hitSlop={6}>
-                <Text style={styles.nick}>@{c.nick}</Text>
-              </Press>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={styles.time}>{ago(c.at)}</Text>
-                <Press haptic={false} onPress={() => moderate({ kind: 'review', target: `${key}/${c.id}`, author: { id: c.user, nick: c.nick }, text: c.text })} accessibilityLabel="Ещё">
-                  <Icon name="more" size={16} color={colors.muted} />
-                </Press>
-              </View>
-            </View>
-            <Text style={styles.text}>{c.text}</Text>
+
+      {mine && !editing && (
+        <View style={[styles.comment, styles.mineCard]}>
+          <View style={styles.meta}>
+            <Text style={styles.nick}>Ваш отзыв</Text>
+            <Stars value={mine.stars ?? 0} size={14} />
           </View>
-        ))}
-      <View style={styles.bar}>
-        <TextInput value={text} onChangeText={setText} placeholder={user ? 'Как средство подошло вам?' : 'Войдите, чтобы оставить отзыв'} placeholderTextColor={colors.faint} style={styles.input} multiline maxLength={500} editable={!!user} />
-        <Press onPress={send} disabled={busy} style={styles.send} accessibilityLabel="Отправить отзыв">
-          {busy ? <ActivityIndicator color="#fff" /> : <Icon name={user ? 'send' : 'user'} size={17} color="#fff" />}
-        </Press>
-      </View>
+          <Text style={styles.text}>{mine.text}</Text>
+          <Press haptic={false} onPress={startEdit} style={{ alignSelf: 'flex-start' }}>
+            <Text style={styles.edit}>Изменить</Text>
+          </Press>
+        </View>
+      )}
+
+      {form && (
+        <View style={styles.formBox}>
+          <View style={styles.mine}>
+            <Text style={styles.mineText}>{user ? 'Ваша оценка' : 'Пользовались? Оцените'}</Text>
+            <Stars value={stars} size={26} onPick={(n) => (user ? (tap('light'), setStars(n)) : router.push('/auth'))} />
+          </View>
+          <View style={styles.bar}>
+            <TextInput value={text} onChangeText={setText} placeholder={user ? 'Как средство подошло вам?' : 'Войдите, чтобы оставить отзыв'} placeholderTextColor={colors.faint} style={styles.input} multiline maxLength={500} editable={!!user} />
+            <Press onPress={send} disabled={busy || (!!user && (!stars || !text.trim()))} style={[styles.send, !!user && (!stars || !text.trim()) && { opacity: 0.45 }]} accessibilityLabel="Отправить отзыв">
+              {busy ? <ActivityIndicator color="#fff" /> : <Icon name={user ? 'send' : 'user'} size={17} color="#fff" />}
+            </Press>
+          </View>
+          {!!user && !stars && !!text.trim() && <Text style={styles.hint}>Поставьте оценку звёздами</Text>}
+        </View>
+      )}
+
+      {others.map((c) => (
+        <View key={c.id} style={styles.comment}>
+          <View style={styles.meta}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+              <Press haptic={false} onPress={() => router.push(`/user/${c.user}` as never)} hitSlop={6}>
+                <Text style={styles.nick} numberOfLines={1}>@{c.nick}</Text>
+              </Press>
+              {!!c.stars && <Stars value={c.stars} size={12} />}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={styles.time}>{ago(c.at)}</Text>
+              <Press haptic={false} onPress={() => moderate({ kind: 'review', target: `${key}/${c.id}`, author: { id: c.user, nick: c.nick }, text: c.text })} accessibilityLabel="Ещё">
+                <Icon name="more" size={16} color={colors.muted} />
+              </Press>
+            </View>
+          </View>
+          <Text style={styles.text}>{c.text}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -126,5 +152,9 @@ const styles = StyleSheet.create({
   text: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, backgroundColor: '#FBFAFE' },
+  mineCard: { borderTopWidth: 0, paddingTop: 12, padding: 12, borderRadius: 16, backgroundColor: '#F6F3FF' },
+  edit: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet, marginTop: 4 },
+  formBox: { gap: 10 },
+  hint: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.warn },
   send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
 });

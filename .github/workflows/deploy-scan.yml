@@ -86,7 +86,10 @@ jobs:
                    '{"mode":"nk","gtin":"04607043450067"}' \
                    '{"mode":"catalog","sort":"best","size":2}' \
                    '{"mode":"catalog","sort":"best","size":2,"page":2}' \
-                   '{"mode":"admin.check","admin":"wrong-password-smoke"}'; do
+                   '{"mode":"admin.check","admin":"wrong-password-smoke"}' \
+                   '{"mode":"link","url":"https://www.ozon.ru/product/cerave-foaming-cleanser-gel-dlya-umyvaniya-litsa-sredstvo-ochishchayushchee-dlya-zhirnoy-i-1116109550/"}' \
+                   '{"mode":"link","url":"https://www.wildberries.ru/catalog/14152358/detail.aspx"}' \
+                   '{"mode":"catalog","q":"сераве увлажняющий крем","size":2}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done
           for D in privacy terms support; do curl -s -o /dev/null -w "page $D HTTP %{http_code}\n" "https://functions.yandexcloud.net/$ID?doc=$D"; done

@@ -10,7 +10,7 @@ const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
 /** The server counts paid requests per account (or per phone when signed out): 50 a day of each kind. */
-export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Клубе (Профиль → Essola Клуб, сейчас бесплатно) лимит втрое больше.';
+export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Club (Профиль → Essola Club, сейчас бесплатно) лимит втрое больше.';
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
@@ -125,7 +125,12 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
   return call<{ product: CachedProduct | null; error?: string }>({ mode: 'url', url });
 }
 
-export const SHOP_LINK = /https?:\/\/(?:www\.)?letu\.ru\/\S+/i;
+export const SHOP_LINK = /https?:\/\/(?:www\.)?(?:letu\.ru|goldapple\.ru|wildberries\.ru|wb\.ru|ozon\.ru)\/\S+/i;
+
+/** Wildberries / Ozon / Gold Apple link → the shop's open composition, our product, close candidates, or the web. */
+export async function linkLookup(url: string): Promise<{ shop?: string; title?: string; brand?: string; ingredients?: string[]; item?: CatalogItem; candidates?: CatalogItem[]; limited?: boolean; none?: boolean }> {
+  return call({ mode: 'link', url });
+}
 
 /** Saves a composition read from a shop page into the shared base. */
 /** Unknown barcode → product name found on the web (marketplaces, shops, barcode catalogs). */
@@ -153,7 +158,7 @@ export async function searchProducts(q: string): Promise<CachedProduct[]> {
 
 export type CatalogItem = { k: string; t: string; b: string; i: string; x: string; c: string; s: number; n: number; u?: string; /** composition not published */ z?: 1; /** goal and free-from tags, see lib/tags.ts */ m?: string; /** Letual rating 0–5 */ r?: number; p?: number };
 /** «Подбор средств»: products from our base by category, goals (any) and free-from tags (all). */
-export async function matchProducts(opts: { cats: string[]; goals: string; free: string; sort: 'score' | 'rating' | 'popular'; page: number }): Promise<{ items: CatalogItem[]; total: number; untagged?: boolean } | null> {
+export async function matchProducts(opts: { cats: string[]; goals: string; free: string; sort: 'score' | 'rating' | 'popular'; page: number; ings?: string[] }): Promise<{ items: CatalogItem[]; total: number; untagged?: boolean } | null> {
   if (!aiEnabled) return null;
   try {
     return await call<{ items: CatalogItem[]; total: number; untagged?: boolean }>({ mode: 'match', ...opts, size: 40 });

@@ -1,3 +1,4 @@
+import { play } from '../lib/sound';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { readJSON, writeJSON } from '../lib/storage';
 import { supabase } from '../lib/supabase';
@@ -72,6 +73,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       setLiked((prev) => {
         const next = new Set(prev);
+        if (!prev.has(id)) play('like');
         const adding = !next.has(id);
         adding ? next.add(id) : next.delete(id);
         writeJSON(`essola.likes.${owner}`, [...next]);
