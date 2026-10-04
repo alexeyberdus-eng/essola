@@ -61,7 +61,7 @@ function parse(html) {
   const img = html.match(/id="product-main-image"[\s\S]{0,400}?src="([^"]+)"/)?.[1] ?? '';
   const block = html.split('id="showmore-section-ingredlist-short"')[1]?.split('id="showmore-section-ingredlist-long"')[0] ?? '';
   const ingredients = [...block.matchAll(/class="ingred-link[^"]*"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => text(m[1])).filter(Boolean);
-  return { b: brand, t: title, i: img, x: ingredients.join(', ') };
+  return { b: brand, t: title, i: img, x: [...new Set(ingredients)].join(', ') };
 }
 
 async function fetchShard(idsDir, shard, of, outDir) {

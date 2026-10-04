@@ -297,7 +297,9 @@ async function withCompositions(items, iam) {
   const shardKey = (k) => `${k.startsWith('inci:') ? 'inci' : 'letu'}/${crypto.createHash('sha1').update(k).digest('hex').slice(0, 3)}`;
   const need = [...new Set(items.filter((x) => !x.x && !x.z && /^(letu|inci):/.test(x.k)).map((x) => shardKey(x.k)))];
   const loaded = Object.fromEntries(await Promise.all(need.map(async (h) => [h, await letuShard(h, iam)])));
-  return items.map((x) => (x.x || x.z || !/^(letu|inci):/.test(x.k) ? x : { ...x, x: loaded[shardKey(x.k)]?.[x.k] || '' }));
+  // INKEEDecoder pages repeat parts of the list further down (highlights): keep each ingredient once, in label order.
+  const once = (k, t) => (k.startsWith('inci:') && t ? [...new Set(t.split(/\s*,\s*/))].join(', ') : t);
+  return items.map((x) => (x.x || x.z || !/^(letu|inci):/.test(x.k) ? x : { ...x, x: once(x.k, loaded[shardKey(x.k)]?.[x.k] || '') }));
 }
 
 const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
