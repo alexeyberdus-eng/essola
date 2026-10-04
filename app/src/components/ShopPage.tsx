@@ -54,9 +54,9 @@ const FIND = `
         return;
       }
     } catch (e) {}
-    setTimeout(tick, 800);
+    setTimeout(tick, 500);
   }
-  setTimeout(tick, 1000);
+  setTimeout(tick, 400);
 })();
 true;
 `;

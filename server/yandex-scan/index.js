@@ -13,6 +13,7 @@ const SCAN = `Выпиши с фото состав косметики (посл
 const DESCRIBE = `Ты косметолог-технолог. По списку ингредиентов (по убыванию доли) коротко и понятно объясни, что даёт средство. Если указано «Средство» (название с упаковки) — не угадывай тип, он известен: оцени, насколько состав эффективен именно для такого средства и его обещаний. Верни ТОЛЬКО JSON:
 {"lead":"1–2 предложения: что это за средство и насколько состав справляется со своей задачей","effects":[{"title":"2–3 слова","text":"какие компоненты и что делают, до 12 слов"}],"weak":"главная слабая сторона состава для этого средства, одно предложение до 18 слов, или пустая строка","use":["куда и как применять, до 12 слов"]}
 effects: 2–4 пункта, use: 1–3 пункта. Каждый ингредиент упоминай один раз. Без медицинских обещаний, без выдуманных ингредиентов.`;
+const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй средства «А» и «Б» или по коротким названиям. Не выдумывай того, чего нет в составе.`;
 const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
 + ингредиент (INCI) | доля | что даст, до 14 слов
@@ -514,7 +515,12 @@ function balanceReview(out, items) {
     if (c && !Number.isNaN(num(r.to))) net += num(r.to) - c.pct;
   }
   for (const c of removed) net -= c.pct;
-  net = r1(net);
+  // The formula itself may not be at 100% yet (88% + advice): the advice has to finish it.
+  const sum = r1(cur.reduce((a, c) => a + c.pct, 0));
+  if (cur.length && Math.abs(sum - 100) >= 0.1 && /хорош|сбаланс|стабильн|готов/i.test(out.verdict || '') && !out.add.length && !out.reduce.length) {
+    out.verdict = `Сейчас сумма формулы ${String(sum).replace('.', ',')}%, а должна быть ровно 100%. Доведите её до 100% — как показано ниже — и формула будет завершена.`;
+  }
+  net = r1(net + sum - 100);
   if (Math.abs(net) < 0.1) return out;
   // The base takes the difference: the largest share that is kept, at its new value if the advice already changes it.
   const donors = cur.filter((c) => !removed.has(c)).map((c) => ({ c, line: out.reduce.find((r) => find(r.name) === c) }));
@@ -732,14 +738,17 @@ async function handle(event, context) {
     };
     // ---- Daily limits on what costs money (model calls, web search): per account, else per device,
     // plus a looser one per network address so a reinstalled app doesn't reset them.
-    const LIMIT = Number(process.env.DAILY_LIMIT) || 50;
-    const CLUB_X = 3;
+    // Free: 3 a day of each paid kind; Essola Club: 10. Product descriptions are cached for everyone and open with
+    // every new product card, so they have their own, larger allowance.
+    const LIMIT = Number(process.env.DAILY_LIMIT) || 3;
+    const CLUB_LIMIT = 10;
+    const DESCRIBE = [30, 100];
     const ip = String(event.requestContext?.identity?.sourceIp || h['x-forwarded-for'] || '').split(',')[0].trim();
-    const allow = async (what, n = LIMIT) => {
+    const allow = async (what, n = LIMIT, clubN = CLUB_LIMIT) => {
       if (await adminOk()) return true;
       const me = await sessionUid();
-      // Essola Club members get three times as much.
-      if (me && (await get(`accounts/${me}.json`, null))?.club) n *= CLUB_X;
+      // Essola Club members get the larger allowance.
+      if (me && (await get(`accounts/${me}.json`, null))?.club) n = Math.max(n, clubN);
       const who = me ? `u:${me}` : uid(req.device) ? `d:${uid(req.device)}` : null;
       const checks = [who && [who, n], ip && [`ip:${ip}`, n * 4]].filter(Boolean);
       const files = await Promise.all(checks.map(([w]) => get(`limits/${day()}/${sha(w)}.json`, {})));
@@ -959,7 +968,7 @@ async function handle(event, context) {
     // ---- Essola Club: free for now; membership lives on the account, the monthly promo code is set in the admin panel ----
     if (req.mode === 'club.get' || req.mode === 'club.join' || req.mode === 'club.leave') {
       const me = await sessionUid();
-      const terms = { limit: LIMIT, club: LIMIT * CLUB_X, describe: LIMIT * 4, describeClub: LIMIT * 4 * CLUB_X, price: 0 };
+      const terms = { limit: LIMIT, club: CLUB_LIMIT, describe: DESCRIBE[0], describeClub: DESCRIBE[1], price: 0 };
       if (!me) return reply(200, { member: false, signedIn: false, terms });
       const acc = await get(`accounts/${me}.json`, null);
       if (!acc) return reply(401, { error: 'no_account' });
@@ -1456,9 +1465,9 @@ async function handle(event, context) {
       // Advice the person already applied from earlier reviews: the technologist finishes instead of improving forever.
       const done = (req.done || []).slice(0, 12).map((x) => clean(x, 60)).filter(Boolean).join(', ');
       // The same formula gets the same answer for everyone, without a new model call.
-      const rk = `review/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
+      const rk = `review2/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
-      if (cachedReview && cachedReview.verdict !== undefined) return reply(200, cachedReview);
+      if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || []));
       if (!(await allow('review'))) return reply(429, { error: 'limit' });
       const text = await chat(process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
       const out = { add: [], reduce: [], remove: [], warn: [] };
@@ -1474,6 +1483,28 @@ async function handle(event, context) {
       await cachePut(rk, iam, out, true);
       return reply(200, { ...out, _usage: lastUsage });
     }
+    if (req.mode === 'compare') {
+      // Two products side by side: the technologist explains how they differ, for what and for which zone.
+      const side = (x) => ({ title: clean(x?.title, 160), items: (Array.isArray(x?.items) ? x.items : []).slice(0, 35).map((i) => clean(i, 60)).filter(Boolean) });
+      const a = side(req.a);
+      const b = side(req.b);
+      if (a.items.length < 2 || b.items.length < 2) return reply(400, { error: 'empty' });
+      // The same pair (in either order) gets the same answer for everyone, without a new model call.
+      const pair = [`${a.title}|${a.items.join(',')}`, `${b.title}|${b.items.join(',')}`].sort().join('||');
+      const ck = `compare/${sha(pair)}.json`;
+      const hit = await cacheGet(ck, iam);
+      if (hit?.text) return reply(200, hit);
+      if (!(await allow('compare'))) return reply(429, { error: 'limit' });
+      const text = await chat(
+        process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
+        [{ role: 'user', content: `${COMPARE}\n\nСредство А: ${a.title || 'без названия'}\nСостав А: ${a.items.join(', ')}\n\nСредство Б: ${b.title || 'без названия'}\nСостав Б: ${b.items.join(', ')}` }],
+        450,
+        true,
+      );
+      const out = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
+      if (out.text) await cachePut(ck, iam, out, true);
+      return reply(200, { ...out, _usage: lastUsage });
+    }
     if (req.mode === 'describe') {
       const list = (req.ingredients || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
@@ -1481,7 +1512,7 @@ async function handle(event, context) {
       const dk = `desc2/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
       if (hit && hit.lead) return reply(200, hit);
-      if (!(await allow('describe', LIMIT * 4))) return reply(429, { error: 'limit' });
+      if (!(await allow('describe', DESCRIBE[0], DESCRIBE[1]))) return reply(429, { error: 'limit' });
       const out = await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 650);
       if (out && out.lead) await cachePut(dk, iam, out, true);
       return reply(200, out);

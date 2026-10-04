@@ -343,21 +343,31 @@ export default function ScannerScreen() {
     setNotice(null);
     try {
       if (!/letu\.ru/i.test(url)) {
-        // Wildberries, Ozon, Gold Apple: the shop's composition if it's open, else our base by the product's name.
-        const r = await linkLookup(url);
+        // Wildberries, Ozon, Gold Apple: the page is read in the background and the server is asked at the same time
+        // (the shop's open composition, or our base by the product's name) — whichever answers first wins.
         const SHOP: Record<string, string> = { wb: 'Wildberries', ozon: 'Ozon', goldapple: 'Золотое Яблоко' };
+        const label = /ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru|wbx\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко';
+        readPage(url, label, '');
+        const run = shopRun.current;
+        const r = await linkLookup(url).catch(() => null);
+        // The page already answered, or another link was started meanwhile.
+        if (!r || shopDone.current || run !== shopRun.current) return;
         const name = [r.brand, r.title].filter(Boolean).join(' ');
         // Wildberries' own card may list a single ingredient («масло ши 100%»): that is the product's whole composition.
         const enough = (r.ingredients?.length ?? 0) >= (r.shop === 'wb' ? 1 : 3);
-        if (enough || r.limited) setBusy(false);
-        if (r.ingredients && enough) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
-        if (r.limited) return setNotice(LIMIT_NOTE);
+        if (r.ingredients && enough) {
+          shopDone.current = true;
+          setShop(null);
+          setBusy(false);
+          return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
+        }
         // Wildberries gives the real name and brand from its card: the same product in our base is the answer.
         if (r.shop === 'wb' && r.item?.x) return openFromBase(r.item);
-        // No open composition: read the product page in the background, the way a person would, without showing it.
-        // The name from the link and the base product it points to stay as the fallback if the page doesn't open
-        // (Ozon often shows a robot check to a page opened in the background).
-        return readPage(url, SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'), name, r.item?.x ? r.item : undefined);
+        // Otherwise the page keeps reading; the link's name and the base product it points to are the fallback
+        // if the page doesn't open (Ozon often shows a robot check to a page opened in the background).
+        if (!pageTitle.current && name) pageTitle.current = name;
+        if (r.item?.x) pageFallback.current = r.item;
+        return;
       }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       // Not in our base yet: read the page in the background, the same way as Ozon / Wildberries.

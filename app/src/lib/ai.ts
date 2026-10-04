@@ -10,7 +10,7 @@ const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
 /** The server counts paid requests per account (or per phone when signed out): 50 a day of each kind. */
-export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Club (Профиль → Essola Club, сейчас бесплатно) лимит втрое больше.';
+export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Club (Профиль → Essola Club, сейчас бесплатно) — 10 в день вместо 3.';
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
@@ -129,6 +129,11 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
 export const SHOP_LINK = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple\.ru|wildberries\.(?:ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru|ozon\.(?:ru|by|kz|com))\/[^\s"'«»<>]+/i;
 
 /** A product name read from a shop page → the same product in our base, when it is clearly the same one. */
+/** Technologist's explanation of how two products differ (cached for everyone per pair). */
+export async function aiCompare(a: { title: string; items: string[] }, b: { title: string; items: string[] }): Promise<{ text: string }> {
+  return call({ mode: 'compare', a, b });
+}
+
 export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {
   return call({ mode: 'byname', name, brand, web });
 }

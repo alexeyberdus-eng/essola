@@ -14,7 +14,7 @@ import { colors, fonts, space } from '../theme';
 type Terms = { limit: number; club: number; describe: number; describeClub: number; price: number };
 type ClubState = { member: boolean; since: string | null; signedIn: boolean; terms: Terms; promo: { code: string; text?: string; until?: string } | null };
 
-const FALLBACK: Terms = { limit: 50, club: 150, describe: 200, describeClub: 600, price: 0 };
+const FALLBACK: Terms = { limit: 3, club: 10, describe: 30, describeClub: 100, price: 0 };
 
 /** Essola Club: what it gives, a comparison with the free app, and joining (free for now). */
 export default function Club() {
@@ -69,6 +69,7 @@ export default function Club() {
     ['Распознавание составов и этикеток по фото', `${t.limit} в день`, `${t.club} в день`],
     ['Советы технолога в конструкторе', `${t.limit} в день`, `${t.club} в день`],
     ['Поиск средств в интернете и по ссылкам', `${t.limit} в день`, `${t.club} в день`],
+    ['Сравнение составов с объяснением технолога', `${t.limit} в день`, `${t.club} в день`],
     ['Разборы «что даёт средство»', `${t.describe} в день`, `${t.describeClub} в день`],
     ['Промокод на косметику Essola каждый месяц', '—', '✓'],
     ['Значок участника в профиле', '—', '✓'],
@@ -100,8 +101,10 @@ export default function Club() {
           <ActivityIndicator color={colors.violet} style={{ marginTop: 24 }} />
         ) : member ? (
           <View style={styles.memberCard}>
+            <LinearGradient colors={['#FFF0F6', '#F4EEFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             <View style={styles.memberIcon}>
-              <Icon name="check" size={20} color="#fff" strokeWidth={2.4} />
+              <LinearGradient colors={['#F59CC2', '#B48AE6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <Icon name="heartFill" size={18} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.memberTitle}>Вы в Essola Club</Text>
@@ -159,7 +162,7 @@ export default function Club() {
         <View style={styles.table}>
           <View style={styles.tr}>
             <View style={{ flex: 1 }} />
-            <Text style={[styles.col, styles.th]}>Обычный</Text>
+            <Text style={[styles.col, styles.th]}>Бесплатный</Text>
             <View style={[styles.col, styles.clubHead]}>
               <LinearGradient colors={['#8E7BEF', '#B48AE6', '#E59BC8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 10 }]} />
               <Text style={[styles.th, { color: '#fff' }]}>Essola Club</Text>
@@ -196,8 +199,8 @@ const styles = StyleSheet.create({
   price: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 16, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   priceN: { fontFamily: fonts.display, fontSize: 24, color: '#fff' },
   priceT: { fontFamily: fonts.medium, fontSize: 12.5, color: 'rgba(255,255,255,0.92)' },
-  memberCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, padding: 14, borderRadius: 20, backgroundColor: '#EAF7F0', borderWidth: 1, borderColor: '#CDEBDA' },
-  memberIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.good, alignItems: 'center', justifyContent: 'center' },
+  memberCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, padding: 14, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#F1DDEB' },
+  memberIcon: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   memberTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   memberText: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.muted, marginTop: 2 },
   error: { fontFamily: fonts.medium, fontSize: 13, color: colors.bad, marginTop: 10 },

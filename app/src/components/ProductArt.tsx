@@ -15,13 +15,13 @@ const TONES: Record<string, [string, string]> = {
 };
 
 /** Product visual: a bottle/jar silhouette tinted by category. */
-export function ProductArt({ p, height = 110 }: { p: Product; height?: number }) {
+export function ProductArt({ p, height = 110, bare }: { p: Product; height?: number; /** without the volume label (the product page has a volume switch) */ bare?: boolean }) {
   const photo = SITE[p.id]?.image;
   if (photo)
     return (
       <View style={[styles.art, { height, backgroundColor: '#FFFFFF' }]}>
         <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="memory-disk" transition={150} />
-        <Text style={styles.volume}>{p.volume}</Text>
+        {!bare && <Text style={styles.volume}>{p.volume}</Text>}
       </View>
     );
   const [bg, tone] = TONES[p.category] ?? TONES['Масла'];
@@ -51,7 +51,7 @@ export function ProductArt({ p, height = 110 }: { p: Product; height?: number })
           </>
         )}
       </Svg>
-      <Text style={styles.volume}>{p.volume}</Text>
+      {!bare && <Text style={styles.volume}>{p.volume}</Text>}
     </View>
   );
 }

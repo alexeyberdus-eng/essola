@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -9,7 +10,7 @@ import { Glow } from '../components/silk';
 import { IconButton, Press, tap } from '../components/ui';
 import { useLibrary } from '../context/LibraryContext';
 import { Analysis, AnalyzedItem, analyze, normalize } from '../lib/analyze';
-import { aiEnabled, catalogPage, CatalogItem } from '../lib/ai';
+import { aiCompare, aiEnabled, catalogPage, CatalogItem, isLimit, LIMIT_NOTE } from '../lib/ai';
 import { colors, fonts, scoreColor, space } from '../theme';
 
 /** One side of the comparison: any composition with a name (a saved scan, a base product, pasted text). */
@@ -70,7 +71,7 @@ export default function CompareScreen() {
         {picking ? (
           <Picker key={picking} title={picking === 'a' ? 'Выберите первое средство' : 'С чем сравнить?'} scans={scans.filter((s) => s.id !== aId)} onPick={choose} />
         ) : (
-          ra && rb && a && b && <Result a={a} b={b} ra={ra} rb={rb} />
+          ra && rb && a && b && <Result key={`${a.title}|${a.text.length}|${b.title}|${b.text.length}`} a={a} b={b} ra={ra} rb={rb} />
         )}
       </ScrollView>
     </View>
@@ -163,30 +164,67 @@ function Picker({ title, scans, onPick }: { title: string; scans: { id: string; 
 }
 
 function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis }) {
-  const ka = new Map(ra.items.map((it) => [keyOf(it), it]));
-  const kb = new Map(rb.items.map((it) => [keyOf(it), it]));
+  const kb = new Set(rb.items.map(keyOf));
   const common = ra.items.filter((it) => kb.has(keyOf(it)));
-  const onlyA = ra.items.filter((it) => !kb.has(keyOf(it)));
-  const onlyB = rb.items.filter((it) => !ka.has(keyOf(it)));
+  const different = ra.items.length + rb.items.length - 2 * common.length;
   const short = (t: string) => t.split(' · ').pop()!.slice(0, 40);
-
-  // The verdict in plain words, from the scores alone.
-  const diff = ra.scores.overall - rb.scores.overall;
-  const lead = diff >= 0 ? ra : rb;
-  const lag = diff >= 0 ? rb : ra;
-  const wins = (Object.keys(ROW_WORD) as (keyof Analysis['scores'])[]).filter((k) => lead.scores[k] - lag.scores[k] >= 8).map((k) => ROW_WORD[k]);
-  const verdict =
-    Math.abs(diff) < 4
-      ? 'Составы примерно на одном уровне — выбирайте по текстуре, цене и задачам.'
-      : `Состав «${short(diff >= 0 ? a.title : b.title)}» сильнее${wins.length ? `: ${wins.slice(0, 3).join(', ')}` : ''}.`;
+  const verdict = summaryOf(a, b, ra, rb, common.length);
   const overlap = Math.round((common.length / Math.max(1, Math.min(ra.items.length, rb.items.length))) * 100);
+
+  const [ai, setAi] = useState<{ busy?: boolean; text?: string; error?: string } | null>(null);
+  const ask = async () => {
+    tap('medium');
+    setAi({ busy: true });
+    try {
+      const names = (r: Analysis) => r.items.map((it) => (it.match === 'unknown' || it.match === 'guess' ? it.raw : it.ing.inci));
+      const r = await aiCompare({ title: a.title, items: names(ra) }, { title: b.title, items: names(rb) });
+      setAi({ text: r.text });
+    } catch (e) {
+      setAi({ error: isLimit(e) ? LIMIT_NOTE : 'Не получилось связаться с технологом — проверьте интернет.' });
+    }
+  };
 
   return (
     <View style={{ marginTop: 18, gap: 14 }}>
       <View style={styles.verdict}>
-        <Text style={styles.verdictText}>{verdict}</Text>
-        <Text style={styles.verdictSub}>Составы совпадают на {overlap}% · общих компонентов: {common.length}</Text>
+        <Text style={styles.verdictText}>{verdict.title}</Text>
+        {verdict.lines.map((l) => (
+          <Text key={l} style={styles.verdictLine}>{l}</Text>
+        ))}
       </View>
+
+      <View style={styles.counts}>
+        <View style={[styles.countBox, { backgroundColor: '#EAF6EF' }]}>
+          <Text style={[styles.countN, { color: colors.good }]}>{common.length}</Text>
+          <Text style={styles.countL}>общих{'\n'}компонентов</Text>
+        </View>
+        <View style={[styles.countBox, { backgroundColor: '#F3EFFF' }]}>
+          <Text style={[styles.countN, { color: colors.violetDeep }]}>{different}</Text>
+          <Text style={styles.countL}>разных{'\n'}компонентов</Text>
+        </View>
+        <View style={[styles.countBox, { backgroundColor: '#FFF4E8' }]}>
+          <Text style={[styles.countN, { color: '#B9772B' }]}>{overlap}%</Text>
+          <Text style={styles.countL}>совпадение{'\n'}составов</Text>
+        </View>
+      </View>
+
+      {aiEnabled && (
+        <View style={styles.card}>
+          {ai?.text ? (
+            <>
+              <Text style={styles.techKicker}>Технолог о разнице</Text>
+              <Text style={styles.techText}>{ai.text}</Text>
+            </>
+          ) : (
+            <Press onPress={ask} disabled={ai?.busy} style={styles.techBtn}>
+              <LinearGradient colors={['#9C8BF5', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              {ai?.busy ? <ActivityIndicator color="#fff" /> : <Icon name="spark" size={17} color="#fff" />}
+              <Text style={styles.techBtnText}>{ai?.busy ? 'Технолог сравнивает…' : 'Технолог объяснит разницу'}</Text>
+            </Press>
+          )}
+          {!!ai?.error && <Text style={styles.muted}>{ai.error}</Text>}
+        </View>
+      )}
 
       <View style={styles.card}>
         {ROWS.map(([k, label]) => {
@@ -202,14 +240,47 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
             </View>
           );
         })}
+        <View style={styles.legend}>
+          <Text style={styles.legendText} numberOfLines={1}>← {short(a.title)}</Text>
+          <Text style={styles.legendText} numberOfLines={1}>{short(b.title)} →</Text>
+        </View>
       </View>
-
-      <Group title={`Только в «${short(a.title)}»`} items={onlyA} />
-      <Group title={`Только в «${short(b.title)}»`} items={onlyB} />
-      <Group title="Общие компоненты" items={common} />
-      <Text style={styles.muted}>Сравнение считается по составу в телефоне, без запросов к ИИ. Порядок ингредиентов учитывается: то, что ближе к началу, весит больше.</Text>
+      <Text style={styles.muted}>Оценки и сводка считаются по составу в телефоне. Порядок ингредиентов учитывается: то, что ближе к началу, весит больше.</Text>
     </View>
   );
+}
+
+/** A short plain-words summary of the difference, from the analyzer alone (no AI). */
+function summaryOf(a: Side, b: Side, ra: Analysis, rb: Analysis, common: number): { title: string; lines: string[] } {
+  const short = (t: string) => `«${t.split(' · ').pop()!.slice(0, 34)}»`;
+  const diff = ra.scores.overall - rb.scores.overall;
+  const [lead, lag, leadName, lagName] = diff >= 0 ? [ra, rb, short(a.title), short(b.title)] : [rb, ra, short(b.title), short(a.title)];
+  const wins = (Object.keys(ROW_WORD) as (keyof Analysis['scores'])[]).filter((k) => lead.scores[k] - lag.scores[k] >= 8).map((k) => ROW_WORD[k]);
+  const title = Math.abs(diff) < 4 ? 'Составы примерно на одном уровне' : `${leadName} сильнее по составу${wins.length ? `: ${wins.slice(0, 3).join(', ')}` : ''}`;
+  const lines: string[] = [];
+  // Key actives each one has that the other doesn't.
+  const actives = (r: Analysis, other: Analysis) => {
+    const has = new Set(other.items.map(keyOf));
+    return r.items.filter((it) => it.ing.act >= 2 && !has.has(keyOf(it))).slice(0, 3).map(nameOf);
+  };
+  const aOnly = actives(ra, rb);
+  const bOnly = actives(rb, ra);
+  if (aOnly.length) lines.push(`Только в ${short(a.title)}: ${aOnly.join(', ')}.`);
+  if (bOnly.length) lines.push(`Только в ${short(b.title)}: ${bOnly.join(', ')}.`);
+  // Watch-outs that differ: fragrance, drying alcohol, risky components.
+  const flags = (r: Analysis) => ({
+    perfume: r.items.some((it) => it.ing.inci === 'Parfum' || it.ing.flags.includes('allergen')),
+    alcohol: r.items.some((it) => it.ing.flags.includes('drying-alcohol')),
+    risk: r.items.filter((it) => it.ing.risk >= 2).length,
+  });
+  const fa = flags(ra);
+  const fb = flags(rb);
+  if (fa.perfume !== fb.perfume) lines.push(`Отдушка или аллергены есть только в ${fa.perfume ? short(a.title) : short(b.title)}.`);
+  if (fa.alcohol !== fb.alcohol) lines.push(`Сушащий спирт — только в ${fa.alcohol ? short(a.title) : short(b.title)}.`);
+  if (fa.risk !== fb.risk) lines.push(`Спорных компонентов: ${fa.risk} против ${fb.risk}.`);
+  if (!lines.length) lines.push(common ? 'Ключевые компоненты почти одинаковые — выбирайте по текстуре и цене.' : 'Составы совсем разные — сравните, для чего вам нужно средство.');
+  if (Math.abs(diff) >= 4 && lagName) lines.push(`Итог: ${leadName} — ${lead.scores.overall}, ${lagName} — ${lag.scores.overall} из 100.`);
+  return { title, lines: lines.slice(0, 5) };
 }
 
 function Bar({ value, win, flip }: { value: number; win: boolean; flip?: boolean }) {
@@ -219,31 +290,6 @@ function Bar({ value, win, flip }: { value: number; win: boolean; flip?: boolean
         <View style={[styles.fill, { width: `${Math.max(4, value)}%`, backgroundColor: scoreColor(value), opacity: win ? 1 : 0.45 }, flip && { alignSelf: 'flex-end' }]} />
       </View>
       <Text style={[styles.num, win && { color: colors.ink, fontFamily: fonts.bold }]}>{value}</Text>
-    </View>
-  );
-}
-
-function Group({ title, items }: { title: string; items: AnalyzedItem[] }) {
-  if (!items.length) return null;
-  return (
-    <View style={styles.card}>
-      <Text style={styles.groupTitle}>
-        {title} <Text style={styles.count}>{items.length}</Text>
-      </Text>
-      <View style={styles.chips}>
-        {items.slice(0, 30).map((it) => {
-          const good = it.ing.act >= 2;
-          const bad = it.ing.risk >= 2;
-          return (
-            <View key={keyOf(it)} style={[styles.chip, good && styles.chipGood, bad && styles.chipBad]}>
-              <Text style={[styles.chipText, good && { color: colors.good }, bad && { color: colors.bad }]} numberOfLines={1}>
-                {nameOf(it)}
-              </Text>
-            </View>
-          );
-        })}
-        {items.length > 30 && <Text style={styles.muted}>и ещё {items.length - 30}</Text>}
-      </View>
     </View>
   );
 }
@@ -272,8 +318,18 @@ const styles = StyleSheet.create({
   pasteGo: { alignSelf: 'flex-end', backgroundColor: colors.violet, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 },
   pasteGoText: { fontFamily: fonts.semibold, fontSize: 14, color: '#fff' },
   verdict: { backgroundColor: '#EEE9FF', borderRadius: 20, padding: 16, gap: 4 },
-  verdictText: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22, color: colors.violetDeep },
-  verdictSub: { fontFamily: fonts.regular, fontSize: 13, color: '#5D5480' },
+  verdictText: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22, color: colors.violetDeep, marginBottom: 2 },
+  verdictLine: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: '#4A4268' },
+  counts: { flexDirection: 'row', gap: 8 },
+  countBox: { flex: 1, borderRadius: 18, paddingVertical: 12, alignItems: 'center', gap: 2 },
+  countN: { fontFamily: fonts.display, fontSize: 24, letterSpacing: -0.6 },
+  countL: { fontFamily: fonts.medium, fontSize: 11.5, lineHeight: 14, color: colors.muted, textAlign: 'center' },
+  techKicker: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: colors.violet },
+  techText: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink },
+  techBtn: { height: 52, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  techBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
+  legend: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  legendText: { flex: 1, fontFamily: fonts.medium, fontSize: 11.5, color: colors.faint },
   card: { backgroundColor: '#fff', borderRadius: 20, padding: 14, gap: 12, borderWidth: 1, borderColor: '#EEEAF7' },
   scoreRow: { gap: 6 },
   scoreLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, textAlign: 'center' },
