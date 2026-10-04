@@ -1,7 +1,7 @@
 // CosIng — the European Commission's cosmetic ingredient database (© European Union, reuse with attribution,
 // Commission Decision 2011/833/EU). Builds one lookup: INCI name → functions and EU Annex entries.
 //   node cosing-build.mjs <outDir>
-// Polite: one request at a time with a pause; about 350 requests in all.
+// Polite: one request at a time with a pause; about 350 requests in all, no retries on rejected queries.
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const UA = 'Mozilla/5.0 (compatible; EssolaBot/1.0; +https://essola.ru)';
@@ -11,68 +11,60 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = process.argv[2] || 'out';
 mkdirSync(out, { recursive: true });
 
+// Only network errors and 5xx are retried: a 4xx is a bad query, and repeating it just hammers the service.
 async function page(query, n, size) {
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     try {
       const fd = new FormData();
       fd.append('query', new Blob([JSON.stringify(query)], { type: 'application/json' }));
       const r = await fetch(`${SEARCH}&text=*&pageSize=${size}&pageNumber=${n}`, { method: 'POST', body: fd, headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
       if (r.ok) return await r.json();
       console.error('HTTP', r.status, n);
+      if (r.status < 500) return null;
     } catch (e) {
       console.error('error', String(e).slice(0, 80));
     }
-    await sleep(3000 * (i + 1));
+    await sleep(4000 * (i + 1));
   }
   return null;
 }
 
-// Deep paging can stop early on the search service: if it does, the list is collected again split by first letter.
-async function collect(query) {
+async function collect(query, seen) {
   const size = 100;
-  const seen = new Map();
-  for (let n = 1; ; n++) {
+  for (let n = 1; n <= 100; n++) {
     const j = await page(query, n, size);
     const rows = j?.results ?? [];
     for (const r of rows) seen.set(r.metadata?.substanceId?.[0] || r.reference, r.metadata || {});
-    if (n === 1) console.log('total', j?.totalResults);
-    if (n % 25 === 0) console.log('page', n, 'collected', seen.size);
-    if (rows.length < size) return { seen, total: j?.totalResults ?? 0, stoppedAt: n };
+    if (rows.length < size) return;
     await sleep(250);
   }
 }
 
+// The service returns at most 10 000 results per query, so the inventory is read in ranges of substance id,
+// each split in two until it fits (the only partition filter the search accepts, see cosing-probe.yml).
 const ING = { terms: { itemType: ['ingredient'] } };
-let { seen, total } = await collect({ bool: { must: [ING] } });
-const first = await page({ bool: { must: [ING] } }, 1, 1);
-total = first?.totalResults ?? total;
-console.log('collected', seen.size, 'of', total);
-// The service stops at 10 000 results per query: split the inventory by the first letters of the INCI name.
-const filters = (p) => [{ prefix: { inciName: p.toLowerCase() } }, { prefix: { inciName: p } }, { wildcard: { inciName: `${p}*` } }, { wildcard: { inciName: `${p.toLowerCase()}*` } }];
-let working = null;
-async function part(p) {
-  for (const f of working ? [working(p)] : filters(p)) {
-    const q = { bool: { must: [ING, f] } };
-    const head = await page(q, 1, 1);
-    const n = head?.totalResults ?? 0;
-    if (!n) continue;
-    if (!working) {
-      const i = filters(p).findIndex((x) => JSON.stringify(x) === JSON.stringify(f));
-      working = (x) => filters(x)[i];
-      console.log('partition filter', JSON.stringify(f));
-    }
-    if (n > 9900 && p.length < 3) {
-      for (const c of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -(,']) await part(p + c);
-      return;
-    }
-    const got = await collect(q);
-    for (const [k, v] of got.seen) seen.set(k, v);
-    console.log('prefix', JSON.stringify(p), n, '→', seen.size);
+const ranged = (lo, hi) => ({ bool: { must: [ING, { range: { substanceId: { gte: String(lo), lte: String(hi) } } }] } });
+const count = async (q) => (await page(q, 1, 1))?.totalResults ?? -1;
+const total = await count({ bool: { must: [ING] } });
+console.log('total', total);
+if (total < 1000) throw new Error('search service is not answering');
+const seen = new Map();
+let inRanges = 0;
+async function range(lo, hi) {
+  const n = await count(ranged(lo, hi));
+  if (n <= 0) return;
+  if (n > 9500 && hi > lo) {
+    const mid = Math.floor((lo + hi) / 2);
+    await range(lo, mid);
+    await range(mid + 1, hi);
     return;
   }
+  inRanges += n;
+  await collect(ranged(lo, hi), seen);
+  console.log('range', lo, hi, n, '→', seen.size);
 }
-if (seen.size < total * 0.98) for (const p of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789']) await part(p);
-console.log('inventory', seen.size, 'of', total);
+await range(0, 2_000_000);
+console.log('inventory', seen.size, 'of', total, '(in id ranges', inRanges, ')');
 
 // Annex tables: reference → conditions (product type, maximum concentration, warnings).
 const parseCsv = (text) => {
