@@ -22,5 +22,8 @@ jobs:
           export PATH="$HOME/yc/bin:$PATH"
           printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
           yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443 && yc config set folder-id "$YC_FOLDER_ID"
+          echo "== link-related, last hour"
+          yc logging read --group-name default --since 1h --limit 1000 --format text 2>&1 | grep -E "wb |short link|shop page|label:|nk card|limit reached|Error|error" | cut -c1-500 || true
+          echo "== everything, last 3h (latest 200)"
           yc logging read --group-name default --since 3h --limit 200 --format text 2>&1 | cut -c1-700 || true
           echo ---; yc serverless function logs essola-scan --since 3h --limit 100 2>&1 | cut -c1-700 || true
