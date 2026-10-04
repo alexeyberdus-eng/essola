@@ -2,26 +2,42 @@ name: CosIng (EU cosmetic ingredients, © European Union)
 
 # Official open data of the European Commission (reuse with attribution, Decision 2011/833/EU):
 # the ingredient inventory with functions and the Annex II–VI lists (banned / restricted / colourants /
-# preservatives / UV filters). Built into one lookup the scan function serves to the app.
+# preservatives / UV filters), built into one lookup the scan function serves to the app. Monthly refresh.
 on:
   push:
-    paths: ['.github/workflows/cosing.yml']
+    paths: ['.github/workflows/cosing.yml', 'app/scripts/cosing-build.mjs']
+  schedule:
+    - cron: '17 3 2 * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  probe:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
     steps:
-      - name: Where the full inventory is
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Collect CosIng
+        run: node app/scripts/cosing-build.mjs out
+      - name: Upload to Object Storage
         run: |
-          UA='Mozilla/5.0 (compatible; EssolaBot/1.0; +https://essola.ru)'
-          echo "== EC search API"
-          curl -s -m 60 -A "$UA" -X POST "https://api.tech.ec.europa.eu/search-api/prod/rest/search?apiKey=285a77fd-1257-4271-8507-f0c6b2961203&text=*&pageSize=2&pageNumber=1" \
-            -F 'query={"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}};type=application/json' | head -c 2500; echo
-          echo "== data.europa.eu dataset"
-          curl -s -m 60 -A "$UA" "https://data.europa.eu/api/hub/search/datasets/cosmetic-ingredient-database-ingredients-and-fragrance-inventory" | head -c 3000; echo
-          curl -s -m 60 -A "$UA" "https://data.europa.eu/api/hub/search/search?q=cosing&filter=dataset&limit=5" | grep -o '"access_url":\[[^]]*\]\|"download_url":\[[^]]*\]\|"id":"[^"]*"' | head -30
+          ls -la out
+          N=$(node -e "console.log(require('./out/cosing-meta.json').names)")
+          [ "$N" -gt 15000 ] || { echo "only $N names — not uploading"; exit 1; }
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          curl -sS -f -X PUT "$B/cosing/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @out/cosing-index.json -w 'index HTTP %{http_code}\n'
+          curl -sS -f -X PUT "$B/cosing/meta.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @out/cosing-meta.json -w 'meta HTTP %{http_code}\n'
+          node -e "const i=require('./out/cosing-index.json');for(const n of ['aqua','niacinamide','phenoxyethanol','salicylic acid','hydroquinone','limonene','titanium dioxide'])console.log(n, JSON.stringify(i[n]||null).slice(0,400))"
