@@ -15,7 +15,7 @@ import { useUserContent } from '../../context/UserContentContext';
 import { analyze, SAMPLES } from '../../lib/analyze';
 import { lookupBarcode } from '../../lib/barcode';
 import * as Clipboard from 'expo-clipboard';
-import { aiEnabled, aiLabel, aiScan, isLimit, LIMIT_NOTE, linkLookup, nkLookup, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
+import { aiEnabled, aiLabel, aiScan, isLimit, LIMIT_NOTE, linkLookup, nkLookup, productByName, barcodeWeb, catalogPage, CatalogItem, productByBarcode, productByLink, saveBarcode, saveProduct, SHOP_LINK } from '../../lib/ai';
 import { LinkHelp } from '../../components/LinkHelp';
 import { ShopPage } from '../../components/ShopPage';
 import { ScoreBadge } from '../../components/ScoreBadge';
@@ -209,6 +209,17 @@ export default function ScannerScreen() {
   };
 
 
+  /** A product from our base opens straight into its analysis (closes the background shop page if any). */
+  const openFromBase = (item: CatalogItem) => {
+    shopDone.current = true;
+    setShop(null);
+    setBusy(false);
+    tap('success');
+    const a = analyze(item.x);
+    const scan = saveScan({ title: [item.b, item.t].filter(Boolean).join(' · '), text: item.x, overall: a.scores.overall, source: sourceOf(item.k), image: item.i || null, url: item.u });
+    router.push(`/analysis/${scan.id}`);
+  };
+
   const pickMatch = (item: CatalogItem) => {
     tap('success');
     const code = lookup?.code ?? pendingCode.current;
@@ -267,6 +278,9 @@ export default function ScannerScreen() {
   const [clip, setClip] = useState<string | null>(null);
   const [shop, setShop] = useState<string | null>(null);
   const [shopName, setShopName] = useState('Летуаль');
+  // Ozon / Wildberries pages are read in the background while «Читаем…» is shown; visible only if that fails.
+  const [shopHidden, setShopHidden] = useState(false);
+  const shopDone = useRef(false);
   useEffect(() => {
     if (!focused || !aiEnabled) return;
     Clipboard.hasUrlAsync?.()
@@ -283,23 +297,38 @@ export default function ScannerScreen() {
       if (!/letu\.ru/i.test(url)) {
         // Wildberries, Ozon, Gold Apple: the shop's composition if it's open, else our base by the product's name.
         const r = await linkLookup(url);
-        setBusy(false);
         const SHOP: Record<string, string> = { wb: 'Wildberries', ozon: 'Ozon', goldapple: 'Золотое Яблоко' };
         const name = [r.brand, r.title].filter(Boolean).join(' ');
+        if (r.ingredients && r.ingredients.length >= 3 || r.limited) setBusy(false);
         if (r.ingredients && r.ingredients.length >= 3) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
         if (r.limited) return setNotice(LIMIT_NOTE);
         // No open composition: open the product page itself in the app and read the name and «Состав» from it,
         // the way a person would (the shop shows its page to the visitor as usual).
         setShopName(SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'));
+        shopDone.current = false;
+        setShopHidden(true);
+        setBusy(true);
         setShop(url);
+        // Not read in 25 seconds (a check page, a slow site): show the page so the person can open «Состав».
+        setTimeout(() => {
+          if (shopDone.current) return;
+          setShopHidden(false);
+          setBusy(false);
+        }, 25000);
         return;
       }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
       if (!product?.ingredients?.length) {
-        // Not in our base yet: open the page in the app and read it there.
-        setBusy(false);
+        // Not in our base yet: read the page in the background, the same way as Ozon / Wildberries.
         setShopName(/goldapple/i.test(url) ? 'Золотое Яблоко' : 'Летуаль');
+        shopDone.current = false;
+        setShopHidden(true);
         setShop(url);
+        setTimeout(() => {
+          if (shopDone.current) return;
+          setShopHidden(false);
+          setBusy(false);
+        }, 25000);
         return;
       }
       setBusy(false);
@@ -750,17 +779,32 @@ export default function ScannerScreen() {
       <ShopPage
         url={shop}
         name={shopName}
+        hidden={shopHidden}
         onClose={() => {
+          shopDone.current = true;
           setShop(null);
           setBusy(false);
         }}
         onScreenshot={() => {
+          shopDone.current = true;
           setShop(null);
           setBusy(false);
           pick();
         }}
-        onFound={({ title, text }) => {
+        onTitle={async (title) => {
+          // Only the name so far: if it's a product of our base, open it from there right away.
+          const hit = await productByName(title).catch(() => null);
+          if (shopDone.current || !hit?.item?.x) return;
+          openFromBase(hit.item);
+        }}
+        onFound={async ({ title, text }) => {
+          if (shopDone.current) return;
           const url = shop!;
+          // The name first: our base has the checked composition and the photo.
+          const hit = title ? await productByName(title).catch(() => null) : null;
+          if (shopDone.current) return;
+          if (hit?.item?.x) return openFromBase(hit.item);
+          shopDone.current = true;
           setShop(null);
           setBusy(false);
           const list = text.split(/\s*[,;]\s*/).map((x) => x.replace(/\.$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);

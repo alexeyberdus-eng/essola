@@ -20,8 +20,20 @@ const FIND = `
     var j = html.match(/"(?:composition|ingredients|sostav)"\\s*:\\s*"([^"]{30,3000})"/i);
     return j ? j[1] : null;
   }
+  var ticks = 0;
+  var sentTitle = false;
+  function title() {
+    var h = document.querySelector('h1');
+    return ((h && h.innerText) || document.title || '').trim();
+  }
   function tick() {
+    ticks++;
     try {
+      // No composition after a while: send at least the name, so our base can be searched.
+      if (ticks === 14 && !sentTitle && title()) {
+        sentTitle = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ title: title(), text: '' }));
+      }
       if (clicked < 3) {
         var els = document.querySelectorAll('button, [role="tab"], [role="button"], summary, li, div, span, a');
         for (var i = 0; i < els.length; i++) {
@@ -31,7 +43,7 @@ const FIND = `
       }
       var found = pick();
       if (found) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ title: document.title, text: found }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ title: title(), text: found }));
         return;
       }
     } catch (e) {}
@@ -42,12 +54,19 @@ const FIND = `
 true;
 `;
 
+const cleanTitle = (t: string) =>
+  t
+    .replace(/\s*[—|-]\s*(Золотое Яблоко|Gold Apple|Л'Этуаль|ЛЭТУАЛЬ|letu).*$/i, '')
+    .replace(/\s*(купить|—|\|).*(ozon|озон|wildberries|вайлдберриз).*$/i, '')
+    .replace(/^купить\s+/i, '')
+    .trim();
+
 /**
  * Opens a Letual / Gold Apple / Wildberries / Ozon product page inside the app, on screen: the shop's device check passes like for
  * any visitor, and the ingredient list is read automatically as soon as it appears (the script also opens the
  * «Состав» tab). The user can scroll, open the tab by hand, or fall back to a screenshot of it.
  */
-export function ShopPage({ url, name, onFound, onClose, onScreenshot }: { url: string | null; name?: string; onFound: (p: { title: string; text: string }) => void; onClose: () => void; onScreenshot: () => void }) {
+export function ShopPage({ url, name, hidden, onFound, onTitle, onClose, onScreenshot }: { url: string | null; name?: string; hidden?: boolean; onFound: (p: { title: string; text: string }) => void; onTitle?: (title: string) => void; onClose: () => void; onScreenshot: () => void }) {
   const insets = useSafeAreaInsets();
   const done = useRef(false);
   const web = useRef<WebView>(null);
@@ -61,6 +80,35 @@ export function ShopPage({ url, name, onFound, onClose, onScreenshot }: { url: s
   }, [url]);
   if (!url) return null;
   const shop = name ?? (/letu/i.test(url) ? 'Летуаль' : 'Золотое Яблоко');
+  // Hidden: the page loads behind the «reading» screen and is read without being shown.
+  if (hidden)
+    return (
+      <View style={styles.hidden} pointerEvents="none">
+        <WebView
+          ref={web}
+          source={{ uri: url }}
+          injectedJavaScript={FIND}
+          applicationNameForUserAgent="Version/17.0 Mobile/15E148 Safari/604.1"
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          domStorageEnabled
+          onLoadEnd={() => web.current?.injectJavaScript(FIND)}
+          onMessage={(e) => {
+            if (done.current) return;
+            try {
+              const data = JSON.parse(e.nativeEvent.data) as { title: string; text: string };
+              if (!data.text) {
+                if (data.title) onTitle?.(cleanTitle(data.title));
+                return;
+              }
+              done.current = true;
+              onFound({ title: cleanTitle(data.title), text: data.text.replace(/\\n/g, ' ') });
+            } catch {}
+          }}
+          style={{ flex: 1 }}
+        />
+      </View>
+    );
   return (
     <View style={[styles.sheet, { paddingTop: insets.top + 6 }]}>
       <View style={styles.head}>
@@ -89,17 +137,14 @@ export function ShopPage({ url, name, onFound, onClose, onScreenshot }: { url: s
           if (done.current) return;
           try {
             const data = JSON.parse(e.nativeEvent.data) as { title: string; text: string };
+            if (!data.text) {
+              if (data.title) onTitle?.(cleanTitle(data.title));
+              return;
+            }
             if (data.text) {
               done.current = true;
               tap('success');
-              onFound({
-                title: data.title
-                  .replace(/\s*[—|-]\s*(Золотое Яблоко|Gold Apple|Л'Этуаль|ЛЭТУАЛЬ|letu).*$/i, '')
-                  .replace(/\s*(купить|—|\|).*(ozon|озон|wildberries|вайлдберриз).*$/i, '')
-                  .replace(/^купить\s+/i, '')
-                  .trim(),
-                text: data.text.replace(/\\n/g, ' '),
-              });
+              onFound({ title: cleanTitle(data.title), text: data.text.replace(/\\n/g, ' ') });
             }
           } catch {
             // ignore malformed messages
@@ -123,6 +168,7 @@ export function ShopPage({ url, name, onFound, onClose, onScreenshot }: { url: s
 
 const styles = StyleSheet.create({
   sheet: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#fff', zIndex: 30 },
+  hidden: { position: 'absolute', left: 0, top: 0, width: 390, height: 844, opacity: 0.01, zIndex: -1 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: colors.line },
   close: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
   title: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },

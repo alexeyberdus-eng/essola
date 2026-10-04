@@ -1310,6 +1310,22 @@ async function handle(event, context) {
       await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), null, ingredients, 'shop').catch(() => {});
       return reply(200, { ok: true });
     }
+    if (req.mode === 'byname') {
+      // A product name read from a shop page → the same product in our base (same brand, most words in common).
+      const name = clean(req.name, 300);
+      if (keywords(name).length < 2) return reply(200, {});
+      const base = await loadLetu(iam);
+      const brandWord = keywords(clean(req.brand, 80) || name)[0] || '';
+      const brandVars = variants(brandWord);
+      const sameBrand = (x) => brandVars.some((v) => norm(x.b).replace(/ /g, '').includes(v.replace(/ /g, '')) || ` ${norm(x.t)} `.includes(` ${v} `));
+      const seenT = new Set();
+      const found = keywordSearch(base, `${clean(req.brand, 80)} ${name}`, 0.7).filter((x) => !x.z && sameBrand(x) && !seenT.has(norm(x.t)) && seenT.add(norm(x.t))).slice(0, 3);
+      if (found[0] && found[0]._score >= 0.75 && (found.length === 1 || found[1]._score < found[0]._score)) {
+        const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
+        return reply(200, { item });
+      }
+      return reply(200, {});
+    }
     if (req.mode === 'link') {
       // Wildberries / Ozon / Gold Apple link: the shop's composition when it is open, otherwise the product
       // found in our base by the words of its name (or of the link), then the web.
