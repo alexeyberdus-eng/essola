@@ -338,8 +338,10 @@ export default function ScannerScreen() {
         const r = await linkLookup(url);
         const SHOP: Record<string, string> = { wb: 'Wildberries', ozon: 'Ozon', goldapple: 'Золотое Яблоко' };
         const name = [r.brand, r.title].filter(Boolean).join(' ');
-        if (r.ingredients && r.ingredients.length >= 3 || r.limited) setBusy(false);
-        if (r.ingredients && r.ingredients.length >= 3) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
+        // Wildberries' own card may list a single ingredient («масло ши 100%»): that is the product's whole composition.
+        const enough = (r.ingredients?.length ?? 0) >= (r.shop === 'wb' ? 1 : 3);
+        if (enough || r.limited) setBusy(false);
+        if (r.ingredients && enough) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
         if (r.limited) return setNotice(LIMIT_NOTE);
         // Wildberries gives the real name and brand from its card: the same product in our base is the answer.
         if (r.shop === 'wb' && r.item?.x) return openFromBase(r.item);

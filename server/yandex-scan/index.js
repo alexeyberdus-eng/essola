@@ -1344,12 +1344,16 @@ async function handle(event, context) {
       // Wildberries / Ozon / Gold Apple link: the shop's composition when it is open, otherwise the product
       // found in our base by the words of its name (or of the link), then the web.
       // Someone already read this page in the app: the saved composition answers at once.
-      const seen = await cacheGet(keyFor({ url: String(req.url || '') }), iam);
+      // (Wildberries answers from its own card, which is always current — no cache for it.)
+      const isWb = /wildberries\.|(^|\/\/|\.)wbx?\.ru/i.test(String(req.url || ''));
+      const seen = isWb ? null : await cacheGet(keyFor({ url: String(req.url || '') }), iam);
       if (seen?.ingredients?.length >= 3) return reply(200, { shop: 'cache', title: seen.title, ingredients: seen.ingredients });
       const info = await fromMarketplace(String(req.url || ''));
       if (!info) return reply(400, { error: 'unsupported_shop' });
       const list = info.composition ? info.composition.replace(/^[^:]{0,30}:\s*/, '').split(/\s*[,;]\s*/).map((x) => x.replace(/[.\s]+$/, '').trim()).filter((x) => x.length > 1 && x.length < 90) : [];
-      if (list.length >= 4) return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ingredients: list });
+      // The seller's own card is the product itself: its composition counts even when short («масло ши 100%»),
+      // a similar product from the base or the web would be a different one.
+      if (list.length >= 4 || (info.shop === 'wb' && list.length >= 1)) return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ingredients: list });
       const name = [info.brand, info.title].filter(Boolean).join(' ');
       if (!name) return reply(200, { shop: info.shop, none: true });
       const base = await loadLetu(iam);
