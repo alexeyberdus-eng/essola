@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSession } from './cloud';
-import type { Summary } from './effects';
+import { usageByTitle, type Summary } from './effects';
 import { myId } from './social';
 import { readJSON, writeJSON } from './storage';
 
@@ -70,13 +70,15 @@ export function useAiSummary(names: string[], kind: string | undefined, local: S
     // sig captures names + kind
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, delay]);
-  if (!ai || ai.sig !== sig) return local;
+  // The product's type from its name decides how it is used (a shampoo is never «on the face and body»).
+  const typed = usageByTitle(kind);
+  if (!ai || ai.sig !== sig) return typed ? { ...local, use: typed } : local;
   const { lead, effects, use, weak } = ai.data;
   return {
     kind: local.kind,
     lead: lead ?? local.lead,
     effects: effects?.length ? effects.slice(0, 4).map((e, i) => ({ icon: local.effects[i]?.icon ?? 'spark', title: e.title, text: e.text })) : local.effects,
-    use: use?.length ? use : local.use,
+    use: typed ?? (use?.length ? use : local.use),
     weak: weak || undefined,
   };
 }
