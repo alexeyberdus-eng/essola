@@ -3,7 +3,7 @@ name: Deploy AI scan function (Yandex Cloud)
 on:
   push:
     branches: [claude/awesome-mccarthy-dlbgor]
-    paths: ['server/yandex-scan/**', '.github/workflows/deploy-scan.yml']
+    paths: ['server/yandex-scan/**', '.github/workflows/deploy-scan.yml', 'app/src/data/legal.ts', 'app/src/lib/recipeCsv.ts']
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,10 @@ jobs:
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           # The admin panel reads recipe tables with the same parser as the app.
           npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
-          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js)
+          # Privacy policy, terms and rules for the web pages (?doc=…): the same texts as in the app.
+          npx -y esbuild@0.25.0 app/src/data/legal.ts --bundle --format=cjs --platform=node --outfile="$RUNNER_TEMP/legal.cjs"
+          node -e "console.log(JSON.stringify(require('$RUNNER_TEMP/legal.cjs').DOCS))" > server/yandex-scan/legal.json
+          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js legal.json)
           BUCKET="essola-products-$YC_FOLDER_ID"
           set +e
           yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3
@@ -86,6 +89,7 @@ jobs:
                    '{"mode":"admin.check","admin":"wrong-password-smoke"}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
           done
+          for D in privacy terms support; do curl -s -o /dev/null -w "page $D HTTP %{http_code}\n" "https://functions.yandexcloud.net/$ID?doc=$D"; done
           echo "Admin panel: https://functions.yandexcloud.net/$ID?admin"; curl -s -o /dev/null -w 'panel HTTP %{http_code}\n' "https://functions.yandexcloud.net/$ID?admin"
           [ -z "$ADMIN_TOKEN" ] && echo "::warning::Add the ADMIN_TOKEN secret to open the admin panel"
           echo "OBF search:"; curl -s -m 20 -A "Essola/1.0" "https://world.openbeautyfacts.org/cgi/search.pl?search_terms=cerave&search_simple=1&action=process&json=1&page_size=3&fields=code,product_name,brands,ingredients_text" | head -c 600; echo

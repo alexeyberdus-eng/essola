@@ -72,7 +72,6 @@ export default function Club() {
     ['Разборы «что даёт средство»', `${t.describe} в день`, `${t.describeClub} в день`],
     ['Промокод на косметику Essola каждый месяц', '—', '✓'],
     ['Значок участника клуба в профиле', '—', '✓'],
-    ['Личные консультации технолога', '—', 'скоро'],
   ];
 
   return (
@@ -90,7 +89,7 @@ export default function Club() {
           <View style={styles.circle2} />
           <Text style={styles.kicker}>{member ? 'вы в клубе' : 'для тех, кто любит уход'}</Text>
           <Text style={styles.title}>Essola Клуб</Text>
-          <Text style={styles.lead}>Больше сканов и советов технолога, ежемесячные промокоды на косметику Essola и новые возможности первыми.</Text>
+          <Text style={styles.lead}>Больше сканов и советов технолога и ежемесячные промокоды на косметику Essola.</Text>
           <View style={styles.price}>
             <Text style={styles.priceN}>0 ₽</Text>
             <Text style={styles.priceT}>сейчас вступление бесплатное</Text>
@@ -143,7 +142,6 @@ export default function Club() {
             ['flask', 'Технолог без ограничений по ходу работы', 'Собирайте и улучшайте свои формулы в конструкторе: советов в три раза больше.'],
             ['bag', 'Промокод каждый месяц', 'Скидки на косметику и ингредиенты Essola — только для участников.'],
             ['user', 'Значок участника', 'В вашем профиле — его видят подписчики и собеседники на форуме.'],
-            ['comment', 'Скоро: живой технолог', 'Личные консультации по уходу и по вашим формулам — участники клуба получат первыми.'],
           ] as [IconName, string, string][]
         ).map(([icon, title, text]) => (
           <View key={title} style={styles.perk}>

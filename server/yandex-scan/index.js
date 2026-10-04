@@ -198,6 +198,27 @@ const ADMIN_PAGE_OF = () => {
   return adminPage;
 };
 
+// Public pages for the App Store listing (privacy policy, terms, rules, support): the same texts as in the app,
+// bundled from app/src/data/legal.ts at deploy time.
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function docPage(name) {
+  let docs = {};
+  try {
+    docs = require('./legal.json');
+  } catch {}
+  const head = (title) => `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} — essola</title><style>body{margin:0;background:#F7F5FF;color:#1E1A33;font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}main{max-width:720px;margin:0 auto;padding:32px 20px 60px}h1{font-size:28px;letter-spacing:-.5px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 6px}.muted{color:#6E6890;font-size:14px}a{color:#5E49D8}nav a{margin-right:14px;font-size:14px}textarea,input{width:100%;box-sizing:border-box;border:1px solid #E6E1FA;border-radius:12px;padding:12px;font:inherit;background:#fff}button{margin-top:12px;border:0;border-radius:14px;padding:12px 20px;font:600 15px inherit;color:#fff;background:#7C66EE}</style></head><body><main><nav class="muted"><a href="?doc=privacy">Конфиденциальность</a><a href="?doc=terms">Условия</a><a href="?doc=rules">Правила</a><a href="?doc=support">Поддержка</a></nav>`;
+  if (name === 'support') {
+    const key = String(process.env.APP_KEY || '').replace(/[^a-z0-9]/gi, '');
+    return head('Поддержка') + `<h1>Поддержка essola</h1><p class="muted">Вопросы о приложении, данных и удалении аккаунта. Ответим на указанную почту.</p>
+<form id="f"><h2>Ваша почта</h2><input id="e" type="email" required autocomplete="email"><h2>Сообщение</h2><textarea id="m" rows="6" required></textarea><button>Отправить</button><p id="r" class="muted"></p></form>
+<p class="muted">Удалить аккаунт можно и в самом приложении: Профиль → Удалить аккаунт.</p>
+<script>document.getElementById('f').onsubmit=async(ev)=>{ev.preventDefault();const r=document.getElementById('r');r.textContent='Отправляем…';try{const x=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json','X-App-Key':'${key}'},body:JSON.stringify({mode:'support.msg',email:document.getElementById('e').value,text:document.getElementById('m').value})});r.textContent=x.ok?'Спасибо! Сообщение получено.':'Не получилось отправить, попробуйте позже.'}catch(e){r.textContent='Нет связи, попробуйте позже.'}};</script></main></body></html>`;
+  }
+  const d = docs[name] || docs.privacy;
+  if (!d) return head('essola') + '<h1>essola</h1></main></body></html>';
+  return head(d.title) + `<h1>${esc(d.title)}</h1><p class="muted">Обновлено: ${esc(d.updated)}</p>` + d.sections.map((x) => `<h2>${esc(x.h)}</h2>${String(x.p).split('\n').map((l) => `<p>${esc(l)}</p>`).join('')}`).join('') + '</main></body></html>';
+}
+
 /** Keys under a prefix in the bucket (up to 1000). */
 async function cacheList(prefix, iam) {
   if (!BUCKET || !iam) return [];
@@ -468,6 +489,7 @@ async function handle(event, context) {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
     const q0 = event.queryStringParameters || {};
+    if (q0.doc) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=600' }, body: docPage(String(q0.doc).replace(/[^a-z]/g, '')) };
     if (q0.admin !== undefined) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }, body: ADMIN_PAGE_OF() };
     // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
     // The app registered its return address under the state beforehand (mode "vk.start").
@@ -651,6 +673,15 @@ async function handle(event, context) {
       await Promise.all([...(acc.links || []).map((k) => cacheDel(k, iam)), ...(acc.sessions || []).map((h) => cacheDel(`sessions/${h}.json`, iam)), cacheDel(`accounts/${me}/data.json`, iam), cacheDel(`accounts/${me}.json`, iam)]);
       return reply(200, { ok: true });
     }
+    if (req.mode === 'support.msg') {
+      const email = String(req.email || '').trim().slice(0, 120);
+      const text = clean(req.text, 3000);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || text.length < 3) return reply(400, { error: 'bad_message' });
+      if (!(await allow('support', 10))) return reply(429, { error: 'limit' });
+      const list = await get('support.json', []);
+      await put('support.json', [{ at: new Date().toISOString(), email, text }, ...list].slice(0, 1000));
+      return reply(200, { ok: true });
+    }
     // ---- Reports, account deletion (App Store rules for apps with user content) ----
     if (req.mode === 'report') {
       const me = uid(req.id);
@@ -762,7 +793,7 @@ async function handle(event, context) {
     if (req.mode === 'admin.check' || req.mode === 'admin.stats' || req.mode === 'admin.reports' || req.mode === 'editorial.remove' || req.mode === 'admin.club' || req.mode === 'admin.promo') {
       if (!(await adminOk())) return reply(403, { error: 'not_admin' });
       if (req.mode === 'admin.check') return reply(200, { ok: true });
-      if (req.mode === 'admin.reports') return reply(200, { items: (await get('reports.json', [])).slice(0, 300) });
+      if (req.mode === 'admin.reports') return reply(200, { items: (await get('reports.json', [])).slice(0, 300), support: (await get('support.json', [])).slice(0, 300) });
       if (req.mode === 'admin.club') return reply(200, { members: (await get('club/members.json', [])).length, promo: await get('club/promo.json', null) });
       if (req.mode === 'admin.promo') {
         const promo = clean(req.code, 40) ? { code: clean(req.code, 40), text: clean(req.text, 200), until: clean(req.until, 10), at: new Date().toISOString() } : null;

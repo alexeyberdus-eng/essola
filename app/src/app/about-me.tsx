@@ -41,7 +41,7 @@ export default function AboutMe() {
         <View style={styles.top}>
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>Расскажите о себе</Text>
-            <Text style={styles.sub}>Оценки составов, подбор и советы технолога будут учитывать именно вас. Всё хранится только на телефоне.</Text>
+            <Text style={styles.sub}>Оценки составов, подбор и советы технолога будут учитывать именно вас. Анкета хранится на телефоне, а если вы вошли — ещё и в вашем аккаунте, и никому не показывается.</Text>
           </View>
           <IconButton icon="close" label="Закрыть" onPress={() => router.back()} />
         </View>

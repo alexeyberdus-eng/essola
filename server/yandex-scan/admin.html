@@ -62,7 +62,7 @@
       <button class="tab" data-tab="stories">Истории</button>
       <button class="tab" data-tab="recipes">Рецепты (CSV)</button>
       <button class="tab" data-tab="club">Клуб</button>
-      <button class="tab" data-tab="reports">Жалобы</button>
+      <button class="tab" data-tab="reports">Жалобы и поддержка</button>
       <button class="tab" data-tab="out" style="margin-left:auto">Выйти</button>
     </div>
 
@@ -296,8 +296,10 @@ $('cSave').onclick = async () => {
 // ---- Reports ----
 const KINDS = { recipe: 'рецепт', comment: 'комментарий', topic: 'тема форума', post: 'ответ на форуме', user: 'профиль', review: 'отзыв' };
 async function loadReports() {
-  const { items } = await api('admin.reports');
-  $('reports').innerHTML = items.length ? items.map((r) => `<div class="report"><b>${esc(KINDS[r.kind] || r.kind)}</b> · ${esc(r.at.slice(0, 16).replace('T', ' '))}<br>${esc(r.reason)}${r.text ? `<br><span class="muted">«${esc(r.text)}»</span>` : ''}<br><span class="muted">автор: ${esc(r.author || '—')} · объект: ${esc(r.target)}</span></div>`).join('') : 'Жалоб нет';
+  const { items, support = [] } = await api('admin.reports');
+  const rep = items.length ? items.map((r) => `<div class="report"><b>${esc(KINDS[r.kind] || r.kind)}</b> · ${esc(r.at.slice(0, 16).replace('T', ' '))}<br>${esc(r.reason)}${r.text ? `<br><span class="muted">«${esc(r.text)}»</span>` : ''}<br><span class="muted">автор: ${esc(r.author || '—')} · объект: ${esc(r.target)}</span></div>`).join('') : 'Жалоб нет';
+  const sup = support.length ? support.map((m) => `<div class="report"><b>${esc(m.email)}</b> · ${esc(m.at.slice(0, 16).replace('T', ' '))}<br>${esc(m.text)}<br><a href="mailto:${esc(m.email)}">Ответить</a></div>`).join('') : 'Сообщений нет';
+  $('reports').innerHTML = `<h2>Жалобы</h2>${rep}<h2 style="margin-top:22px">Обращения в поддержку</h2>${sup}`;
 }
 </script>
 </body>
