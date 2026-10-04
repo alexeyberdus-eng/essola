@@ -89,6 +89,7 @@ jobs:
                    '{"mode":"admin.check","admin":"wrong-password-smoke"}' \
                    '{"mode":"link","url":"https://www.ozon.ru/product/cerave-foaming-cleanser-gel-dlya-umyvaniya-litsa-sredstvo-ochishchayushchee-dlya-zhirnoy-i-1116109550/"}' \
                    '{"mode":"link","url":"https://www.wildberries.ru/catalog/14152358/detail.aspx"}' \
+                   '{"mode":"link","url":"https://www.wildberries.ru/catalog/1502673109/detail.aspx"}' \
                    '{"mode":"link","url":"https://ozon.ru/t/yeYlGZI"}' \
                    '{"mode":"catalog","q":"сераве увлажняющий крем","size":2}'; do
             curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'

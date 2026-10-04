@@ -278,9 +278,48 @@ export default function ScannerScreen() {
   const [clip, setClip] = useState<string | null>(null);
   const [shop, setShop] = useState<string | null>(null);
   const [shopName, setShopName] = useState('Летуаль');
-  // Ozon / Wildberries pages are read in the background while «Читаем…» is shown; visible only if that fails.
+  // Ozon / Wildberries pages are read in the background while «Читаем…» is shown; shown only if the person asks.
   const [shopHidden, setShopHidden] = useState(false);
   const shopDone = useRef(false);
+  const shopRun = useRef(0);
+  const pageTitle = useRef('');
+  // The page couldn't be read: the notice offers to open it by hand.
+  const [stuck, setStuck] = useState<{ url: string; text: string } | null>(null);
+
+  const readPage = (url: string, label: string, known: string) => {
+    setShopName(label);
+    pageTitle.current = known;
+    shopDone.current = false;
+    setShopHidden(true);
+    setBusy(true);
+    setShop(url);
+    const run = ++shopRun.current;
+    setTimeout(() => {
+      if (!shopDone.current && run === shopRun.current) giveUp(url, label);
+    }, 30000);
+  };
+
+  // Nothing read from the page in time: search the composition by the product's name instead of showing the browser.
+  const giveUp = async (url: string, label: string) => {
+    shopDone.current = true;
+    setShop(null);
+    const title = pageTitle.current;
+    if (title) {
+      const r = await productByName(title, undefined, true).catch(() => null);
+      if (r?.item?.x) return openFromBase(r.item);
+      if (r?.ingredients && r.ingredients.length >= 3) {
+        setBusy(false);
+        return finish(`Состав: ${r.ingredients.join(', ')}`, title, { source: label }, true);
+      }
+    }
+    setBusy(false);
+    const text = title
+      ? `Нашли «${title}», но состав на странице ${label} не прочитался. Сфотографируйте состав на упаковке — или откройте страницу и найдите «Состав».`
+      : `Страница ${label} не открылась. Сфотографируйте состав на упаковке — или откройте страницу и найдите «Состав».`;
+    setStuck({ url, text });
+    setNotice(text);
+  };
+
   useEffect(() => {
     if (!focused || !aiEnabled) return;
     Clipboard.hasUrlAsync?.()
@@ -302,35 +341,14 @@ export default function ScannerScreen() {
         if (r.ingredients && r.ingredients.length >= 3 || r.limited) setBusy(false);
         if (r.ingredients && r.ingredients.length >= 3) return finish(`Состав: ${r.ingredients.join(', ')}`, name || undefined, { source: SHOP[r.shop ?? ''] ?? 'магазин' }, true);
         if (r.limited) return setNotice(LIMIT_NOTE);
-        // No open composition: open the product page itself in the app and read the name and «Состав» from it,
-        // the way a person would (the shop shows its page to the visitor as usual).
-        setShopName(SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'));
-        shopDone.current = false;
-        setShopHidden(true);
-        setBusy(true);
-        setShop(url);
-        // Not read in 25 seconds (a check page, a slow site): show the page so the person can open «Состав».
-        setTimeout(() => {
-          if (shopDone.current) return;
-          setShopHidden(false);
-          setBusy(false);
-        }, 25000);
-        return;
+        // Wildberries gives the real name and brand from its card: the same product in our base is the answer.
+        if (r.shop === 'wb' && r.item?.x) return openFromBase(r.item);
+        // No open composition: read the product page in the background, the way a person would, without showing it.
+        return readPage(url, SHOP[r.shop ?? ''] ?? (/ozon/i.test(url) ? 'Ozon' : /wildberries|wb\.ru/i.test(url) ? 'Wildberries' : 'Золотое Яблоко'), r.shop === 'wb' ? name : '');
       }
       const { product } = await productByLink(url).catch(() => ({ product: null }));
-      if (!product?.ingredients?.length) {
-        // Not in our base yet: read the page in the background, the same way as Ozon / Wildberries.
-        setShopName(/goldapple/i.test(url) ? 'Золотое Яблоко' : 'Летуаль');
-        shopDone.current = false;
-        setShopHidden(true);
-        setShop(url);
-        setTimeout(() => {
-          if (shopDone.current) return;
-          setShopHidden(false);
-          setBusy(false);
-        }, 25000);
-        return;
-      }
+      // Not in our base yet: read the page in the background, the same way as Ozon / Wildberries.
+      if (!product?.ingredients?.length) return readPage(url, /goldapple/i.test(url) ? 'Золотое Яблоко' : 'Летуаль', '');
       setBusy(false);
       finish(`Состав: ${product.ingredients.join(', ')}`, product.title ?? undefined, { source: product.source }, true);
     } catch (e) {
@@ -568,6 +586,21 @@ export default function ScannerScreen() {
           <View style={[styles.noticeBox, { marginTop: 12 }]}>
             <Text style={styles.noticeText}>{notice}</Text>
             {notice === LINK_NOTICE && <LinkHelp inline />}
+            {stuck && notice === stuck.text && (
+              <Press
+                onPress={() => {
+                  shopDone.current = false;
+                  shopRun.current++;
+                  setShopHidden(false);
+                  setShop(stuck.url);
+                  setNotice(null);
+                }}
+                style={styles.clip}
+              >
+                <Icon name="arrowRight" size={16} color={colors.violet} />
+                <Text style={[styles.clipTitle, { flex: 1 }]}>Открыть страницу</Text>
+              </Press>
+            )}
           </View>
         )}
         {seen && !lookup && mode === 'label' && (
@@ -793,6 +826,8 @@ export default function ScannerScreen() {
         }}
         onTitle={async (title) => {
           // Only the name so far: if it's a product of our base, open it from there right away.
+          if (pageTitle.current === title) return;
+          pageTitle.current = title;
           const hit = await productByName(title).catch(() => null);
           if (shopDone.current || !hit?.item?.x) return;
           openFromBase(hit.item);

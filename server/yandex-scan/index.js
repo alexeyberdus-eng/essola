@@ -455,23 +455,31 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
 // ---- Links from Wildberries and Ozon ----
 // Wildberries publishes each card as a static JSON file on its CDN (name, brand, characteristics incl. «Состав»).
 // The CDN host number depends on the article; try the likely one first, then the rest in small batches.
+// Since basket 37 every new host takes the next 312 volumes; the table continues that step for newer articles.
 const WB_RANGES = [143, 287, 431, 719, 1007, 1061, 1115, 1169, 1313, 1601, 1655, 1919, 2045, 2189, 2405, 2621, 2837, 3053, 3269, 3485, 3701, 3917, 4133, 4349, 4565, 4877, 5189, 5501, 5813, 6125, 6437, 6749, 7061, 7373, 7685, 7997, 8309, 8621, 8933, 9245];
+while (WB_RANGES.length < 140) WB_RANGES.push(WB_RANGES[WB_RANGES.length - 1] + 312);
+const wbHostOf = new Map(); // vol → host that answered, so the next article from that volume goes straight there
 async function wbCard(nm) {
   const vol = Math.floor(nm / 1e5);
   const part = Math.floor(nm / 1e3);
-  const guess = WB_RANGES.findIndex((x) => vol <= x) + 1 || WB_RANGES.length;
-  const hosts = [guess, ...Array.from({ length: 40 }, (_, i) => i + 1).filter((i) => i !== guess)];
+  const guess = wbHostOf.get(vol) || WB_RANGES.findIndex((x) => vol <= x) + 1 || WB_RANGES.length;
+  // Nearest hosts first (the table drifts by a host or two), then everything else.
+  const near = [0, -1, 1, -2, 2, -3, 3].map((d) => guess + d).filter((h) => h >= 1);
+  const hosts = [...near, ...Array.from({ length: 160 }, (_, i) => i + 1).filter((h) => !near.includes(h))];
   const get = async (h) => {
     const url = `https://basket-${String(h).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nm}/info/ru/card.json`;
     const r = await fetch(url, { signal: AbortSignal.timeout(4000) }).catch(() => null);
-    return r && r.ok ? r.json().catch(() => null) : null;
+    const c = r && r.ok ? await r.json().catch(() => null) : null;
+    if (c) wbHostOf.set(vol, h);
+    return c;
   };
   const first = await get(hosts[0]);
   if (first) return first;
-  for (let i = 1; i < hosts.length; i += 10) {
-    const found = (await Promise.all(hosts.slice(i, i + 10).map(get))).find(Boolean);
+  for (let i = 1; i < hosts.length; i += 30) {
+    const found = (await Promise.all(hosts.slice(i, i + 30).map(get))).find(Boolean);
     if (found) return found;
   }
+  console.log('wb card not found', nm, 'vol', vol, 'guess', guess);
   return null;
 }
 /** Short share links (ozon.ru/t/…, wb.ru/…, clck…) only redirect to the product page: read where they point. */
@@ -1323,6 +1331,12 @@ async function handle(event, context) {
       if (found[0] && found[0]._score >= 0.75 && (found.length === 1 || found[1]._score < found[0]._score)) {
         const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(found[0])], iam);
         return reply(200, { item });
+      }
+      // The shop page gave only the name: look for the composition on the web (same daily limit as other web searches).
+      if (req.web) {
+        const brand = clean(req.brand, 80);
+        const more = await findByLabel(brand || brandWord, brand ? name : name.split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web')).catch(() => ({}));
+        if (more.item?.x || more.ingredients?.length) return reply(200, more);
       }
       return reply(200, {});
     }

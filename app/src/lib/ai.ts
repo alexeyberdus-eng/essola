@@ -128,8 +128,8 @@ export async function productByLink(url: string): Promise<{ product: CachedProdu
 export const SHOP_LINK = /https?:\/\/(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple\.ru|wildberries\.(?:ru|by|kz|am|kg|uz|ge)|wb\.ru|wbx\.ru|ozon\.ru)\/\S+/i;
 
 /** A product name read from a shop page → the same product in our base, when it is clearly the same one. */
-export async function productByName(name: string, brand?: string): Promise<{ item?: CatalogItem }> {
-  return call({ mode: 'byname', name, brand });
+export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {
+  return call({ mode: 'byname', name, brand, web });
 }
 
 /** Wildberries / Ozon / Gold Apple link → the shop's open composition, our product, close candidates, or the web. */

@@ -24,21 +24,26 @@ const FIND = `
   var sentTitle = false;
   function title() {
     var h = document.querySelector('h1');
-    return ((h && h.innerText) || document.title || '').trim();
+    var og = document.querySelector('meta[property="og:title"]');
+    return ((h && h.innerText) || (og && og.getAttribute('content')) || '').trim();
   }
+  var CLICK = ['состав', 'ingredients', 'состав продукта', 'состав и описание', 'описание и состав', 'характеристики и описание', 'все характеристики и описание', 'все характеристики', 'характеристики', 'о товаре', 'описание', 'читать полностью', 'показать полностью', 'развернуть'];
+  var done = {};
   function tick() {
     ticks++;
     try {
-      // No composition after a while: send at least the name, so our base can be searched.
-      if (ticks === 14 && !sentTitle && title()) {
+      // The name as soon as the page shows it: our base is searched by it while the composition is looked for.
+      if (!sentTitle && title().length > 6 && ticks >= 2) {
         sentTitle = true;
         window.ReactNativeWebView.postMessage(JSON.stringify({ title: title(), text: '' }));
       }
-      if (clicked < 3) {
+      // Shops load the description and characteristics lower on the page only when scrolled to.
+      if (ticks % 2 === 0) window.scrollBy(0, 900);
+      if (clicked < 6) {
         var els = document.querySelectorAll('button, [role="tab"], [role="button"], summary, li, div, span, a');
         for (var i = 0; i < els.length; i++) {
           var t = (els[i].textContent || '').trim().toLowerCase();
-          if (t === 'состав' || t === 'ingredients' || t === 'состав продукта' || t === 'состав и описание' || t === 'описание и состав' || t === 'характеристики и описание' || t === 'все характеристики и описание' || t === 'все характеристики') { els[i].click(); clicked++; break; }
+          if (t.length < 40 && CLICK.indexOf(t) >= 0 && !done[t]) { done[t] = 1; try { els[i].click(); } catch (e) {} clicked++; break; }
         }
       }
       var found = pick();
