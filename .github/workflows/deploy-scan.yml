@@ -48,13 +48,13 @@ jobs:
           yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3
           echo "bucket step exit: ${PIPESTATUS[0]}"
           set -e
-          ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET"
+          ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET,NODE_OPTIONS=--max-old-space-size=3584"
           [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
           [ -n "$NK_API_KEY" ] && ENVV="$ENVV,NK_API_KEY=$NK_API_KEY"
           [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
           [ -n "$ADMIN_TOKEN" ] && ENVV="$ENVV,ADMIN_TOKEN=$ADMIN_TOKEN"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
-          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 2048m --execution-timeout 60s --source-path scan.zip"
+          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 4096m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.
           yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
             || yc serverless function version create $V --environment "$ENVV" >/dev/null

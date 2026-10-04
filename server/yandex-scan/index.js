@@ -289,7 +289,7 @@ async function letuShard(h, iam) {
   if (shards.has(h)) return shards.get(h);
   const [src, hash] = h.includes('/') ? h.split('/') : ['letu', h];
   const data = (await cacheGet(`${src}/x/${hash}.json`, iam)) || {};
-  if (shards.size > 1500) shards.delete(shards.keys().next().value);
+  if (shards.size > 700) shards.delete(shards.keys().next().value);
   shards.set(h, data);
   return data;
 }
