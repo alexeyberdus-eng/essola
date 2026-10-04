@@ -2,6 +2,7 @@ import { BarcodeScanningResult, BarcodeType, CameraView, scanFromURLAsync, useCa
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,7 +30,7 @@ const native = Platform.OS !== 'web';
 
 const LINK_NOTICE = 'Скопируйте ссылку на товар в Летуаль, Wildberries, Ozon или Золотом Яблоке и нажмите «Ссылка» ещё раз. Если ссылки нет — сделайте скриншот состава и загрузите его через «Галерея».';
 
-type Mode = 'barcode' | 'label' | 'front' | 'cz';
+type Mode = 'barcode' | 'label' | 'front' | 'cz' | 'link';
 type Lookup = { code: string; state: 'searching' | 'missing'; name?: string | null } | null;
 
 /** Where a product card from our bases came from. */
@@ -42,8 +43,6 @@ export default function ScannerScreen() {
   const camera = useRef<CameraView>(null);
   const { saveScan, scans } = useLibrary();
   const { height: winH } = useWindowDimensions();
-  // The camera opens on the top half with the scan history below; it can be expanded to full screen.
-  const [full, setFull] = useState(false);
   const { barcodes, rememberBarcode } = useUserContent();
 
   const [mode, setMode] = useState<Mode>('label');
@@ -276,6 +275,8 @@ export default function ScannerScreen() {
 
   // A Gold Apple / Letual link copied from the shop app: offer to check it right away.
   const [clip, setClip] = useState<string | null>(null);
+  // A link the person dismissed isn't offered again until something else is copied.
+  const clipSkip = useRef<string | null>(null);
   const [shop, setShop] = useState<string | null>(null);
   const [shopName, setShopName] = useState('Летуаль');
   // Ozon / Wildberries pages are read in the background while «Читаем…» is shown; shown only if the person asks.
@@ -327,7 +328,10 @@ export default function ScannerScreen() {
     if (!focused || !aiEnabled) return;
     Clipboard.hasUrlAsync?.()
       .then((has) => (has ? Clipboard.getUrlAsync() : Clipboard.getStringAsync()))
-      .then((t) => setClip(t?.match(SHOP_LINK)?.[0] ?? null))
+      .then((t) => {
+        const link = t?.match(SHOP_LINK)?.[0] ?? null;
+        setClip(link && link !== clipSkip.current ? link : null);
+      })
       .catch(() => {});
   }, [focused]);
 
@@ -448,7 +452,8 @@ export default function ScannerScreen() {
     setMode(m);
     setNotice(null);
     setMatches(null);
-    if (m === 'barcode') {
+    // Any mode but «Состав» leaves an unknown barcode behind (in «Состав» its composition is being shot).
+    if (m !== 'label') {
       setLookup(null);
       pendingCode.current = null;
     }
@@ -508,8 +513,20 @@ export default function ScannerScreen() {
   }
 
   const barcode = mode === 'barcode';
-  const frameTop = insets.top + (full ? (barcode ? 190 : 100) : barcode ? 96 : 66);
-  const frameH = barcode ? (full ? 150 : 120) : undefined;
+  // Variant 1 «как камера iPhone»: full-screen camera, a dark dock with the mode words, gallery · shutter · text.
+  const DOCK = 226 + insets.bottom;
+  const frameTop = insets.top + (barcode ? 190 : 112);
+  const frameH = barcode ? 150 : undefined;
+  const MODES: [Mode, string][] = aiEnabled ? [['label', 'Состав'], ['front', 'Этикетка'], ['cz', 'Штрихкод'], ['link', 'Ссылка']] : [['label', 'Состав']];
+  // Barcode not in the base and the person went to shoot the composition: the dock stays, with a reminder.
+  const shootForCode = lookup?.state === 'missing' && mode === 'label';
+  const hint = busy
+    ? mode === 'cz' ? 'Ищем средство по коду…' : mode === 'front' ? 'Узнаём средство и ищем состав…' : mode === 'link' ? 'Читаем страницу товара…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'
+    : mode === 'front' ? 'Наведите на лицевую сторону — узнаем средство'
+    : mode === 'cz' ? 'Наведите на штрихкод или код «Честный знак»'
+    : mode === 'link' ? 'Скопируйте ссылку на товар в WB, Ozon, Летуаль или Золотом Яблоке'
+    : shootForCode ? 'Снимите состав — запомним его за этим штрихкодом'
+    : `${ocr.state === 'loading' && webOcr ? `Готовлю распознавание ${Math.round(ocr.progress * 100)}% · ` : ''}Наведите на блок «Состав» и сделайте снимок`;
 
   const findPanel = (
           <View style={styles.find}>
@@ -533,159 +550,119 @@ export default function ScannerScreen() {
           </View>
   );
 
-  const sheet = (
-      <View style={[full ? styles.sheet : styles.sheetInline, full && { paddingBottom: insets.bottom + 18 }]}>
-        {full && <View style={styles.grab} />}
-        {lookup ? (
-          <View>
-            <View style={styles.live}>
-              {lookup.state === 'searching' ? <ActivityIndicator color={colors.sageDeep} /> : <Icon name="alert" size={20} color={colors.brassText} />}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>{lookup.state === 'searching' ? 'Ищем в открытых базах' : lookup.name ? 'Нашли товар, но без состава' : 'В базах этого товара нет'}</Text>
-                <Text style={styles.mono} numberOfLines={2}>{lookup.name ?? 'Open Beauty Facts · Open Food Facts · база Essola'}</Text>
-              </View>
-            </View>
-            <View style={styles.steps}>
-              <Step ok text="Штрихкод распознан" />
-              {lookup.state === 'searching' ? (
-                <Text style={styles.stepNow}>Поиск состава…</Text>
-              ) : (
-                <Text style={styles.stepText}>Сфотографируйте состав на упаковке — мы разберём его и запомним за этим штрихкодом.</Text>
-              )}
-            </View>
-            {lookup.state === 'missing' && aiEnabled && findPanel}
-            {lookup.state === 'missing' && (
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-                <Button label="Снять состав" icon="camera" onPress={() => setMode('label')} style={{ flex: 1 }} />
-                <Press onPress={() => switchMode('barcode')} style={styles.square} accessibilityLabel="Сканировать снова">
-                  <Icon name="barcode" size={21} />
-                </Press>
-              </View>
-            )}
-            {lookup.state === 'missing' && mode === 'label' && (
-              <Text style={[styles.sheetText, { marginTop: 10 }]}>Наведите на «Состав» и нажмите кнопку ниже.</Text>
-            )}
+  const noticeCard = notice && (
+    <View style={styles.noticeBox}>
+      <Text style={styles.noticeText}>{notice}</Text>
+      {notice === LINK_NOTICE && <LinkHelp inline />}
+      {stuck && notice === stuck.text && (
+        <Press
+          onPress={() => {
+            shopDone.current = false;
+            shopRun.current++;
+            setShopHidden(false);
+            setShop(stuck.url);
+            setNotice(null);
+          }}
+          style={styles.clip}
+        >
+          <Icon name="arrowRight" size={16} color={colors.violet} />
+          <Text style={[styles.clipTitle, { flex: 1 }]}>Открыть страницу</Text>
+        </Press>
+      )}
+      <Press haptic={false} onPress={() => setNotice(null)} style={styles.noticeClose} accessibilityLabel="Скрыть">
+        <Icon name="close" size={14} color={colors.brassText} />
+      </Press>
+    </View>
+  );
+
+  // A scanned barcode the bases don't know: a white sheet with the search, over the camera.
+  const lookupSheet = lookup && !shootForCode && (
+    <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
+      <View style={styles.grab} />
+      <ScrollView style={{ maxHeight: Math.round(winH * 0.6) }} bounces={false} keyboardShouldPersistTaps="handled">
+        <View style={styles.live}>
+          {lookup.state === 'searching' ? <ActivityIndicator color={colors.sageDeep} /> : <Icon name="alert" size={20} color={colors.brassText} />}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sheetTitle}>{lookup.state === 'searching' ? 'Ищем в открытых базах' : lookup.name ? 'Нашли товар, но без состава' : 'В базах этого товара нет'}</Text>
+            <Text style={styles.mono} numberOfLines={2}>{lookup.name ?? 'Open Beauty Facts · Open Food Facts · база Essola'}</Text>
           </View>
-        ) : busy ? (
-          <View style={styles.live}>
-            <Text style={styles.liveText}>{mode === 'cz' ? 'Ищем средство по коду…' : mode === 'front' ? 'Узнаём средство и ищем состав…' : ocr.state === 'loading' ? 'Загружаю распознавание…' : 'Читаю состав…'}</Text>
+        </View>
+        <View style={styles.steps}>
+          <Step ok text="Штрихкод распознан" />
+          {lookup.state === 'searching' ? (
+            <Text style={styles.stepNow}>Поиск состава…</Text>
+          ) : (
+            <Text style={styles.stepText}>Сфотографируйте состав на упаковке — мы разберём его и запомним за этим штрихкодом.</Text>
+          )}
+        </View>
+        {lookup.state === 'missing' && aiEnabled && findPanel}
+        {lookup.state === 'missing' && (
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+            <Button label="Снять состав" icon="camera" onPress={() => setMode('label')} style={{ flex: 1 }} />
+            <Press onPress={() => switchMode('cz')} style={styles.square} accessibilityLabel="Сканировать снова">
+              <Icon name="barcode" size={21} />
+            </Press>
           </View>
-        ) : mode === 'cz' ? (
-          <>
-            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на штрихкод или квадратный код «Честный знак»</Text>
-            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Найдём средство в Национальном каталоге, нашей базе и интернете и откроем разбор</Text>
-          </>
-        ) : mode === 'front' ? (
-          <>
-            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на лицевую сторону упаковки</Text>
-            <Text style={[styles.sheetText, { textAlign: 'center' }]}>Узнаем средство и сразу откроем его разбор</Text>
-          </>
-        ) : barcode ? (
-          <>
-            <Text style={styles.sheetTitle}>Наведите на штрихкод</Text>
-            <Text style={styles.sheetText}>Держите телефон в 15–20 см и приблизьте кнопкой «2×», если полоски расплываются. Ищем в открытых базах, нашей базе и интернет-магазинах.</Text>
-            <View style={[styles.findRow, { marginTop: 12 }]}>
-              <Icon name="barcode" size={16} color={colors.muted} />
-              <TextInput value={digits} onChangeText={(t) => setDigits(t.replace(/\D/g, '').slice(0, 14))} onSubmitEditing={() => digits.length >= 8 && lookupCode(digits)} placeholder="Или введите цифры под штрихкодом" placeholderTextColor={colors.faint} keyboardType="number-pad" returnKeyType="search" style={styles.findInput} />
-              {digits.length >= 8 && (
-                <Press onPress={() => lookupCode(digits)} accessibilityLabel="Найти по цифрам">
-                  <Text style={styles.clipGo}>Найти</Text>
-                </Press>
-              )}
-            </View>
-          </>
+        )}
+        {!!noticeCard && <View style={{ marginTop: 12 }}>{noticeCard}</View>}
+      </ScrollView>
+    </View>
+  );
+
+  const side = 58;
+  const dock = !lookupSheet && (
+    <View style={[styles.dock, { height: DOCK }]} pointerEvents="box-none">
+      <LinearGradient colors={['rgba(10,10,12,0)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.93)']} locations={[0, 0.24, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={styles.hint} numberOfLines={2}>{hint}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.words} style={{ flexGrow: 0 }}>
+        {MODES.map(([k, l]) => (
+          <Press key={k} haptic={false} onPress={() => switchMode(k)} style={styles.word} accessibilityLabel={l}>
+            <Text style={[styles.wordText, mode === k && styles.wordOn]}>{l}</Text>
+          </Press>
+        ))}
+      </ScrollView>
+      <View style={[styles.row, { marginBottom: insets.bottom + 16 }]}>
+        {mode === 'link' ? (
+          <View style={{ width: side }} />
         ) : (
-          <>
-            <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Наведите на блок «Состав»</Text>
-            <Text style={[styles.sheetText, { textAlign: 'center' }]}>
-              {ocr.state === 'loading' && webOcr ? `Готовлю распознавание ${Math.round(ocr.progress * 100)}% · ` : ''}Крупно и ровно — оценим за пару секунд
-            </Text>
-          </>
+          <Press onPress={pick} style={{ width: side, alignItems: 'center' }} accessibilityLabel="Галерея">
+            <View style={styles.thumb}><Icon name="image" size={20} color="#fff" /></View>
+            <Text style={styles.under}>Галерея</Text>
+          </Press>
         )}
-        {notice && (
-          <View style={[styles.noticeBox, { marginTop: 12 }]}>
-            <Text style={styles.noticeText}>{notice}</Text>
-            {notice === LINK_NOTICE && <LinkHelp inline />}
-            {stuck && notice === stuck.text && (
-              <Press
-                onPress={() => {
-                  shopDone.current = false;
-                  shopRun.current++;
-                  setShopHidden(false);
-                  setShop(stuck.url);
-                  setNotice(null);
-                }}
-                style={styles.clip}
-              >
-                <Icon name="arrowRight" size={16} color={colors.violet} />
-                <Text style={[styles.clipTitle, { flex: 1 }]}>Открыть страницу</Text>
-              </Press>
-            )}
+        {mode === 'label' || mode === 'front' ? (
+          <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
+            <LinearGradient colors={['#9C8BF5', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.shutterIn} />
+          </Press>
+        ) : mode === 'link' ? (
+          <Press onPress={pasteLink} disabled={busy} style={styles.shutter} accessibilityLabel="Вставить ссылку">
+            <LinearGradient colors={['#9C8BF5', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.shutterIn, { alignItems: 'center', justifyContent: 'center' }]}>
+              <Icon name="external" size={24} color="#fff" />
+            </LinearGradient>
+          </Press>
+        ) : (
+          <View style={styles.shutterGhost}>
+            <Icon name="barcode" size={26} color="#fff" />
           </View>
         )}
-        {seen && !lookup && mode === 'label' && (
-          <Press onPress={() => { setMode('barcode'); lookupCode(seen); }} style={styles.clip}>
-            <Icon name="barcode" size={16} color={colors.violet} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.clipTitle}>В кадре штрихкод</Text>
-              <Text style={styles.clipText}>{seen}</Text>
-            </View>
-            <Text style={styles.clipGo}>Найти</Text>
+        {mode === 'label' ? (
+          <Press onPress={() => setManual(true)} style={{ width: side, alignItems: 'center' }} accessibilityLabel="Вставить состав текстом">
+            <View style={styles.round}><Icon name="text" size={20} color="#fff" /></View>
+            <Text style={styles.under}>Текстом</Text>
           </Press>
-        )}
-        {clip && !lookup && (
-          <Press onPress={() => checkLink(clip)} style={styles.clip}>
-            <Icon name="external" size={16} color={colors.violet} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.clipTitle}>Нашли ссылку на товар</Text>
-              <Text style={styles.clipText} numberOfLines={1}>
-                {clip.replace(/^https?:\/\/(www\.)?/, '')}
-              </Text>
-            </View>
-            <Text style={styles.clipGo}>Проверить</Text>
-          </Press>
-        )}
-        {(!lookup || (lookup.state === 'missing' && mode === 'label')) && (
-          <>
-            <View style={styles.controls}>
-              {mode === 'label' || mode === 'front' ? (
-                <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
-                  <View style={styles.shutterIn} />
-                </Press>
-              ) : (
-                <View style={styles.shutterGhost}>
-                  <Icon name="barcode" size={26} color={colors.sageDeep} />
-                </View>
-              )}
-            </View>
-            <View style={styles.actions}>
-              <Press onPress={pick} style={styles.action}>
-                <View style={styles.actionIcon}><Icon name="image" size={19} color={colors.violet} /></View>
-                <Text style={styles.actionText}>Галерея</Text>
-              </Press>
-              {mode === 'label' && (
-                <Press onPress={() => setManual(true)} style={styles.action}>
-                  <View style={styles.actionIcon}><Icon name="text" size={19} color={colors.violet} /></View>
-                  <Text style={styles.actionText}>Вставить текст</Text>
-                </Press>
-              )}
-              {aiEnabled && !lookup && (
-                <Press onPress={pasteLink} style={styles.action}>
-                  <View style={styles.actionIcon}><Icon name="external" size={19} color={colors.violet} /></View>
-                  <Text style={styles.actionText}>Ссылка WB, Ozon, Летуаль, ЗЯ</Text>
-                </Press>
-              )}
-            </View>
-          </>
+        ) : (
+          <View style={{ width: side }} />
         )}
       </View>
+      {mode === 'link' && <Text style={[styles.under, styles.linkUnder, { bottom: insets.bottom + 2 }]}>Вставить ссылку</Text>}
+    </View>
   );
 
   return (
-    <View style={[styles.screen, !full && { backgroundColor: colors.bg }]}>
+    <View style={styles.screen}>
       <StatusBar style="light" />
       {engine}
-      <View style={[styles.camBox, full ? StyleSheet.absoluteFill : { flex: 1, minHeight: Math.round(winH * 0.38) }]}>
+      <View style={[styles.camBox, StyleSheet.absoluteFill]}>
       {permission?.granted ? (
         focused && (
           <CameraView
@@ -710,17 +687,8 @@ export default function ScannerScreen() {
       )}
 
       {permission?.granted && <Pressable onPress={refocus} style={StyleSheet.absoluteFill} accessibilityLabel="Навести фокус" />}
-      {permission?.granted && (
-        <View style={[styles.zoom, { bottom: full ? 350 : 14 }]}>
-          {ZOOMS.map(([z, l]) => (
-            <Press key={l} haptic={false} onPress={() => { tap(); setZoom(z); refocus(); }} style={[styles.zoomBtn, zoom === z && styles.zoomOn]}>
-              <Text style={[styles.zoomText, zoom === z && { color: colors.olive }]}>{l}</Text>
-            </Press>
-          ))}
-        </View>
-      )}
-      {permission?.granted && (
-        <View pointerEvents="none" style={[styles.frame, { top: frameTop }, frameH ? { height: frameH } : { bottom: full ? 330 : 64 }]}>
+      {permission?.granted && mode !== 'link' && (
+        <View pointerEvents="none" style={[styles.frame, { top: frameTop }, frameH ? { height: frameH } : { bottom: DOCK + 30 }]}>
           <Breathe amount={0.025} style={StyleSheet.absoluteFill}>
             {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
               <View key={c} style={[styles.corner, styles[c], lookup && { borderColor: '#B9C9A6' }]} />
@@ -732,28 +700,29 @@ export default function ScannerScreen() {
           <LightWave trigger={wave} />
         </View>
       )}
+      {/* Zoom: a pill on the right edge, out of the thumb's way. */}
+      {permission?.granted && mode !== 'link' && (
+        <View style={[styles.zoom, { top: frameTop + 40 }]}>
+          {ZOOMS.map(([z, l]) => (
+            <Press key={l} haptic={false} onPress={() => { tap(); setZoom(z); refocus(); }} style={[styles.zoomBtn, zoom === z && styles.zoomOn]} accessibilityLabel={`Зум ${l}`}>
+              <Text style={[styles.zoomText, zoom === z && { color: colors.ink }]}>{l}</Text>
+            </Press>
+          ))}
+        </View>
+      )}
 
       <View style={[styles.camTop, { top: insets.top + 10 }]}>
         <Press onPress={close} style={styles.camBtn} accessibilityLabel="Закрыть">
           <Icon name="arrowLeft" size={18} color="#fff" />
         </Press>
-        <Glass style={styles.modes} tint="rgba(20,20,15,0.35)" intensity={30}>
-          <View style={{ flexDirection: 'row', padding: 4 }}>
-            {(
-              [
-                ['label', 'Состав'],
-                ...(aiEnabled ? ([['front', 'Этикетка'], ['cz', 'Штрихкод']] as const) : []),
-              ] as const
-            ).map(([k, l]) => (
-              <Press key={k} haptic={false} onPress={() => switchMode(k)} style={[styles.mode, mode === k && styles.modeOn]}>
-                <Text style={[styles.modeText, mode === k && { color: colors.olive }]}>{l}</Text>
-              </Press>
-            ))}
-          </View>
-        </Glass>
-        <Press onPress={() => setTorch((t) => !t)} style={[styles.camBtn, torch && { backgroundColor: colors.brassLight }]} accessibilityLabel="Фонарик">
-          <Icon name="torch" size={18} color={torch ? colors.olive : '#fff'} />
-        </Press>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Press onPress={() => { tap(); setHistory(true); }} style={styles.camBtn} accessibilityLabel="История сканирований">
+            <Icon name="history" size={18} color="#fff" />
+          </Press>
+          <Press onPress={() => setTorch((t) => !t)} style={[styles.camBtn, torch && { backgroundColor: colors.brassLight }]} accessibilityLabel="Фонарик">
+            <Icon name="torch" size={18} color={torch ? colors.olive : '#fff'} />
+          </Press>
+        </View>
       </View>
 
       {lookup && barcode && (
@@ -762,38 +731,40 @@ export default function ScannerScreen() {
           <Text style={styles.codeText}>{lookup.code.replace(/(\d)(\d{6})(\d{6})/, '$1 $2 $3')}</Text>
         </View>
       )}
-
-      {!full && permission?.granted && (
-        <Press onPress={() => { tap(); setFull(true); }} style={styles.expand} accessibilityLabel="Развернуть камеру">
-          <Icon name="chevronDown" size={15} color="#fff" />
-          <Text style={styles.expandText}>Развернуть</Text>
-        </Press>
-      )}
-      {full && (
-        <Press onPress={() => { tap(); setFull(false); }} style={[styles.expand, { top: insets.top + 62, bottom: undefined }]} accessibilityLabel="Свернуть камеру">
-          <Text style={styles.expandText}>Свернуть</Text>
-        </Press>
-      )}
       </View>
-      {full ? (
-        sheet
-      ) : (
-        // The panel under the camera stays put; it scrolls only while search results are shown.
-        // The panel under the camera has its own height and never moves; the camera takes the rest of the screen.
-        // Only search results (unknown barcode) can scroll, inside a capped box.
-        <View>
-          {lookup ? (
-            <ScrollView style={{ maxHeight: Math.round(winH * 0.5) }} bounces={false} keyboardShouldPersistTaps="handled">
-              {sheet}
-            </ScrollView>
-          ) : (
-            sheet
+
+      {/* Cards over the camera, just above the dock: what went wrong, a barcode seen while shooting the composition. */}
+      {!lookupSheet && (noticeCard || (seen && !lookup && mode === 'label')) && (
+        <View style={[styles.float, { bottom: DOCK - 6 }]}>
+          {noticeCard}
+          {seen && !lookup && mode === 'label' && (
+            <Press onPress={() => { setMode('barcode'); lookupCode(seen); }} style={styles.clip}>
+              <Icon name="barcode" size={16} color={colors.violet} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.clipTitle}>В кадре штрихкод</Text>
+                <Text style={styles.clipText}>{seen}</Text>
+              </View>
+              <Text style={styles.clipGo}>Найти</Text>
+            </Press>
           )}
-          <Press haptic={false} onPress={() => { tap(); setHistory(true); }} style={[styles.historyBtn, styles.historyBar, { marginBottom: insets.bottom + 10 }]} accessibilityLabel="История сканирований">
-            <Icon name="history" size={18} color={colors.violet} />
-            <Text style={styles.historyTitle}>История сканирований</Text>
-            {scans.length > 0 && <Text style={styles.historyCount}>{scans.length}</Text>}
-            <Icon name="arrowRight" size={15} color={colors.muted} />
+        </View>
+      )}
+      {dock}
+      {lookupSheet}
+
+      {/* A product link in the clipboard: offered in any mode, right under the top bar. */}
+      {clip && !busy && !shop && (
+        <View style={[styles.clipPop, { top: insets.top + 62 }]}>
+          <View style={styles.clipIcon}><Icon name="external" size={16} color={colors.violet} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.clipTitle}>В буфере ссылка на товар</Text>
+            <Text style={styles.clipText} numberOfLines={1}>{clip.replace(/^https?:\/\/(www\.)?/, '')}</Text>
+          </View>
+          <Press onPress={() => checkLink(clip)} style={styles.clipBtn} accessibilityLabel="Проверить ссылку">
+            <Text style={styles.clipBtnText}>Проверить</Text>
+          </Press>
+          <Press haptic={false} onPress={() => { clipSkip.current = clip; setClip(null); }} style={styles.clipX} accessibilityLabel="Не сейчас">
+            <Icon name="close" size={14} color={colors.muted} />
           </Press>
         </View>
       )}
@@ -1005,9 +976,27 @@ const styles = StyleSheet.create({
   steps: { marginTop: 12, gap: 7 },
   stepText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
   stepNow: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
-  zoom: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', gap: 6, padding: 4, borderRadius: 99, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  zoomBtn: { minWidth: 46, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  zoomOn: { backgroundColor: '#FBF8F2' },
+  zoom: { position: 'absolute', right: 12, gap: 6, padding: 5, borderRadius: 99, backgroundColor: 'rgba(20,20,18,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
+  zoomBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  zoomOn: { backgroundColor: '#FFFFFF' },
+  dock: { position: 'absolute', left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },
+  hint: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, color: 'rgba(255,255,255,0.9)', textAlign: 'center', paddingHorizontal: 24 },
+  words: { paddingHorizontal: 12, gap: 2, flexGrow: 1, justifyContent: 'center', marginTop: 12 },
+  word: { paddingHorizontal: 7, paddingVertical: 8 },
+  wordText: { fontFamily: fonts.semibold, fontSize: 12.5, letterSpacing: 0.8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' },
+  wordOn: { color: '#C9BDFF' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 30, marginTop: 14 },
+  thumb: { width: 50, height: 50, borderRadius: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
+  round: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
+  under: { fontFamily: fonts.medium, fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 5, textAlign: 'center' },
+  linkUnder: { position: 'absolute', left: 0, right: 0 },
+  float: { position: 'absolute', left: space.gutter, right: space.gutter, gap: 8 },
+  noticeClose: { position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  clipPop: { position: 'absolute', left: space.gutter, right: space.gutter, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, paddingLeft: 12, borderRadius: 18, backgroundColor: '#FFFFFF', ...Platform.select({ ios: { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }, default: { elevation: 6 } }) },
+  clipIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
+  clipBtn: { backgroundColor: colors.violet, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  clipBtnText: { fontFamily: fonts.semibold, fontSize: 13, color: '#fff' },
+  clipX: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   zoomText: { fontFamily: fonts.semibold, fontSize: 14, color: '#fff' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16 },
   action: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 82, paddingHorizontal: 6, paddingVertical: 12, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E0F2', shadowColor: '#2B2F7A', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
@@ -1022,10 +1011,11 @@ const styles = StyleSheet.create({
   matchBrand: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 16 },
   square: { width: 52, height: 52, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
-  shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 3, borderColor: colors.olive, padding: 5 },
-  shutterIn: { flex: 1, borderRadius: 34, backgroundColor: colors.olive },
-  shutterGhost: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, borderColor: '#D9D2EC', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
-  noticeBox: { backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12 },
+  shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: '#FFFFFF', padding: 5 },
+  shutterIn: { flex: 1, borderRadius: 32 },
+  // «Штрихкод» reads by itself: a dashed ring instead of a button.
+  shutterGhost: { width: 78, height: 78, borderRadius: 39, borderWidth: 2, borderColor: 'rgba(255,255,255,0.7)', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  noticeBox: { backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12, paddingRight: 30 },
   noticeText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.brassText },
   notice: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.brassText, backgroundColor: colors.brassSoft, borderRadius: radius.md, padding: 12 },
   manualTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.gutter, paddingBottom: 6 },
