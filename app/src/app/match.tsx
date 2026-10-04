@@ -55,7 +55,6 @@ const AREAS: Area[] = [
 const FREE_KEYS = Object.keys(FREE_TAGS) as (keyof typeof FREE_TAGS)[];
 const SORTS = [
   ['score', 'Лучший состав'],
-  ['rating', 'Рейтинг покупателей'],
   ['popular', 'Популярные'],
 ] as const;
 
@@ -321,7 +320,7 @@ export default function Match() {
                   {!!x.b && <Text style={styles.prodBrand} numberOfLines={1}>{x.b}</Text>}
                   <Text style={styles.prodTitle} numberOfLines={2}>{x.t}</Text>
                   <Text style={styles.meta} numberOfLines={1}>
-                    {[x.r ? `★ ${x.r.toFixed(1)}` : '', fits.length ? fits.join(', ') : '', me ? me.label.toLowerCase() : ''].filter(Boolean).join(' · ')}
+                    {[fits.length ? fits.join(', ') : '', me ? me.label.toLowerCase() : ''].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
                 <ScoreBadge value={score} size={44} />

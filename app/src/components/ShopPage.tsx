@@ -25,7 +25,9 @@ const FIND = `
   function title() {
     var h = document.querySelector('h1');
     var og = document.querySelector('meta[property="og:title"]');
-    return ((h && h.innerText) || (og && og.getAttribute('content')) || '').trim();
+    var t = ((h && h.innerText) || (og && og.getAttribute('content')) || '').trim();
+    // A shop's visitor check (Gold Apple «checking device», Ozon «Доступ ограничен») is not the product.
+    return /checking|проверк|robot|робот|captcha|доступ ограничен|access denied/i.test(t) ? '' : t;
   }
   var CLICK = ['состав', 'ingredients', 'состав продукта', 'состав и описание', 'описание и состав', 'характеристики и описание', 'все характеристики и описание', 'все характеристики', 'характеристики', 'о товаре', 'описание', 'читать полностью', 'показать полностью', 'развернуть'];
   var done = {};

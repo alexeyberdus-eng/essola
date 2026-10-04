@@ -1480,6 +1480,11 @@ async function handle(event, context) {
         const t = await chat(m, msg, 2500, true, noThink).catch((e) => (/ 400:/.test(String(e.message)) ? chat(m, msg, 2500, true) : Promise.reject(e)));
         const nc = t.match(/НЕ\s*КОСМЕТИКА\s*:?\s*([^\n]{0,60})/i);
         if (nc) return reply(200, { ingredients: [], notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
+        // «Нет состава» (in any wording) means the photo has no ingredient list: never a one-item composition.
+        if (/нет\s+состава|пустой\s+ответ|состав\s+(не\s+(найден|виден|указан)|отсутствует)|no\s+ingredients/i.test(t) && !/[;,]/.test(t)) {
+          out = { ingredients: [], raw: 'no_composition' };
+          break;
+        }
         const json = t.includes('"ingredients"') && t.match(/\[[\s\S]*?\]/);
         const list = json ? [...json[0].matchAll(/"([^"\n]{2,89})"/g)].map((x) => x[1]) : t.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[^:\n]{0,20}:\s*/, '').split(/\s*[;\n]\s*/).map((x) => x.replace(/^(\d+[.)]\s+|[-*•]\s+)/, '').replace(/[.]$/, '').trim()).filter((x) => x.length > 1 && x.length < 90);
         out = { ingredients: list, raw: t.slice(0, 200) };

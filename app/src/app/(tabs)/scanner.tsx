@@ -1,4 +1,4 @@
-import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import { BarcodeScanningResult, BarcodeType, CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -381,14 +381,17 @@ export default function ScannerScreen() {
       try {
         const { ingredients: list, notCosmetic } = await aiScan(await toJpegBase64(uri), pendingCode.current, pendingName.current);
         if (notCosmetic) return finish(`NOT_COSMETIC: ${notCosmetic}`);
-        if (!list.length || !analyze(list.join(', ')).items.length) throw new Error('EMPTY');
+        // A real ingredient list: several items, or a short one made of known ingredients («масло ши 100%»).
+        const parsed = analyze(list.join(', '));
+        const known = parsed.items.filter((it) => it.match !== 'guess').length;
+        if (!parsed.items.length || (list.length < 3 && !known)) throw new Error('EMPTY');
         finish(`Состав: ${list.join(', ')}`, undefined, undefined, true);
       } catch (e) {
         setNotice(
           isLimit(e)
             ? LIMIT_NOTE
             : String(e).includes('EMPTY')
-            ? 'Не нашли на фото список ингредиентов. Снимите блок «Состав» крупнее и ровнее.'
+            ? 'Состав не обнаружен. Наведите камеру на блок «Состав» или «Ingredients» (мелкий текст, слова через запятую) и снимите крупнее. Если хотите узнать средство по лицевой стороне — выберите «Этикетка».'
             : `Не получилось прочитать фото — проверьте интернет и попробуйте ещё раз. (${String(e).slice(0, 60)})`,
         );
       } finally {
@@ -428,8 +431,16 @@ export default function ScannerScreen() {
   };
 
   const pick = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true });
-    if (!res.canceled && res.assets[0]) await (mode === 'front' ? readFront(res.assets[0].uri) : readImage(res.assets[0].uri));
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: mode !== 'cz' });
+    if (res.canceled || !res.assets[0]) return;
+    const uri = res.assets[0].uri;
+    if (mode === 'cz') {
+      // «Штрихкод» reads only codes: a barcode or a «Честный знак» square from the picture, nothing else.
+      const codes = await scanFromURLAsync(uri, CODE_TYPES).catch(() => []);
+      if (codes[0]) return onMarking(codes[0]);
+      return setNotice('На фото не нашли штрихкод или код «Честный знак». Снимите код крупно и ровно — или выберите «Состав», чтобы разобрать список ингредиентов.');
+    }
+    await (mode === 'front' ? readFront(uri) : readImage(uri));
   };
 
   const switchMode = (m: Mode) => {
@@ -652,14 +663,16 @@ export default function ScannerScreen() {
                 <View style={styles.actionIcon}><Icon name="image" size={19} color={colors.violet} /></View>
                 <Text style={styles.actionText}>Галерея</Text>
               </Press>
-              <Press onPress={() => setManual(true)} style={styles.action}>
-                <View style={styles.actionIcon}><Icon name="text" size={19} color={colors.violet} /></View>
-                <Text style={styles.actionText}>Вставить текст</Text>
-              </Press>
+              {mode === 'label' && (
+                <Press onPress={() => setManual(true)} style={styles.action}>
+                  <View style={styles.actionIcon}><Icon name="text" size={19} color={colors.violet} /></View>
+                  <Text style={styles.actionText}>Вставить текст</Text>
+                </Press>
+              )}
               {aiEnabled && !lookup && (
                 <Press onPress={pasteLink} style={styles.action}>
                   <View style={styles.actionIcon}><Icon name="external" size={19} color={colors.violet} /></View>
-                  <Text style={styles.actionText}>Ссылка WB, Ozon, Летуаль</Text>
+                  <Text style={styles.actionText}>Ссылка WB, Ozon, Летуаль, ЗЯ</Text>
                 </Press>
               )}
             </View>
@@ -682,7 +695,7 @@ export default function ScannerScreen() {
             enableTorch={torch}
             zoom={zoom}
             autofocus={focus}
-            barcodeScannerSettings={mode === 'cz' ? { barcodeTypes: ['datamatrix', 'ean13', 'ean8', 'upc_a', 'upc_e'] } : undefined}
+            barcodeScannerSettings={mode === 'cz' ? { barcodeTypes: CODE_TYPES } : undefined}
             onBarcodeScanned={mode === 'cz' && !busy ? onMarking : undefined}
             onCameraReady={() => setReady(true)}
           />
@@ -905,6 +918,9 @@ function Step({ ok, text }: { ok?: boolean; text: string }) {
 
 const C = 30;
 /** expo-camera zoom is exponential in the lens's max zoom (~16× on the main iPhone lens): these give ~2× and ~3×. */
+/** «Штрихкод» mode: product barcodes and the «Честный знак» DataMatrix only. */
+const CODE_TYPES: BarcodeType[] = ['datamatrix', 'ean13', 'ean8', 'upc_a', 'upc_e'];
+
 const ZOOMS: [number, string][] = [
   [0, '1×'],
   [0.25, '2×'],
