@@ -41,8 +41,10 @@ export function opinion(a: Analysis, special?: string | null): Opinion {
     : actives.length
       ? `${join(names(actives).slice(0, 4)).replace(/^./, (c) => c.toUpperCase())}. ${actives[0].ing.ru}: ${actives[0].ing.note.charAt(0).toLowerCase()}${actives[0].ing.note.slice(1)}`
       : base.length
-        ? `Активов с доказанным действием немного — средство работает в основном за счёт базы: ${join(base.map(name))}.`
-        : 'Выраженных активов нет — это скорее базовый уход, чем средство с целевым эффектом.';
+        ? `Мягкая основа: ${join(base.map(name))} — бережный базовый уход на каждый день.`
+        : !risky.length && !allergens.length
+          ? 'Простой состав без спорных компонентов — бережный базовый уход.'
+          : 'Простой базовый уход без лишних наворотов.';
 
   // Each ingredient is named once with all its reasons («спирт — может сушить, возможный аллерген»);
   // ingredients with the same reasons are listed together.

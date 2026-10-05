@@ -182,7 +182,7 @@ export default function ScannerScreen() {
     setBusy(true);
     setNotice(null);
     try {
-      const r = await aiLabel(await toJpegBase64(uri, 720));
+      const r = await aiLabel(await toJpegBase64(uri, 560));
       if (r.notCosmetic) return finish(`NOT_COSMETIC: ${r.notCosmetic}`);
       const name = [r.brand, r.name].filter(Boolean).join(' ');
       if (r.item) {

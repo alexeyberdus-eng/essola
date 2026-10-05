@@ -113,12 +113,15 @@ export function summarize(items: Ingredient[], kind?: string): Summary {
     : 'Состав почти без активных компонентов — работает как базовый уход.';
 
   const use: string[] = [];
-  if (keys.has('clean')) use.push('Лицо или тело: на влажную кожу, вспенить и смыть');
+  // Conditioning polymers next to the cleansers: a shampoo or a 2-in-1, used on hair, not on the face.
+  const hair = items.some((i) => /trimonium|polyquaternium|amodimethicone|quaternium|keratin/i.test(i.inci));
+  if (keys.has('clean') && hair) use.push('Волосы: на влажные волосы и кожу головы, вспенить и смыть');
+  else if (keys.has('clean')) use.push('Лицо или тело: на влажную кожу, вспенить и смыть');
   else if (keys.has('spf')) use.push('Утром, последним шагом ухода, обновлять каждые 2–3 часа на солнце');
   else if (type === 'Масляное средство') use.push('Лицо, тело, волосы: 2–3 капли на влажную кожу или кончики');
   else if (type === 'Тоник или сыворотка') use.push('Лицо и шея: после умывания, перед кремом');
   else use.push('Лицо и шея: на чистую кожу утром и вечером');
-  if (keys.has('renew') || keys.has('age')) use.push('Вечером, 2–3 раза в неделю; утром обязателен SPF');
+  if ((keys.has('renew') || keys.has('age')) && !keys.has('clean')) use.push('Вечером, 2–3 раза в неделю; утром обязателен SPF');
   if (keys.has('acne')) use.push('Точечно или на зоны с воспалениями');
   return { kind: type, lead, effects, use };
 }

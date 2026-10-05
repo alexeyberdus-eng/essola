@@ -166,10 +166,8 @@ function Picker({ title, scans, onPick }: { title: string; scans: { id: string; 
 }
 
 type Tier = 'pro' | 'lite';
-const TIERS: [Tier, string][] = [
-  ['pro', 'Технолог продвинутый'],
-  ['lite', 'Технолог обычный'],
-];
+// The regular (light) technologist was a test and is switched off; the server still answers `tier: 'lite'`.
+const TIERS: [Tier, string][] = [['pro', 'Технолог объяснит разницу']];
 
 function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis }) {
   const kb = new Set(rb.items.map(keyOf));
@@ -225,7 +223,7 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
             <View key={tier} style={styles.card}>
               {x?.text ? (
                 <>
-                  <Text style={styles.techKicker}>{label}: вывод</Text>
+                  <Text style={styles.techKicker}>Технолог о разнице</Text>
                   <Text style={styles.techText}>{x.text}</Text>
                 </>
               ) : (

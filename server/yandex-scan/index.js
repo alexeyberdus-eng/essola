@@ -90,7 +90,7 @@ function decodeDescribe(text) {
   for (const t of how) out.use.push(t.charAt(0).toUpperCase() + t.slice(1));
   return out;
 }
-const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 4–6 коротких предложений простым языком, без списков и markdown: чем они различаются по действию (ключевые активы и их место в составе), текстуре и мягкости, кому и для чего лучше подходит каждое, и короткий вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
+const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 3–4 коротких предложения простым языком, без списков и markdown: главное различие по действию (ключевые активы), кому какое подходит и вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
 // «Технолог обычный»: the light model answers in codes, the server writes the comparison from fixed phrases.
 const COMPARE_LITE = `Ты косметолог-технолог. Сравни средство А и средство Б по названию и составу (по убыванию доли). Отвечай строго строками-кодами, без пояснений и markdown:
 Z:зона А,зона Б (коды FACE лицо, EYE вокруг глаз, BODY тело, HAND руки, LIP губы, HAIR волосы, SCALP кожа головы)
@@ -148,18 +148,18 @@ function decodeCompare(text) {
   if (v.length > 8) out.push(`Вывод: ${v.charAt(0).toLowerCase()}${v.slice(1)}${/[.!?]$/.test(v) ? '' : '.'}`);
   return { text: out.length > 1 ? out.join(' ') : '' };
 }
-const REVIEW = `Ты косметолог-технолог. Дана формула: ингредиент, доля, роль. Базовые проверки (сумма 100%, консервант, эмульгатор, pH) уже показаны пользователю — повторяй их только если есть «Замечания». Оцени формулу и предложи, чем её конкретно улучшить: какие активы или компоненты добавить для эффекта, текстуры и стабильности, что убавить или убрать. Ответ строго строками, без markdown:
+const REVIEW = `Ты косметолог-технолог. Дана формула (ингредиент, доля, роль). Сумму, консервант, эмульгатор и pH пользователь уже видит — упоминай их только если есть «Замечания». Ответ строго строками, без markdown:
 В: вывод в 2 предложениях — что получится и главный совет
-+ ингредиент (INCI) | доля | что даст, до 14 слов
-- ингредиент | новая доля | почему, до 12 слов
-x ингредиент | почему, до 12 слов
-! предупреждение, до 12 слов
-Предлагай изменения ТОЛЬКО если они действительно нужны: ошибка, нестабильность, опасная доля или явная нехватка эффекта для задачи. Не улучшай ради улучшения. Если формула уже сбалансирована и стабильна — ответь одной строкой «В: Хорошая, стабильная формула…» с коротким объяснением и больше ничего не пиши. Строк «+» — 0–3 (конкретные ингредиенты), «-», «x», «!» — 0–2. В «+» только ингредиенты, которых НЕТ в формуле (сверяй INCI и русские названия, синонимы тоже). Если уже имеющегося компонента мало или много — пиши строку «-» с новой долей (она может быть и больше текущей). Учитывай «Тип»: для чего средство и задачу. Сумма формулы должна остаться 100%: если что-то добавляешь, обязательно добавь строку «-», за счёт чего (компонента с самой большой долей в ЭТОЙ формуле) и до какой доли. Новую долю считай от текущей доли в формуле: например, было Aqua 12%, добавляешь 2% — пиши «- Aqua | 10%». Никогда не пиши типичную долю из других рецептов, только пересчёт этой формулы.
++ ингредиент (INCI) | доля | что даст, до 12 слов
+- ингредиент | новая доля | почему, до 10 слов
+x ингредиент | почему, до 10 слов
+! предупреждение, до 10 слов
+Меняй только то, что действительно нужно: ошибка, нестабильность, опасная доля, явная нехватка эффекта для «Типа». Хорошая формула — одна строка «В: Хорошая, стабильная формула…». «+» 0–3, только ингредиенты, которых НЕТ в формуле (и синонимов); «-», «x», «!» 0–2. Сумма остаётся 100%: к каждому «+» добавь «-» за счёт основы (вода или базовое масло) с новой долей, пересчитанной от ЭТОЙ формулы (было Aqua 12%, +2% → «- Aqua | 10%»).
 Пример:
-В: Получится лёгкий увлажняющий тоник, но кислоты многовато для ежедневного ухода. Смягчите формулу пантенолом и добавьте увлажнитель.
-+ Panthenol | 1% | смягчит действие кислоты и успокоит кожу
-+ Sodium Hyaluronate | 0,2% | дополнительное увлажнение без липкости
-- Lactic Acid | 5% | 8% может раздражать при ежедневном использовании /no_think`;
+В: Лёгкий увлажняющий тоник, но кислоты многовато для ежедневного ухода. Смягчите формулу пантенолом.
++ Panthenol | 1% | смягчит действие кислоты
+- Aqua | 79% | место для пантенола
+- Lactic Acid | 5% | 8% раздражает при ежедневном применении /no_think`;
 const LABEL = `На фото лицевая сторона упаковки косметического средства. Ответь ОДНОЙ строкой: бренд | название средства как на упаковке (с линейкой, без объёма) | тип по-русски (крем, шампунь, сыворотка…). Если бренда не видно, но ты узнаёшь средство по названию и дизайну, назови бренд (например, Egg Mellow — Too Cool For School). Без пояснений. Если на фото не косметика — ответь «НЕ КОСМЕТИКА: что это». /no_think`;
 const SEARCH_URL = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
 
@@ -368,7 +368,7 @@ const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32
 let lastUsage;
 // ---- Spending: every model call and web search is counted per day and kind of request; each function instance
 // writes its own file (stats/<day>/<instance>.json), the admin panel adds them up. Prices are per 1000 tokens, ₽.
-const PRICE = { lite: 0.2, pro: 0.8, vision: 0.5, search: 0.48 };
+const PRICE = { lite: 0.2, pro: 0.8, vision: 0.22, search: 0.26 };
 const INSTANCE = crypto.randomBytes(5).toString('hex');
 let curMode = 'other';
 const stats = {};
@@ -549,7 +549,7 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
   if (ours.length) {
     const words = norm(`${name} ${kind}`).split(' ').filter((w) => w.length > 2 && !/^\d+(мл|ml|г|g)?$/.test(w));
     const score = (x) => words.filter((w) => norm(x.t).includes(w)).length + (x.z ? -5 : 0);
-    const top = [...ours].sort((a, c) => score(c) - score(a) || (c.p || 0) - (a.p || 0)).slice(0, 60);
+    const top = [...ours].sort((a, c) => score(c) - score(a) || (c.p || 0) - (a.p || 0)).slice(0, 30);
     let pick = top.length === 1 && !top[0].z ? top[0] : null;
     if (!pick) {
       const list = top.map((x, i) => `${i + 1}. ${x.t}`).join('\n');
@@ -568,15 +568,15 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
   const hit = await cacheGet(ck, iam);
   if (hit && hit.ingredients) return hit;
   if (!(await canWeb())) return { limited: true };
-  const queries = [`${brand} ${name} ingredients`, `${brand} ${name} состав`, `${brand} ${name} site:incidecoder.com`];
+  const queries = [`${brand} ${name} ingredients inci`, `${brand} ${name} состав`];
   const docs = (await Promise.all(queries.map((q) => search(q, iam).catch(() => [])))).flat();
   // Marketplaces render their pages with scripts (nothing to read) and some shops block robots: skip them.
   const skip = /wildberries|ozon\.|goldapple|market\.yandex|aliexpress|youtube|vk\.com|pinterest|instagram/;
   const seen = new Set();
-  const pages = docs.filter((d) => d.url && !skip.test(d.url) && !seen.has(d.url) && seen.add(d.url)).sort((a, b) => Number(/incidecoder|skinsort|cosdna|inci/.test(b.url)) - Number(/incidecoder|skinsort|cosdna|inci/.test(a.url))).slice(0, 4);
+  const pages = docs.filter((d) => d.url && !skip.test(d.url) && !seen.has(d.url) && seen.add(d.url)).sort((a, b) => Number(/incidecoder|skinsort|cosdna|inci/.test(b.url)) - Number(/incidecoder|skinsort|cosdna|inci/.test(a.url))).slice(0, 3);
   const texts = await Promise.all(pages.map((d) => pageIngredients(d.url).catch(() => '')));
-  const snippets = docs.slice(0, 6).map((d) => `${d.title} — ${d.text}`).join('\n');
-  const text = [...texts.filter(Boolean), snippets].join('\n---\n').slice(0, 9000);
+  const snippets = docs.slice(0, 4).map((d) => `${d.title} — ${d.text}`).join('\n');
+  const text = [...texts.filter(Boolean), snippets].join('\n---\n').slice(0, 5000);
   console.log('label web:', pages.length, 'pages,', texts.filter(Boolean).length, 'with text');
   if (!text.trim()) return {};
   const out = await chat(model, [{ role: 'user', content: `Ниже тексты страниц о средстве «${brand} ${name}». Найди его полный состав (ingredients, INCI). Выпиши ингредиенты через запятую, как в источнике, без пояснений. Если полного состава этого средства нет — ответь «нет».\n${text}` }], 700, true).catch(() => '');
@@ -758,7 +758,7 @@ async function pageIngredients(url) {
   const html = (await res.text()).slice(0, 1_500_000);
   const text = strip(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<\/(p|div|li|h\d|br|tr)>/gi, '\n'));
   const at = text.search(/ingredients|состав|inci/i);
-  return at < 0 ? '' : text.slice(Math.max(0, at - 100), at + 2500);
+  return at < 0 ? '' : text.slice(Math.max(0, at - 100), at + 1500);
 }
 
 /** Someone who posts gets a public profile with their nickname (if they had none), so tapping the nick opens it. */
@@ -1634,7 +1634,7 @@ async function handle(event, context) {
       // The same formula gets the same answer for everyone, without a new model call.
       // «Технолог обычный» answers the same coded lines with the light model: a few times cheaper.
       const lite = req.tier === 'lite';
-      const rk = `${lite ? 'reviewL1' : 'review3'}/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
+      const rk = `${lite ? 'reviewL1' : 'review4'}/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
       if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || [], req.kind));
       if (lite) curMode = 'review.lite';
@@ -1662,7 +1662,7 @@ async function handle(event, context) {
       // The same pair in the same order (the answer says «А» and «Б») gets the same answer for everyone.
       const pair = `${a.title}|${a.items.join(',')}||${b.title}|${b.items.join(',')}`;
       const lite = req.tier === 'lite';
-      const ck = `${lite ? 'compareL1' : 'compare2'}/${sha(pair)}.json`;
+      const ck = `${lite ? 'compareL1' : 'compare3'}/${sha(pair)}.json`;
       const hit = await cacheGet(ck, iam);
       if (hit?.text) return reply(200, hit);
       if (lite) {
@@ -1677,7 +1677,7 @@ async function handle(event, context) {
       const text = await chat(
         process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
         [{ role: 'user', content: `${COMPARE}\n\nСредство А: ${a.title || 'без названия'}\nСостав А: ${a.items.join(', ')}\n\nСредство Б: ${b.title || 'без названия'}\nСостав Б: ${b.items.join(', ')}` }],
-        450,
+        300,
         true,
       );
       const out = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
@@ -1737,7 +1737,7 @@ async function handle(event, context) {
       try {
         // Qwen "thinks" before answering, which multiplies the cost; ask the server to skip it.
         const noThink = { chat_template_kwargs: { enable_thinking: false } };
-        const t = await chat(m, msg, 2500, true, noThink).catch((e) => (/ 400:/.test(String(e.message)) ? chat(m, msg, 2500, true) : Promise.reject(e)));
+        const t = await chat(m, msg, 1400, true, noThink).catch((e) => (/ 400:/.test(String(e.message)) ? chat(m, msg, 1400, true) : Promise.reject(e)));
         const nc = t.match(/НЕ\s*КОСМЕТИКА\s*:?\s*([^\n]{0,60})/i);
         if (nc) return reply(200, { ingredients: [], notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
         // «Нет состава» (in any wording) means the photo has no ingredient list: never a one-item composition.
