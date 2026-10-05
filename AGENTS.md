@@ -1,6 +1,11 @@
 # essola lab — guide for AI agents (Codex, Claude)
 
 Read this file and `docs/HANDOFF.md` before any task; details (base crawls, sign-in, App Store items) are in `docs/REFERENCE.md`. Update `docs/HANDOFF.md` when you finish or hand over.
+
+**Change log is mandatory.** Every commit you push adds a line at the top of `docs/CHANGELOG.md`, in the same commit:
+time (Moscow), author (Claude / Codex), branch, what changed and why in plain Russian, commit hash or «(этот коммит)»,
+and where it went live (Expo Go / сервер / RuStore) if it did.
+
 The owner is a beginner and writes in Russian: answer in Russian, in plain words.
 
 ## What the product is
@@ -22,7 +27,7 @@ Mobile app «essola lab» (Expo / React Native). Features:
 | `app/scripts/` | Base builders run by GitHub Actions: Letual, INKEEDecoder, CosIng, ingredient index, catalog. |
 | `server/yandex-scan/index.js` | The single Yandex Cloud Function: AI calls (YandexGPT, Qwen vision), product base, accounts, forum, limits, stats. |
 | `server/yandex-scan/admin.html` | Admin panel, including «Расходы и статистика» (AI spend per mode per day). |
-| `docs/` | `HANDOFF.md` (current state), `REFERENCE.md` (how things work), RuStore listing (`docs/rustore/`), points plan (`docs/monetization.md`). |
+| `docs/` | `CHANGELOG.md` (every change), `HANDOFF.md` (current state), `REFERENCE.md` (how things work), RuStore listing (`docs/rustore/`), points plan (`docs/monetization.md`). |
 
 ## Branches and deploys
 
