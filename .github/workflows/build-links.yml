@@ -27,9 +27,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # The Expo CLI reads the app config, which needs the app's packages.
+      - name: Install dependencies
+        run: npm ci
       - name: Latest builds
         run: |
-          npx --yes eas-cli@latest init --non-interactive --force > /dev/null
+          npx --yes eas-cli@latest init --non-interactive --force
           npx --yes eas-cli@latest build:list --platform android --limit 4 --json --non-interactive > /tmp/builds.json
           node -e "
             const b=JSON.parse(require('fs').readFileSync('/tmp/builds.json','utf8'));
