@@ -4,6 +4,10 @@ name: Ссылки на сборки
 
 on:
   workflow_dispatch:
+  # Also runs when this file or its trigger changes (a manual run needs the file on the default branch).
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/workflows/build-links.yml', 'app/build-links.trigger']
 
 permissions:
   contents: read
