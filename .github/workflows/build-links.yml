@@ -7,7 +7,7 @@ on:
   # Also runs when this file or its trigger changes (a manual run needs the file on the default branch).
   push:
     branches: [claude/awesome-mccarthy-dlbgor]
-    paths: ['.github/workflows/build-links.yml', 'app/build-links.trigger']
+    paths: ['.github/workflows/build-links.yml', '.github/build-links.trigger']
 
 permissions:
   contents: read
@@ -16,7 +16,7 @@ permissions:
 jobs:
   links:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 330
     defaults:
       run:
         working-directory: app
@@ -35,10 +35,17 @@ jobs:
       - name: Latest builds
         run: |
           npx --yes eas-cli@latest init --non-interactive --force
-          npx --yes eas-cli@latest build:list --platform android --limit 4 --json --non-interactive > /tmp/builds.json
+          # Waits while the newest build is still in the Expo queue or building (up to ~5 hours).
+          for i in $(seq 1 150); do
+            npx --yes eas-cli@latest build:list --platform android --limit 4 --json --non-interactive > /tmp/builds.json
+            S=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/builds.json','utf8'))[0].status")
+            echo "newest build: $S"
+            case "$S" in NEW|IN_QUEUE|IN_PROGRESS|PENDING_CANCEL) sleep 120;; *) break;; esac
+          done
           node -e "
             const b=JSON.parse(require('fs').readFileSync('/tmp/builds.json','utf8'));
-            const rows=b.map((x)=>'- '+(x.buildProfile||'')+' · '+(x.channel||'')+' · версия '+(x.appBuildVersion||'')+' · '+x.status+(x.artifacts&&x.artifacts.buildUrl?' · [скачать]('+x.artifacts.buildUrl+')':''));
+            const kind=(x)=>/\.aab$/.test((x.artifacts&&x.artifacts.buildUrl)||'')?'AAB (Google Play)':'APK';
+            const rows=b.map((x)=>'- '+kind(x)+' · версия '+(x.appBuildVersion||'')+' · '+x.status+(x.artifacts&&x.artifacts.buildUrl?' · [скачать]('+x.artifacts.buildUrl+')':''));
             require('fs').writeFileSync('/tmp/body.md','## Последние сборки Android\n\n'+rows.join('\n')+'\n');
           "
           cat /tmp/body.md
