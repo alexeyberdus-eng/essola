@@ -48,8 +48,19 @@ export async function cloud<T>(mode: string, body: object = {}, timeout = 15000)
   return json as T;
 }
 
+// Scans and likes are kept per person on the phone (essola.scans.<id>): only the signed-in account's own lists
+// go to its cloud copy, never another account's or a guest's left on the same phone.
+let owner: string | null = null;
+export function setSyncOwner(id: string | null) {
+  owner = id;
+}
+const mine = (k: string) => {
+  const m = k.match(/^essola\.(scans|likes)\.(.+)$/);
+  return !m || m[2] === owner;
+};
+
 async function localData() {
-  const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => SYNCED.test(k));
+  const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => SYNCED.test(k) && mine(k));
   const pairs = await AsyncStorage.multiGet(keys).catch(() => [] as readonly [string, string | null][]);
   const out: Record<string, unknown> = {};
   for (const [k, v] of pairs) {
@@ -110,13 +121,27 @@ export async function pullData(): Promise<boolean> {
   const local = await localData();
   const writes: [string, string][] = [];
   for (const [k, v] of Object.entries(data ?? {})) {
-    if (!SYNCED.test(k)) continue;
+    if (!SYNCED.test(k) || !mine(k)) continue;
     const next = merge(local[k], v);
     if (JSON.stringify(next) !== JSON.stringify(local[k])) writes.push([k, JSON.stringify(next)]);
   }
   if (writes.length) await AsyncStorage.multiSet(writes).catch(() => {});
   await pushData();
   return writes.length > 0;
+}
+
+/**
+ * Signing out: the last changes go to the account, then everything personal leaves the phone (it comes back with
+ * the next sign-in), so the next person on this phone starts clean and gets nothing of this account.
+ */
+export async function clearPersonalData() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  if (session) await pushData().catch(() => {});
+  const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => SYNCED.test(k) || k === 'essola.uid');
+  await AsyncStorage.multiRemove(keys).catch(() => {});
+  dirty = false;
+  owner = null;
 }
 
 /** Retries a sync that failed while offline. */

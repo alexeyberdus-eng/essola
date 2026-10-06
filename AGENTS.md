@@ -52,7 +52,7 @@ node --check ../server/yandex-scan/index.js
 
 Server helpers can be unit-checked with node, for example
 `node -e "require('./server/yandex-scan/index.js')._balanceReview(...)"`.
-The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare` and `_keywordSearch`.
+The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, `_imageOk` and `_keywordSearch`.
 
 ## Logs and diagnosis
 
@@ -81,4 +81,8 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare` a
   store. On iPhone, digital goods are sold only through Apple in-app purchases. The plan is in `docs/monetization.md`
   and is **not enabled yet**: App Store publication comes first.
 - Don't publish the owner's photos. Admin access is by email hash or `ADMIN_TOKEN`.
+- Who acts on the server is decided by `actor()`: the session, or a guest id with its device secret. Never trust
+  `req.id` alone for anything that changes data.
+- Paid calls go through `allow()` (reservation files, fails closed). Compositions from phones go through
+  `userSubmit()` and never overwrite another record.
 - Technologist advice in the builder must keep the formula at 100% (`balanceReview` fills with the base, never an active).

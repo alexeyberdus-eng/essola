@@ -4,9 +4,9 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { DevSettings, Platform } from 'react-native';
 import * as Updates from 'expo-updates';
 import type { SkinType } from '../lib/analyze';
-import { cloud, CloudError, cloudEnabled, getSession, pullData, setSession } from '../lib/cloud';
+import { clearPersonalData, cloud, CloudError, cloudEnabled, getSession, pullData, setSession, setSyncOwner } from '../lib/cloud';
 import { readJSON, remove, writeJSON } from '../lib/storage';
-import { setMyId } from '../lib/social';
+import { resetMyId, setMyId } from '../lib/social';
 import { signInWithVk as vkLogin } from '../lib/vk';
 
 export type User = {
@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (signedIn) {
         setUser(cached);
         setMyId(cached!.id);
+        setSyncOwner(cached!.id);
       }
       setReady(true);
       // Refresh from the server in the background; a revoked session signs out.
@@ -91,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (e instanceof CloudError && e.status === 401) {
               await setSession(null);
               await remove(ACCOUNT_KEY);
+              await clearPersonalData();
+              resetMyId();
               setUser(null);
             }
           });
@@ -116,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (legacy) await remove(LEGACY_KEY);
     await writeJSON(ACCOUNT_KEY, u);
     setMyId(u.id);
+    setSyncOwner(u.id);
     setUser(u);
     // Another phone's data arrived: restart once so every screen reads it.
     const restored = await pullData().catch(() => false);
@@ -132,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (!cred.identityToken) throw new Error('Apple не вернул токен. Попробуйте ещё раз.');
     const name = [cred.fullName?.givenName, cred.fullName?.familyName].filter(Boolean).join(' ') || undefined;
-    const r = await cloud<{ session: string; account: Account }>('auth.apple', { token: cred.identityToken, name }).catch(fail);
+    const r = await cloud<{ session: string; account: Account }>('auth.apple', { token: cred.identityToken, name, consent: true }).catch(fail);
     await opened(r.session, r.account);
     return { needsNick: !r.account.nick };
   }, [opened]);
@@ -140,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithVk = useCallback(async () => {
     const vk = await vkLogin();
     if (!vk) return null;
-    const r = await cloud<{ session: string; account: Account }>('auth.vk', { token: vk.accessToken }).catch(fail);
+    const r = await cloud<{ session: string; account: Account }>('auth.vk', { token: vk.accessToken, consent: true }).catch(fail);
     await opened(r.session, r.account);
     return { needsNick: !r.account.nick };
   }, [opened]);
@@ -158,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmailCode = useCallback(
     async (email: string, code: string, extra?: { name?: string; nick?: string }) => {
       if (!/^\d{6}$/.test(code)) throw new Error('Код состоит из 6 цифр');
-      const r = await cloud<{ session: string; account: Account }>('auth.email.verify', { email, code, name: extra?.name }).catch((e) => {
+      const r = await cloud<{ session: string; account: Account }>('auth.email.verify', { email, code, name: extra?.name, consent: true }).catch((e) => {
         if (e instanceof CloudError && (e.code === 'wrong_code' || e.code === 'expired')) throw new Error(e.code === 'wrong_code' ? 'Неверный код' : 'Код устарел — запросите новый');
         return fail(e);
       });
@@ -186,10 +190,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    // Personal data goes to the account first and then leaves the phone: the next person here starts clean.
+    await clearPersonalData();
     await cloud('auth.logout').catch(() => {});
     await setSession(null);
     await remove(ACCOUNT_KEY);
+    resetMyId();
     setUser(null);
+    setTimeout(RELOAD, 300);
   }, []);
 
   const value = useMemo(

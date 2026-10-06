@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getSession } from './cloud';
 import { usageByTitle, type Summary } from './effects';
-import { myId } from './social';
+import { myId, mySecret } from './social';
 import { readJSON, writeJSON } from './storage';
 
 // Our Yandex Cloud function (server/yandex-scan). Without it the app uses its local engines.
@@ -14,7 +14,8 @@ export const LIMIT_NOTE = 'На сегодня лимит распознаван
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
-  const who = { session: (await getSession()) ?? undefined, device: await myId() };
+  const id = await myId();
+  const who = { session: (await getSession()) ?? undefined, device: id, id, secret: await mySecret() };
   const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }) });
   if (res.status === 429) throw new Error('LIMIT');
   if (!res.ok) throw new Error(`AI_${res.status}`);
@@ -100,6 +101,8 @@ async function cached<T>(tag: string, body: object): Promise<T> {
 }
 
 export type Review = {
+  /** What the formula makes: the product, what it does and who it suits. */
+  summary?: string;
   verdict?: string;
   add?: { name: string; pct?: string; why?: string }[];
   reduce?: { name: string; to?: string; why?: string }[];
@@ -108,7 +111,7 @@ export type Review = {
 };
 /** Technologist's advice on a builder formula ("Aqua 70%", …). */
 export const aiReview = (items: string[], kind: string, notes: string[], done: string[] = [], tier: 'pro' | 'lite' = 'pro') =>
-  cached<Review>(tier === 'lite' ? 'reviewL1' : 'review7', { mode: 'review', items, kind, notes, done, tier });
+  cached<Review>(tier === 'lite' ? 'reviewL2' : 'review8', { mode: 'review', items, kind, notes, done, tier });
 
 export type CachedProduct = { title?: string | null; ingredients: string[]; source?: string; image?: string | null; url?: string };
 

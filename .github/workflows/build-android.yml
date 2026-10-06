@@ -11,6 +11,10 @@ on:
         description: 'Сборка для RuStore (обновления только через «Выпустить обновление»)'
         type: boolean
         default: false
+      bundle:
+        description: 'Файл AAB для Google Play (вместо APK)'
+        type: boolean
+        default: false
   push:
     branches: [claude/awesome-mccarthy-dlbgor]
     paths: ['.github/workflows/build-android.yml']
@@ -35,7 +39,9 @@ jobs:
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
       VK_ID: ${{ secrets.VK_CLIENT_ID }}
       # The store build listens to the «production» channel: people get only the updates released on purpose.
-      CHANNEL: ${{ inputs.store && 'production' || 'preview' }}
+      CHANNEL: ${{ (inputs.store || inputs.bundle) && 'production' || 'preview' }}
+      # Google Play takes an app bundle (.aab); RuStore and direct installs take an APK.
+      BUILD_TYPE: ${{ inputs.bundle && 'app-bundle' || 'apk' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +66,7 @@ jobs:
             app.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};
             fs.writeFileSync('app.json',JSON.stringify(app,null,2));
             const eas=JSON.parse(fs.readFileSync('eas.json','utf8'));
-            eas.build.apk={distribution:process.env.CHANNEL==='production'?'store':'internal',channel:process.env.CHANNEL,autoIncrement:true,android:{buildType:'apk'},env:{
+            eas.build.apk={distribution:process.env.CHANNEL==='production'?'store':'internal',channel:process.env.CHANNEL,autoIncrement:true,android:{buildType:process.env.BUILD_TYPE},env:{
               EXPO_PUBLIC_SCAN_URL:'https://functions.yandexcloud.net/d4eikcrvo6v275frt26v',
               EXPO_PUBLIC_SCAN_KEY:'$KEY',
               EXPO_PUBLIC_VK_ID:process.env.VK_ID||''}};
@@ -91,14 +97,14 @@ jobs:
             const { URL, PAGE } = process.env;
             const qr = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=16&data=${encodeURIComponent(URL)}`;
             const body = [
-              process.env.CHANNEL === 'production' ? '## RuStore: файл для публикации (APK)' : '## Android: установочный файл (APK)',
+              process.env.BUILD_TYPE === 'app-bundle' ? '## Google Play: файл для публикации (AAB)' : process.env.CHANNEL === 'production' ? '## RuStore: файл для публикации (APK)' : '## Android: установочный файл (APK)',
               '',
               'Наведите камеру Android-телефона на QR-код или откройте ссылку на телефоне, скачайте файл и установите его',
               '(телефон спросит разрешение на установку из браузера — разрешите).',
               '',
-              `<img src="${qr}" width="240" alt="QR-код APK">`,
+              `<img src="${qr}" width="240" alt="QR-код">`,
               '',
-              `[Скачать APK](${URL}) · [страница сборки](${PAGE})`,
+              `[Скачать файл](${URL}) · [страница сборки](${PAGE})`,
               '',
               `Сборка \`${context.sha.slice(0, 7)}\`, ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК.`,
             ].join('\n');

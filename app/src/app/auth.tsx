@@ -42,6 +42,8 @@ export default function AuthScreen() {
       .catch(() => {});
   }, []);
   const [busy, setBusy] = useState(false);
+  // Consent to the processing of personal data (152-ФЗ): required before any way of signing in.
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
@@ -51,6 +53,11 @@ export default function AuthScreen() {
   };
 
   const run = async (fn: () => Promise<void>) => {
+    if (!agreed && step !== 'nick') {
+      tap();
+      setError('Чтобы войти, отметьте согласие на обработку персональных данных');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -89,6 +96,27 @@ export default function AuthScreen() {
             </View>
           ))}
         </View>
+
+        {step !== 'nick' && (
+          <Press
+            haptic={false}
+            onPress={() => {
+              setAgreed((v) => !v);
+              setError(null);
+            }}
+            style={styles.consent}
+            accessibilityLabel={`Согласие на обработку персональных данных: ${agreed ? 'отмечено' : 'не отмечено'}`}
+          >
+            <View style={[styles.box, agreed && styles.boxOn]}>{agreed && <Icon name="check" size={15} color="#fff" strokeWidth={3} />}</View>
+            <Text style={styles.consentText}>
+              Даю согласие на обработку персональных данных в соответствии с{' '}
+              <Text style={styles.consentLink} onPress={() => router.push('/legal' as never)}>
+                политикой конфиденциальности
+              </Text>{' '}
+              и принимаю условия использования
+            </Text>
+          </Press>
+        )}
 
         {step !== 'nick' && Platform.OS === 'ios' && appleAvailable && (
           <AppleAuthentication.AppleAuthenticationButton
@@ -192,7 +220,7 @@ export default function AuthScreen() {
             <Button
               label="Получить код"
               loading={busy}
-              disabled={!validEmail}
+              disabled={!validEmail || !agreed}
               onPress={() =>
                 run(async () => {
                   const res = await requestEmailCode(email.trim());
@@ -244,9 +272,6 @@ export default function AuthScreen() {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <T v="small" style={{ textAlign: 'center', marginTop: 'auto', paddingTop: space.xl }}>
-          Продолжая, вы соглашаетесь с условиями использования и политикой конфиденциальности Essola.
-        </T>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -290,5 +315,10 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
     color: colors.ink,
   },
+  consent: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 4 },
+  box: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.6, borderColor: colors.violet, alignItems: 'center', justifyContent: 'center', marginTop: 1, backgroundColor: colors.card },
+  boxOn: { backgroundColor: colors.violet },
+  consentText: { flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink },
+  consentLink: { color: colors.violet, textDecorationLine: 'underline' },
   error: { fontFamily: fonts.regular, fontSize: 14, color: colors.bad, textAlign: 'center' },
 });

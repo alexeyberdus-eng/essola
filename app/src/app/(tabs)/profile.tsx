@@ -201,7 +201,16 @@ function AccountLinks({ signedIn, onDeleted }: { signedIn: boolean; onDeleted: (
         style: 'destructive',
         onPress: async () => {
           setBusy(true);
-          await deleteAccount();
+          try {
+            await deleteAccount();
+          } catch {
+            setBusy(false);
+            Alert.alert('Удаление не завершено', 'Не получилось связаться с сервером, данные пока не удалены. Проверьте интернет и попробуйте ещё раз.', [
+              { text: 'Отмена', style: 'cancel' },
+              { text: 'Повторить', onPress: del },
+            ]);
+            return;
+          }
           await onDeleted().catch(() => {});
           setBusy(false);
           Alert.alert('Аккаунт удалён', 'Все ваши данные удалены.');

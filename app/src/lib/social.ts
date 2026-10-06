@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import type { Recipe } from '../data/recipes';
 import { getSession } from './cloud';
 import { readJSON, writeJSON } from './storage';
@@ -9,18 +10,37 @@ export const socialEnabled = !!url;
 
 async function call<T>(body: object): Promise<T> {
   // The session lets the server recognise the admin (official @essola posts, stories, recipe tables).
+  // The device secret proves to the server that a guest id is really this phone's (ids are public).
   const session = (await getSession()) ?? undefined;
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ session, ...body }) });
+  const secret = await mySecret();
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ session, secret, ...body }) });
   if (!res.ok) throw new Error(`SOCIAL_${res.status}`);
   return (await res.json()) as T;
 }
 
 let cachedId: string | null = null;
+/** Signed out: the next guest on this phone gets a fresh id of their own. */
+export function resetMyId() {
+  cachedId = null;
+}
 /** Signed in: the community identity is the account's id, the same on every phone. */
 export function setMyId(id: string) {
   cachedId = id;
   writeJSON('essola.uid', id);
 }
+let cachedSecret: string | null = null;
+/** A random secret that never leaves the phone except to our server; it proves the guest id is ours. */
+export async function mySecret() {
+  if (cachedSecret) return cachedSecret;
+  let s = await readJSON<string | null>('essola.secret', null);
+  if (!s) {
+    s = Array.from(Crypto.getRandomBytes(24), (b) => b.toString(16).padStart(2, '0')).join('');
+    await writeJSON('essola.secret', s);
+  }
+  cachedSecret = s;
+  return s;
+}
+
 /** Stable anonymous id of this device's profile. */
 export async function myId() {
   if (cachedId) return cachedId;

@@ -149,14 +149,16 @@ function decodeCompare(text) {
   return { text: out.length > 1 ? out.join(' ') : '' };
 }
 const REVIEW = `Ты косметолог-технолог. Дана формула (ингредиент, доля, роль). Сумму, консервант, эмульгатор и pH пользователь уже видит — упоминай их только если есть «Замечания». Ответ строго строками, без markdown:
-В: вывод в 2 предложениях — что получится и главный совет
+О: что получится — какое это средство, что оно даст и кому подойдёт, 1–2 предложения (пиши всегда)
+В: главный вывод и совет, 1–2 предложения
 + ингредиент (INCI) | доля | что даст, до 12 слов
 - ингредиент | новая доля | почему, до 10 слов
 x ингредиент | почему, до 10 слов
 ! предупреждение, до 10 слов
-Меняй только то, что действительно нужно: ошибка, нестабильность, опасная доля, явная нехватка эффекта для «Типа». Хорошая формула — одна строка «В: Хорошая, стабильная формула…». «+» 0–3, только ингредиенты, которых НЕТ в формуле (и синонимов); «-», «x», «!» 0–2. Сумма остаётся 100%: к каждому «+» добавь «-» за счёт основы (вода или базовое масло) с новой долей, пересчитанной от ЭТОЙ формулы (было Aqua 12%, +2% → «- Aqua | 10%»).
+Меняй только то, что действительно нужно: ошибка, нестабильность, опасная доля, явная нехватка эффекта для «Типа». Хорошая формула — строка «О: …» и строка «В: Хорошая, стабильная формула…», больше ничего. «+» 0–3, только ингредиенты, которых НЕТ в формуле (и синонимов); «-», «x», «!» 0–2. Сумма остаётся 100%: к каждому «+» добавь «-» за счёт основы (вода или базовое масло) с новой долей, пересчитанной от ЭТОЙ формулы (было Aqua 12%, +2% → «- Aqua | 10%»).
 Пример:
-В: Лёгкий увлажняющий тоник, но кислоты многовато для ежедневного ухода. Смягчите формулу пантенолом.
+О: Лёгкий увлажняющий тоник с молочной кислотой: мягко обновляет кожу и выравнивает тон, подойдёт нормальной и жирной коже.
+В: Кислоты многовато для ежедневного ухода — смягчите формулу пантенолом.
 + Panthenol | 1% | смягчит действие кислоты
 - Aqua | 79% | место для пантенола
 - Lactic Acid | 5% | 8% раздражает при ежедневном применении /no_think`;
@@ -329,7 +331,7 @@ const ADMIN_PAGE_OF = () => {
       return '';
     }
   };
-  adminPage = read('admin.html').replace('/*CSV*/', () => read('admin-csv.js').replace(/<\/script/gi, '<\\/script')).replace('/*APP_KEY*/', () => String(process.env.APP_KEY || '').replace(/[^a-z0-9]/gi, ''));
+  adminPage = read('admin.html').replace('/*CSV*/', () => read('admin-csv.js').replace(/<\/script/gi, '<\\/script')).replace('/*APP_KEY*/', '');
   return adminPage;
 };
 
@@ -352,6 +354,49 @@ function docPage(name) {
   const d = docs[name] || docs.privacy;
   if (!d) return head('essola') + '<h1>essola</h1></main></body></html>';
   return head(d.title) + `<h1>${esc(d.title)}</h1><p class="muted">Обновлено: ${esc(d.updated)}</p>` + d.sections.map((x) => `<h2>${esc(x.h)}</h2>${String(x.p).split('\n').map((l) => `<p>${esc(l)}</p>`).join('')}`).join('') + '</main></body></html>';
+}
+
+// The same answer asked for several times at once (two screens, a double tap) is made once per instance.
+const inflight = new Map();
+function shared(key, make) {
+  if (inflight.has(key)) return inflight.get(key);
+  const p = make().finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+/** A JPEG or PNG no larger than `max` pixels on each side (read from the file header). */
+function imageOk(dataUrl, max) {
+  let buf;
+  try {
+    buf = Buffer.from(String(dataUrl).replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
+  } catch {
+    return false;
+  }
+  if (buf[0] === 0x89 && buf.toString('ascii', 1, 4) === 'PNG') return buf.readUInt32BE(16) <= max && buf.readUInt32BE(20) <= max;
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) return false;
+  for (let i = 2; i + 9 < buf.length; ) {
+    if (buf[i] !== 0xff) return false;
+    const marker = buf[i + 1];
+    const len = buf.readUInt16BE(i + 2);
+    // Start-of-frame markers carry the size: height, then width.
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return buf.readUInt16BE(i + 5) <= max && buf.readUInt16BE(i + 7) <= max;
+    i += 2 + len;
+  }
+  return false;
+}
+
+/** For the daily limits: storage errors are reported, not hidden, so a paid call is refused when the count can't be kept. */
+async function putStrict(key, iam, data) {
+  if (!BUCKET || !iam) return false;
+  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'PUT', headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' }, body: JSON.stringify(data), signal: AbortSignal.timeout(5000) }).catch(() => null);
+  return !!res && res.ok;
+}
+async function listStrict(prefix, iam) {
+  if (!BUCKET || !iam) return null;
+  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}?list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`, { headers: { 'X-YaCloud-SubjectToken': iam }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return [...(await res.text()).matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
 }
 
 /** Keys under a prefix in the bucket (up to 1000). */
@@ -460,6 +505,34 @@ const cosingKeys = (name) => {
   const out = [n, n.replace(/\s*\(.*?\)\s*/g, ' ').trim(), ...n.split(/\s*\/\s*/)];
   return [...new Set(out.filter((x) => x.length > 1))];
 };
+/** A list sent from a phone looks like a real composition: most names are known INCI or common Russian ingredient words. */
+const RU_INGR = /(вода|глицерин|экстракт|масл|кислот|спирт|натри|кали|гликол|токоферол|пантенол|отдушк|парфюм|бензоат|сорбат|феноксиэт|ксантан|карбомер|диметикон|цетеар|стеар|лаур|кокамид|бетаин|мочевин|аллантоин|сквалан|ниацинамид|гиалурон|церамид|керамид|лецитин|воск|глюкоз|гидролат|ароматизатор|краситель|\bci ?\d)/i;
+async function plausibleList(list, iam) {
+  if (list.length < 3) return false;
+  const db = await loadCosing(iam);
+  const known = list.filter((n) => RU_INGR.test(n) || cosingKeys(n).some((k) => db[k])).length;
+  return known >= Math.max(3, Math.ceil(list.length * 0.5));
+}
+/**
+ * Compositions sent by phones (a photo matched to a barcode, a shop page read in the app) never overwrite a record
+ * someone else made: the first plausible one is kept as unconfirmed, the same list from another person and network
+ * confirms it, a different one is only logged for the admin (suggest/…), so nothing can be replaced or rolled back.
+ */
+async function userSubmit(key, iam, who, rec) {
+  const norm2 = (l) => l.map((x) => x.toLowerCase().replace(/\s+/g, ' ').trim()).join('|');
+  const prev = await cacheGet(key, iam);
+  const log = () => cachePut(`suggest/${key.replace(/[^a-z0-9]/gi, '_')}/${Date.now()}-${who.slice(0, 12)}.json`, iam, { ...rec, by: who, at: new Date().toISOString() }, true).catch(() => {});
+  if (!prev) {
+    await cachePut(key, iam, { ...rec, by: who, verified: false });
+    return 'saved';
+  }
+  if (prev.by && prev.by !== who && !prev.verified && Array.isArray(prev.ingredients) && norm2(prev.ingredients) === norm2(rec.ingredients)) {
+    await cachePut(key, iam, { ...prev, verified: true, confirmedBy: who });
+    return 'confirmed';
+  }
+  await log();
+  return 'kept';
+}
 // «Средства с ингредиентом»: product keys per ingredient, built by CI (scripts/build-ingr.ts), most popular first.
 const ingrLists = new Map();
 async function ingrList(slug, iam) {
@@ -542,7 +615,7 @@ function keywordSearch(list, q, min = 0.6) {
 
 /** Brand + name read from the pack → the product in our Letual base (titles there are Russian, packs often English,
  * so a small text model picks among the brand's products), or a composition found on the web. */
-async function findByLabel(brand, name, kind, iam, model, canWeb = async () => true) {
+async function findByLabel(brand, name, kind, iam, model, canWeb = async () => true, canPick = canWeb) {
   const b = norm(brand).replace(/ /g, '');
   const base = await loadLetu(iam);
   const ours = b.length >= 2 ? base.filter((x) => { const xb = norm(x.b).replace(/ /g, ''); return xb && (xb === b || (b.length >= 4 && (xb.includes(b) || b.includes(xb)))); }) : [];
@@ -552,10 +625,20 @@ async function findByLabel(brand, name, kind, iam, model, canWeb = async () => t
     const top = [...ours].sort((a, c) => score(c) - score(a) || (c.p || 0) - (a.p || 0)).slice(0, 30);
     let pick = top.length === 1 && !top[0].z ? top[0] : null;
     if (!pick) {
-      const list = top.map((x, i) => `${i + 1}. ${x.t}`).join('\n');
-      const ans = await chat(model, [{ role: 'user', content: `На упаковке: «${brand} ${name}»${kind ? ` (${kind})` : ''}. Какой товар из списка — это то же средство (переводы и сокращения допустимы)? Ответь только номером, или 0, если такого нет.\n${list}` }], 8, true).catch(() => '0');
-      const n = parseInt(String(ans).match(/\d+/)?.[0] || '0', 10);
-      pick = n > 0 && n <= top.length ? top[n - 1] : null;
+      // The model's choice is remembered per query and base version: asking again costs nothing. A new choice
+      // is a paid call and goes through the daily limit like any other.
+      const pk = `pick/${crypto.createHash('sha1').update(norm(`${brand}|${name}|${kind}`)).digest('hex')}-${base.length}.json`;
+      const memo = await cacheGet(pk, iam);
+      if (memo) pick = memo.k ? top.find((x) => x.k === memo.k) || null : null;
+      else if (await canPick()) {
+        const list = top.map((x, i) => `${i + 1}. ${String(x.t).slice(0, 120)}`).join('\n');
+        const ans = await chat(model, [{ role: 'user', content: `На упаковке: «${String(brand).slice(0, 60)} ${String(name).slice(0, 160)}»${kind ? ` (${String(kind).slice(0, 40)})` : ''}. Какой товар из списка — это то же средство (переводы и сокращения допустимы)? Ответь только номером, или 0, если такого нет.\n${list}` }], 8, true).catch(() => null);
+        if (ans !== null) {
+          const n = parseInt(String(ans).match(/\d+/)?.[0] || '0', 10);
+          pick = n > 0 && n <= top.length ? top[n - 1] : null;
+          await cachePut(pk, iam, { k: pick ? pick.k : 0 }, true).catch(() => {});
+        }
+      } else return { limited: true };
     }
     if (pick) {
       const [item] = await withCompositions([(({ g, _h, _score, ...x }) => x)(pick)], iam);
@@ -667,7 +750,7 @@ function balanceReview(out, items, kind = '') {
   // The formula itself may not be at 100% yet (5% of actives + advice): the advice has to finish it.
   const sum = r1(cur.reduce((a, c) => a + c.pct, 0));
   if (cur.length && Math.abs(sum - 100) >= 0.1 && /хорош|сбаланс|стабильн|готов/i.test(out.verdict || '')) {
-    out.verdict = `Сейчас сумма формулы ${String(sum).replace('.', ',')}%, а должна быть ровно 100%. Доведите её до 100% — как показано ниже — и формула будет завершена.`;
+    out.verdict = `Почти готово: сейчас сумма формулы ${String(sum).replace('.', ',')}%, а должна быть ровно 100%. Доведите её до 100%, как показано ниже, — и формула будет завершена.`;
   }
   net = r1(net + sum - 100);
   if (Math.abs(net) < 0.1) return out;
@@ -860,12 +943,29 @@ async function handle(event, context) {
     return { statusCode: 302, headers: { Location: `${back}${back.includes('?') ? '&' : '?'}${params}` }, body: '' };
   }
   const h = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
-  if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY) return reply(401, { error: 'unauthorized' });
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
     const req = JSON.parse(raw);
+    // The app key is shared by every installed app, so it only keeps out random traffic; who may do what is
+    // decided below by the session or the device secret. The admin panel has no app key: it may call only the
+    // admin-only modes, each of which checks the admin token itself.
+    const ADMIN_MODES = ['admin.check', 'admin.stats', 'admin.reports', 'admin.club', 'admin.promo', 'editorial.add', 'editorial.list', 'editorial.remove', 'stories.add', 'stories.list', 'stories.img', 'stories.remove'];
+    if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY && !(req.admin && ADMIN_MODES.includes(req.mode))) return reply(401, { error: 'unauthorized' });
     const textModel = process.env.TEXT_MODEL || 'yandexgpt-lite/latest';
     const iam = context?.token?.access_token;
+    // What goes into a model prompt is cut to sane sizes before anything else: long fields only add cost.
+    if (['describe', 'review', 'compare', 'scan', 'label', 'byname', 'link'].includes(req.mode)) {
+      const strs = (a, n, len) => (Array.isArray(a) ? a : []).filter((x) => typeof x === 'string').slice(0, n).map((x) => x.replace(/[<>]/g, '').trim().slice(0, len)).filter(Boolean);
+      if ('items' in req) req.items = strs(req.items, 40, 120);
+      if ('ingredients' in req) req.ingredients = strs(req.ingredients, 60, 90);
+      if ('notes' in req) req.notes = strs(req.notes, 6, 160);
+      if ('done' in req) req.done = strs(req.done, 12, 60);
+      for (const k of ['kind', 'title', 'name', 'brand', 'url']) {
+        if (typeof req[k] === 'string') req[k] = req[k].slice(0, k === 'url' ? 600 : 200);
+        else if (req[k] != null) delete req[k];
+      }
+      for (const k of ['a', 'b']) if (req[k] && typeof req[k] === 'object') req[k] = { title: typeof req[k].title === 'string' ? req[k].title.slice(0, 200) : '', items: strs(req[k].items, 35, 90) };
+    }
     if (req.mode === 'vk.start') {
       const state = String(req.state || '');
       const back = String(req.back || '');
@@ -898,6 +998,27 @@ async function handle(event, context) {
       const ses = await get(`sessions/${sha(t)}.json`, null);
       return (sessionMemo = ses && Date.now() - ses.at < 365 * 86400e3 ? ses.uid : null);
     };
+    // Community identity. Signed in: the account id from the session (the id the client sends is ignored).
+    // Guest: the id the client sends counts only with the secret that was first used with it (kept on the phone,
+    // never shown to anyone). Public ids of authors are visible in the app, so the id alone proves nothing.
+    let actorMemo;
+    const actor = async () => {
+      if (actorMemo !== undefined) return actorMemo;
+      const me = await sessionUid();
+      if (me) return (actorMemo = me);
+      const id = uid(req.id);
+      const secret = String(req.secret || '');
+      // Account ids act only through a session; guests need their secret.
+      if (!id || /^a[0-9a-f]{18}$/.test(id) || secret.length < 20) return (actorMemo = null);
+      const k = `owners/${sha(id)}.json`;
+      const own = await get(k, null);
+      if (!own) {
+        await put(k, { h: sha(secret), at: Date.now() });
+        return (actorMemo = id);
+      }
+      return (actorMemo = own.h === sha(secret) ? id : null);
+    };
+    const NO_ACTOR = () => reply(401, { error: 'not_signed' });
     // ---- Daily limits on what costs money (model calls, web search): per account, else per device,
     // plus a looser one per network address so a reinstalled app doesn't reset them.
     // Free: 3 a day of each paid kind; Essola Club: 10. Product descriptions are cached for everyone and open with
@@ -913,12 +1034,30 @@ async function handle(event, context) {
       if (me && (await get(`accounts/${me}.json`, null))?.club) n = Math.max(n, clubN);
       const who = me ? `u:${me}` : uid(req.device) ? `d:${uid(req.device)}` : null;
       const checks = [who && [who, n], ip && [`ip:${ip}`, n * 4]].filter(Boolean);
-      const files = await Promise.all(checks.map(([w]) => get(`limits/${day()}/${sha(w)}.json`, {})));
-      if (checks.some(([, max], i) => (files[i][what] || 0) >= max)) {
+      if (!checks.length) return false;
+      // Reserve first, then count: every paid request writes its own small file, then lists the day's files.
+      // Requests racing each other see one another's files, and the earliest ones win; the rest give their
+      // place back. If the storage can't write or list, the paid call is refused.
+      const stamp = `${String(Date.now()).padStart(14, '0')}-${crypto.randomBytes(4).toString('hex')}.json`;
+      const dirs = checks.map(([w]) => `limits/${day()}/${sha(w)}/${what.replace(/[^a-z.]/gi, '')}/`);
+      const release = () => Promise.all(dirs.map((d) => cacheDel(`${d}${stamp}`, iam)));
+      const wrote = await Promise.all(dirs.map((d) => putStrict(`${d}${stamp}`, iam, {})));
+      const lists = wrote.every(Boolean) ? await Promise.all(dirs.map((d) => listStrict(d, iam))) : [null];
+      if (lists.some((l) => !l)) {
+        await release();
+        console.log('limit storage unavailable:', what);
+        return false;
+      }
+      const over = lists.some((l, i) => {
+        const sorted = [...l].sort();
+        const pos = sorted.indexOf(`${dirs[i]}${stamp}`);
+        return (pos < 0 ? sorted.length : pos) >= checks[i][1];
+      });
+      if (over) {
+        await release();
         console.log('limit reached:', what, who || 'ip');
         return false;
       }
-      await Promise.all(checks.map(([w], i) => put(`limits/${day()}/${sha(w)}.json`, { ...files[i], [what]: (files[i][what] || 0) + 1 })));
       return true;
     };
     // Admin: the session of an account whose email hash is listed, or the panel's token.
@@ -945,6 +1084,11 @@ async function handle(event, context) {
       if (!acc) {
         acc = { uid: `a${crypto.randomBytes(9).toString('hex')}`, provider, email: info.email || null, name: info.name || null, nick: null, links: [link], sessions: [], createdAt: new Date().toISOString() };
         await put(link, { uid: acc.uid });
+      }
+      // Consent to personal data processing, given with a checkbox on the sign-in screen: when it was given.
+      if (req.consent === true) {
+        acc.consentAt = acc.consentAt || new Date().toISOString();
+        acc.consentLast = new Date().toISOString();
       }
       if (!acc.email && info.email) acc.email = info.email;
       if (!acc.name && info.name) acc.name = info.name;
@@ -1042,16 +1186,16 @@ async function handle(event, context) {
     }
     // ---- Reports, account deletion (App Store rules for apps with user content) ----
     if (req.mode === 'report') {
-      const me = uid(req.id);
-      if (!me) return reply(400, { error: 'bad_report' });
+      const me = (await actor()) || 'anon';
+      if (!(await allow('report', 30))) return reply(429, { error: 'limit' });
       const item = { at: new Date().toISOString(), from: me, kind: clean(req.kind, 20), target: clean(req.target, 120), author: uid(req.author), text: clean(req.text, 300), reason: clean(req.reason, 200) };
       const list = await get('reports.json', []);
       await put('reports.json', [item, ...list].slice(0, 2000));
       return reply(200, { ok: true });
     }
     if (req.mode === 'user.delete') {
-      const me = uid(req.id);
-      if (!me) return reply(400, { error: 'bad_user' });
+      const me = await actor();
+      if (!me) return NO_ACTOR();
       const prev = await get(`users/${me}.json`, null);
       // Profile, published recipes, followers and notifications are removed; forum posts stay but lose the name.
       await Promise.all([put(`users/${me}.json`, { id: me, nick: 'удалённый пользователь', deleted: true }), put(`users/${me}/recipes.json`, []), put(`users/${me}/followers.json`, []), put(`notif/${me}.json`, [])]);
@@ -1083,16 +1227,17 @@ async function handle(event, context) {
       return reply(200, { ok: true });
     }
     if (req.mode === 'user.save') {
-      const id = uid(req.id);
-      if (!id) return reply(400, { error: 'bad_user' });
+      const id = await actor();
+      if (!id) return NO_ACTOR();
       const prev = await get(`users/${id}.json`, {});
       let nick = clean(req.nick, 24) || prev.nick || 'user';
       if (/^essola/i.test(nick)) nick = `${nick}_`;
       const user = { ...prev, id, nick, name: clean(req.name, 60) || prev.name || '', bio: clean(req.bio, 160) || prev.bio || '' };
       await put(`users/${id}.json`, user);
       // nick → id, for @mentions in the forum
+      // @mentions of a nick already taken by someone else keep going to its first owner.
       const nicks = await get('nicks.json', {});
-      if (nicks[nick.toLowerCase()] !== id) await put('nicks.json', { ...nicks, [nick.toLowerCase()]: id });
+      if (!nicks[nick.toLowerCase()]) await put('nicks.json', { ...nicks, [nick.toLowerCase()]: id });
       return reply(200, { user });
     }
     if (req.mode === 'user.get') {
@@ -1101,9 +1246,10 @@ async function handle(event, context) {
       return reply(200, { user, recipes, followers: followers.length, follows: follows.length, following: followers.includes(uid(req.viewer)) });
     }
     if (req.mode === 'recipe.publish') {
-      const id = uid(req.id);
+      const id = await actor();
+      if (!id) return NO_ACTOR();
       const r = req.recipe || {};
-      if (!id || !r.id || !r.title) return reply(400, { error: 'bad_recipe' });
+      if (!r.id || !r.title) return reply(400, { error: 'bad_recipe' });
       const user = await get(`users/${id}.json`, { id, nick: 'user' });
       const recipe = JSON.parse(JSON.stringify(r).slice(0, 20000));
       const mine = (await get(`users/${id}/recipes.json`, [])).filter((x) => x.id !== recipe.id);
@@ -1116,7 +1262,7 @@ async function handle(event, context) {
       return reply(200, { items: await get('community/recent.json', []) });
     }
     if (req.mode === 'follow') {
-      const me = uid(req.id);
+      const me = await actor();
       const target = uid(req.target);
       if (!me || !target || me === target) return reply(400, { error: 'bad_follow' });
       const list = (await get(`users/${target}/followers.json`, [])).filter((x) => x !== me);
@@ -1240,8 +1386,9 @@ async function handle(event, context) {
       return reply(t ? 200 : 404, t ? { topic: t } : { error: 'not_found' });
     }
     if (req.mode === 'forum.create') {
-      await ensureUser(get, put, uid(req.id), req.nick);
-      const me = uid(req.id);
+      const me = await actor();
+      if (!me) return NO_ACTOR();
+      await ensureUser(get, put, me, req.nick);
       const title = clean(req.title, 120);
       const text = clean(req.text, 4000);
       if (!me || title.length < 4) return reply(400, { error: 'bad_topic' });
@@ -1252,8 +1399,9 @@ async function handle(event, context) {
       return reply(200, { id: tid });
     }
     if (req.mode === 'forum.reply') {
-      await ensureUser(get, put, uid(req.id), req.nick);
-      const me = uid(req.id);
+      const me = await actor();
+      if (!me) return NO_ACTOR();
+      await ensureUser(get, put, me, req.nick);
       const text = clean(req.text, 3000);
       const t = await loadTopic(clean(req.tid, 40));
       if (!me || !t || !text) return reply(400, { error: 'bad_reply' });
@@ -1277,7 +1425,7 @@ async function handle(event, context) {
       return reply(200, { topic: t });
     }
     if (req.mode === 'forum.like') {
-      const me = uid(req.id);
+      const me = await actor();
       const t = await loadTopic(clean(req.tid, 40));
       if (!me || !t) return reply(400, { error: 'bad_like' });
       const pid = clean(req.pid, 20);
@@ -1313,12 +1461,14 @@ async function handle(event, context) {
       return reply(x ? 200 : 404, x || { error: 'not_found' });
     }
     if (req.mode === 'notif.list') {
-      const me = uid(req.id);
+      const me = await actor();
       return reply(200, { items: me ? await get(`notif/${me}.json`, []) : [] });
     }
     if (req.mode === 'social.get' || req.mode === 'social.like' || req.mode === 'social.comment' || req.mode === 'social.rate') {
       const key = `social/${crypto.createHash('sha1').update(String(req.key || '')).digest('hex')}.json`;
-      const me = uid(req.id);
+      // Reading shows «mine» for the claimed id; writing needs a proven one.
+      const me = req.mode === 'social.get' ? uid(req.id) : await actor();
+      if (req.mode !== 'social.get' && !me) return NO_ACTOR();
       const data = await get(key, { likes: [], comments: [] });
       if (req.mode === 'social.like' && me) {
         data.likes = data.likes.filter((x) => x !== me);
@@ -1494,7 +1644,7 @@ async function handle(event, context) {
         if (named) out = { ...out, title: named };
       }
       if (out.ingredients.length < 3 && out.title) {
-        const more = await findByLabel(out.brand, out.title, '', iam, textModel, webOk).catch(() => ({}));
+        const more = await findByLabel(out.brand, out.title, '', iam, textModel, webOk, () => allow('pick', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1])).catch(() => ({}));
         out = { ...out, ...more };
       }
       if (card || out.item || out.ingredients.length >= 3) await cachePut(ck, iam, out, true).catch(() => {});
@@ -1524,15 +1674,24 @@ async function handle(event, context) {
       // A barcode someone matched to a composition (photo or a product from our base): remembered for everyone.
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
       const code = String(req.barcode || '').replace(/\D/g, '');
-      if (code.length < 8 || ingredients.length < 3) return reply(400, { error: 'bad_product' });
-      if (!(await cacheGet(keyFor({ barcode: code }), iam))) await cachePut(keyFor({ barcode: code }), iam, { title: String(req.title || '').slice(0, 200), ingredients, source: 'essola' });
-      return reply(200, { ok: true });
+      if (code.length < 8 || !(await plausibleList(ingredients, iam))) return reply(400, { error: 'bad_product' });
+      const who = await actor();
+      if (!who || !(await allow('submit', 30))) return reply(429, { error: 'limit' });
+      const done = await userSubmit(keyFor({ barcode: code }), iam, sha(`${who}|${ip}`), { title: String(req.title || '').slice(0, 200), ingredients, source: 'essola' });
+      return reply(200, { ok: true, done });
     }
     if (req.mode === 'save') {
       // A composition the user's phone read from a shop page: keep it for everyone.
       const ingredients = (req.ingredients || []).filter((x) => typeof x === 'string' && x.length > 1 && x.length < 90).slice(0, 80);
-      if (!req.url || ingredients.length < 3) return reply(400, { error: 'bad_product' });
-      await cachePut(keyFor({ url: req.url }), iam, { title: String(req.title || '').slice(0, 200), url: req.url, ingredients, source: 'shop' });
+      let host0 = '';
+      try {
+        host0 = new URL(String(req.url)).hostname;
+      } catch {}
+      if (!/(^|\.)(letu\.ru|goldapple\.ru|wildberries\.[a-z]{2,3}|wb\.ru|ozon\.[a-z]{2,3})$/i.test(host0) || !(await plausibleList(ingredients, iam))) return reply(400, { error: 'bad_product' });
+      const who = await actor();
+      if (!who || !(await allow('submit', 30))) return reply(429, { error: 'limit' });
+      const done = await userSubmit(keyFor({ url: req.url }), iam, sha(`${who}|${ip}`), { title: String(req.title || '').slice(0, 200), url: req.url, ingredients, source: 'shop' });
+      if (done === 'kept') return reply(200, { ok: true, done });
       const host = (() => { try { return new URL(req.url).hostname.replace(/^www\./, ''); } catch { return 'shop'; } })();
       await shopAdd(iam, keyFor({ url: req.url }), String(req.title || '').slice(0, 200), String(req.image || '').slice(0, 400) || null, ingredients, host, clean(req.brand, 60), req.url).catch(() => {});
       return reply(200, { ok: true });
@@ -1555,7 +1714,7 @@ async function handle(event, context) {
       // The shop page gave only the name: look for the composition on the web (same daily limit as other web searches).
       if (req.web) {
         const brand = clean(req.brand, 80);
-        const more = await findByLabel(brand || brandWord, brand ? name : name.split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web')).catch(() => ({}));
+        const more = await findByLabel(brand || brandWord, brand ? name : name.split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web'), () => allow('pick', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1])).catch(() => ({}));
         if (more.item?.x || more.ingredients?.length) return reply(200, more);
       }
       return reply(200, {});
@@ -1598,7 +1757,7 @@ async function handle(event, context) {
         const items = await withCompositions(found.map(({ g, _h, _score, ...x }) => x), iam);
         return reply(200, { shop: info.shop, title: info.title, brand: info.brand, candidates: items });
       }
-      const more = await findByLabel(info.brand || brandWord, info.brand ? info.title || '' : (info.title || '').split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web')).catch(() => ({}));
+      const more = await findByLabel(info.brand || brandWord, info.brand ? info.title || '' : (info.title || '').split(' ').slice(1).join(' '), '', iam, textModel, () => allow('web'), () => allow('pick', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1])).catch(() => ({}));
       return reply(200, { shop: info.shop, title: info.title, brand: info.brand, ...more });
     }
     if (req.mode === 'url') {
@@ -1634,24 +1793,29 @@ async function handle(event, context) {
       // The same formula gets the same answer for everyone, without a new model call.
       // «Технолог обычный» answers the same coded lines with the light model: a few times cheaper.
       const lite = req.tier === 'lite';
-      const rk = `${lite ? 'reviewL1' : 'review4'}/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
+      const rk = `${lite ? 'reviewL2' : 'review5'}/${sha(`${req.kind || ''}|${list}|${notes}|${done}`)}.json`;
       const cachedReview = await cacheGet(rk, iam);
       if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || [], req.kind));
       if (lite) curMode = 'review.lite';
-      if (!(await (lite ? allow('review.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]) : allow('review')))) return reply(429, { error: 'limit' });
-      const text = await chat(lite ? textModel : process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь одной строкой «В: Формула готова…» с коротким объяснением, что получилось.` : ''}` }], 500, true);
-      const out = { add: [], reduce: [], remove: [], warn: [] };
-      for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
-        const [head, ...rest] = line.slice(1).split('|').map((x) => x.trim());
-        if (/^В:/i.test(line)) out.verdict = line.replace(/^В:\s*/i, '');
-        else if (line[0] === '+' && head) out.add.push({ name: head, pct: rest[0], why: rest[1] });
-        else if ((line[0] === '-' || line[0] === '−') && head) out.reduce.push({ name: head, to: rest[0], why: rest[1] });
-        else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
-        else if (line[0] === '!' && head) out.warn.push(head);
-      }
-      balanceReview(out, req.items || [], req.kind);
-      await cachePut(rk, iam, out, true);
-      return reply(200, { ...out, _usage: lastUsage });
+      const made = await shared(rk, async () => {
+        if (!(await (lite ? allow('review.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]) : allow('review')))) return null;
+        const text = await chat(lite ? textModel : process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь строкой «О: …» — какое средство получилось, для чего и кому — и строкой «В: Формула готова…».` : ''}` }], 500, true);
+        const out = { add: [], reduce: [], remove: [], warn: [] };
+        for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
+          const [head, ...rest] = line.slice(1).split('|').map((x) => x.trim());
+          if (/^О:/i.test(line)) out.summary = line.replace(/^О:\s*/i, '');
+          else if (/^В:/i.test(line)) out.verdict = line.replace(/^В:\s*/i, '');
+          else if (line[0] === '+' && head) out.add.push({ name: head, pct: rest[0], why: rest[1] });
+          else if ((line[0] === '-' || line[0] === '−') && head) out.reduce.push({ name: head, to: rest[0], why: rest[1] });
+          else if ((line[0] === 'x' || line[0] === 'х' || line[0] === '×') && head) out.remove.push({ name: head, why: rest[0] });
+          else if (line[0] === '!' && head) out.warn.push(head);
+        }
+        balanceReview(out, req.items || [], req.kind);
+        await cachePut(rk, iam, out, true);
+        return out;
+      });
+      if (!made) return reply(429, { error: 'limit' });
+      return reply(200, { ...made, _usage: lastUsage });
     }
     if (req.mode === 'compare') {
       // Two products side by side: the technologist explains how they differ, for what and for which zone.
@@ -1668,20 +1832,28 @@ async function handle(event, context) {
       if (lite) {
         // The cheap technologist: light model, a few dozen coded tokens, the text is assembled here.
         curMode = 'compare.lite';
-        if (!(await allow('compare.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return reply(429, { error: 'limit' });
-        const out = decodeCompare(await chat(textModel, [{ role: 'system', content: COMPARE_LITE }, { role: 'user', content: `Средство А: ${a.title || 'без названия'}. Состав: ${a.items.join(', ')}\nСредство Б: ${b.title || 'без названия'}. Состав: ${b.items.join(', ')}` }], 160, true));
-        if (out.text) await cachePut(ck, iam, out, true);
+        const out = await shared(ck, async () => {
+          if (!(await allow('compare.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return null;
+          const o = decodeCompare(await chat(textModel, [{ role: 'system', content: COMPARE_LITE }, { role: 'user', content: `Средство А: ${a.title || 'без названия'}. Состав: ${a.items.join(', ')}\nСредство Б: ${b.title || 'без названия'}. Состав: ${b.items.join(', ')}` }], 160, true));
+          if (o.text) await cachePut(ck, iam, o, true);
+          return o;
+        });
+        if (!out) return reply(429, { error: 'limit' });
         return reply(200, { ...out, _usage: lastUsage });
       }
-      if (!(await allow('compare'))) return reply(429, { error: 'limit' });
-      const text = await chat(
-        process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
-        [{ role: 'user', content: `${COMPARE}\n\nСредство А: ${a.title || 'без названия'}\nСостав А: ${a.items.join(', ')}\n\nСредство Б: ${b.title || 'без названия'}\nСостав Б: ${b.items.join(', ')}` }],
-        300,
-        true,
-      );
-      const out = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
-      if (out.text) await cachePut(ck, iam, out, true);
+      const out = await shared(ck, async () => {
+        if (!(await allow('compare'))) return null;
+        const text = await chat(
+          process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
+          [{ role: 'user', content: `${COMPARE}\n\nСредство А: ${a.title || 'без названия'}\nСостав А: ${a.items.join(', ')}\n\nСредство Б: ${b.title || 'без названия'}\nСостав Б: ${b.items.join(', ')}` }],
+          300,
+          true,
+        );
+        const o = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
+        if (o.text) await cachePut(ck, iam, o, true);
+        return o;
+      });
+      if (!out) return reply(429, { error: 'limit' });
       return reply(200, { ...out, _usage: lastUsage });
     }
     if (req.mode === 'describe') {
@@ -1691,15 +1863,19 @@ async function handle(event, context) {
       const dk = `desc3/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
       if (hit && hit.lead) return reply(200, hit);
-      if (!(await allow('describe', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return reply(429, { error: 'limit' });
-      const out = decodeDescribe(await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 220, true));
-      if (out && out.lead) await cachePut(dk, iam, out, true);
+      const out = await shared(dk, async () => {
+        if (!(await allow('describe', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return null;
+        const o = decodeDescribe(await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 220, true));
+        if (o && o.lead) await cachePut(dk, iam, o, true);
+        return o;
+      });
+      if (!out) return reply(429, { error: 'limit' });
       return reply(200, out);
     }
     if (req.mode === 'label') {
       // Front of the pack → brand and name only: a small photo and a one-line answer keep it cheap.
       const image = String(req.image || '');
-      if (!image || image.length > 3_000_000) return reply(400, { error: 'bad_image' });
+      if (!image || image.length > 2_000_000 || !imageOk(image, 1600)) return reply(400, { error: 'bad_image' });
       if (!(await allow('photo'))) return reply(429, { error: 'limit' });
       const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
       const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
@@ -1721,12 +1897,12 @@ async function handle(event, context) {
       if (nc) return reply(200, { notCosmetic: nc[1].trim() || 'не косметика', _usage: lastUsage });
       const [brand = '', name = '', kind = ''] = t.split('\n')[0].split('|').map((x) => x.replace(/^["«]|["»]$/g, '').trim());
       console.log('label:', brand, '|', name);
-      const found = await findByLabel(brand, name, kind, iam, textModel, () => allow('web'));
+      const found = await findByLabel(brand, name, kind, iam, textModel, () => allow('web'), () => allow('pick', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]));
       return reply(200, { brand: brand.slice(0, 60), name: name.slice(0, 120), kind: kind.slice(0, 40), ...found, _usage: lastUsage });
     }
     const image = String(req.image || '');
     console.log('scan request, image chars:', image.length);
-    if (!image || image.length > 12_000_000) return reply(400, { error: 'bad_image' });
+    if (!image || image.length > 4_000_000 || !imageOk(image, 3200)) return reply(400, { error: 'bad_image' });
     if (!(await allow('photo'))) return reply(429, { error: 'limit' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
     // Vision models differ per account; try the configured one first, then known multimodal ids.
@@ -1758,7 +1934,11 @@ async function handle(event, context) {
     if (!out) throw last;
     const ingredients = Array.isArray(out.ingredients) ? out.ingredients.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
     console.log('scan ingredients:', ingredients.length);
-    if (req.barcode && ingredients.length >= 3) await cachePut(keyFor({ barcode: req.barcode }), iam, { title: req.title || null, ingredients, source: 'scan' });
+    // The photo is the person's: what it shows joins the barcode under the same rules as other phone submissions.
+    if (req.barcode && String(req.barcode).replace(/\D/g, '').length >= 8 && (await plausibleList(ingredients, iam))) {
+      const who = await actor();
+      if (who) await userSubmit(keyFor({ barcode: req.barcode }), iam, sha(`${who}|${ip}`), { title: String(req.title || '').slice(0, 200) || null, ingredients, source: 'scan' }).catch(() => {});
+    }
     return reply(200, ingredients.length ? { ingredients, _usage: lastUsage } : { ingredients, why: out.raw ?? '', _usage: lastUsage });
   } catch (e) {
     console.error(e);
@@ -1770,3 +1950,4 @@ module.exports._balanceReview = balanceReview;
 
 module.exports._decodeDescribe = decodeDescribe;
 module.exports._decodeCompare = decodeCompare;
+module.exports._imageOk = imageOk;

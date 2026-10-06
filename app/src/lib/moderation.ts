@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import { myId, socialEnabled } from './social';
+import { myId, mySecret, socialEnabled } from './social';
 import { readJSON, writeJSON } from './storage';
-import { cloud, setSession } from './cloud';
+import { cloud, CloudError, getSession, setSession } from './cloud';
 
 // What the App Store asks of apps with user content: report content, hide (block) users, accept community rules
 // before posting, and delete the account from inside the app.
@@ -12,7 +12,8 @@ import { cloud, setSession } from './cloud';
 const url = process.env.EXPO_PUBLIC_SCAN_URL;
 const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 async function call(body: object) {
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify(body) });
+  const who = { session: (await getSession()) ?? undefined, secret: await mySecret() };
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }) });
   if (!res.ok) throw new Error(`MOD_${res.status}`);
   return res.json();
 }
@@ -118,9 +119,16 @@ export function postError(e: unknown) {
 }
 
 /** Deletes everything the person published, their account on our server and the data on this phone. */
+// Both server deletions are repeatable: running them again after a partial success is safe. The phone is wiped
+// only after the server confirmed, so a failed attempt keeps the session for another try.
 export async function deleteAccount() {
-  if (socialEnabled) await call({ mode: 'user.delete', id: await myId() }).catch(() => {});
-  await cloud('account.delete').catch(() => {});
+  if (socialEnabled) await call({ mode: 'user.delete', id: await myId() });
+  if (await getSession()) {
+    await cloud('account.delete').catch((e) => {
+      // Already deleted by an earlier attempt whose answer was lost.
+      if (!(e instanceof CloudError && e.status === 401)) throw e;
+    });
+  }
   await setSession(null);
   const keys = (await AsyncStorage.getAllKeys().catch(() => [] as readonly string[])).filter((k) => k.startsWith('essola.') || k.startsWith('ai:') || k.startsWith('ai2:'));
   await AsyncStorage.multiRemove(keys).catch(() => {});

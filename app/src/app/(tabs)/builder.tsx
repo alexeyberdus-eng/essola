@@ -96,7 +96,8 @@ export default function BuilderScreen() {
     // said right here, without asking again (a new review would only invent the next «improvement»).
     if (review?.data && applied.current.length && !edited.current && !problems.length) {
       tap('success');
-      setReview({ sig, data: { verdict: `Формула готова: рекомендации технолога учтены (${applied.current.slice(0, 4).join(', ')}), сумма 100%. Можно сохранять рецепт и готовить.` } });
+      // The finished formula is described: what it became and what it is for, not only that it is done.
+      setReview({ sig, data: { summary: review.data.summary || summary.lead, verdict: `Формула готова: рекомендации технолога учтены (${applied.current.slice(0, 4).join(', ')}), сумма 100%. Можно сохранять рецепт и готовить.` } });
       applied.current = [];
       return;
     }
@@ -466,13 +467,24 @@ function ReviewCard({ r, items, summary, onAdd, onSetPct, onRemove }: { r: Revie
     <FadeIn>
       <Card style={styles.review}>
         <Text style={styles.reviewKicker}>Оценка технолога</Text>
+        {!!(r.summary || summary.lead) && (
+          <View style={{ gap: 4 }}>
+            <Text style={styles.reviewGroup}>Что получится</Text>
+            <Text style={styles.reviewLead}>{r.summary || summary.lead}</Text>
+          </View>
+        )}
         {!(r.add ?? []).length && !(r.reduce ?? []).length && !(r.remove ?? []).length && (
           <View style={styles.goodBadge}>
             <Icon name="check" size={16} color={colors.good} strokeWidth={2.6} />
             <Text style={styles.goodText}>Хорошая формула — менять ничего не нужно</Text>
           </View>
         )}
-        {!!r.verdict && <Text style={styles.reviewLead}>{r.verdict}</Text>}
+        {!!r.verdict && (
+          <View style={{ gap: 4 }}>
+            <Text style={styles.reviewGroup}>Вывод</Text>
+            <Text style={styles.reviewLead}>{r.verdict}</Text>
+          </View>
+        )}
         {summary.effects.length > 0 && (
           <View style={styles.effects}>
             {summary.effects.map((e) => (

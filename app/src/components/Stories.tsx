@@ -162,12 +162,28 @@ function Viewer({ stories, start, onClose, onSeen, onRemove }: { stories: Story[
     }
   };
 
+  // The slide timer runs from where it stopped: holding a finger on the story pauses it, like in Instagram.
+  const [held, setHeld] = useState(false);
+  const run = useCallback(
+    (from: number) => {
+      const a = Animated.timing(progress, { toValue: 1, duration: Math.max(1, SLIDE_MS * (1 - from)), easing: Easing.linear, useNativeDriver: false });
+      a.start(({ finished }) => finished && next());
+    },
+    [progress, next],
+  );
   useEffect(() => {
     progress.setValue(0);
-    const a = Animated.timing(progress, { toValue: 1, duration: SLIDE_MS, easing: Easing.linear, useNativeDriver: false });
-    a.start(({ finished }) => finished && next());
-    return () => a.stop();
-  }, [si, k, progress, next]);
+    run(0);
+    return () => progress.stopAnimation();
+  }, [si, k, progress, run]);
+  const hold = () => {
+    setHeld(true);
+    progress.stopAnimation();
+  };
+  const release = () => {
+    setHeld(false);
+    progress.stopAnimation((v) => run(v));
+  };
 
   if (!story || !slide) return null;
   const picture = story.server ? img[story.server] : slide.image;
@@ -175,7 +191,7 @@ function Viewer({ stories, start, onClose, onSeen, onRemove }: { stories: Story[
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <LinearGradient colors={['#5B47C9', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, paddingTop: insets.top + 8 }}>
-        <View style={styles.bars}>
+        <View style={[styles.bars, held && { opacity: 0 }]}>
           {story.slides.map((_, i) => (
             <View key={i} style={styles.bar}>
               <Animated.View style={[styles.barFill, { width: i < k ? '100%' : i > k ? '0%' : progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
@@ -222,10 +238,10 @@ function Viewer({ stories, start, onClose, onSeen, onRemove }: { stories: Story[
             <Icon name="arrowRight" size={16} color={colors.ink} />
           </Press>
         )}
-        {/* Tap zones: left third goes back, the rest goes forward. */}
+        {/* Tap zones: left third goes back, the rest goes forward; press and hold anywhere pauses. */}
         <View style={[StyleSheet.absoluteFill, { top: insets.top + 70, bottom: story.cta ? 110 : 0, flexDirection: 'row' }]} pointerEvents="box-none">
-          <Pressable style={{ flex: 1 }} onPress={prev} />
-          <Pressable style={{ flex: 2 }} onPress={next} />
+          <Pressable style={{ flex: 1 }} onPress={prev} onPressIn={hold} onPressOut={release} onLongPress={() => {}} delayLongPress={220} />
+          <Pressable style={{ flex: 2 }} onPress={next} onPressIn={hold} onPressOut={release} onLongPress={() => {}} delayLongPress={220} />
         </View>
       </LinearGradient>
     </Modal>
