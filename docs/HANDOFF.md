@@ -46,6 +46,10 @@
 - **Сборка для Google Play (AAB):** в действии «Android APK» новая галочка «Файл AAB для Google Play».
   Инструкция в `docs/google-play/README.md`.
 
+### Файлы для магазинов (коммит 51eb4a2)
+- Google Play, AAB, версия 8: https://expo.dev/artifacts/eas/Ug5OOMD7Zm77KOZyNFasvLVQyc37whcIWP_qdJpdUIQ.aab
+- RuStore, APK, версия 7 (загрузить после текущей модерации): https://expo.dev/artifacts/eas/xPaUK7HbCe-ihaeCN7MLxFsLvNn7BAcbvZ9iAJp20-k.apk
+
 ### Не сделано из аудита (следующий шаг)
 - П.9: точная статистика по каждому вызову со сверкой с биллингом.
 - П.10–12: разные состояния ошибки и пустого результата в базе, тайм-аут ожидания ИИ, контраст подписей нижнего
