@@ -15,9 +15,6 @@ on:
         description: 'Файл AAB для Google Play (вместо APK)'
         type: boolean
         default: false
-  push:
-    branches: [claude/awesome-mccarthy-dlbgor]
-    paths: ['.github/workflows/build-android.yml']
 
 concurrency:
   group: android-apk
@@ -30,7 +27,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # The Expo free queue can take hours; the build goes on in Expo even if this job stops waiting.
+    timeout-minutes: 340
     defaults:
       run:
         working-directory: app
