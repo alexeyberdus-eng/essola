@@ -11,6 +11,10 @@
 
 ---
 
+## 2026-10-07
+
+- 15:45 · Claude · claude/awesome-mccarthy-dlbgor · Картинка 1024×500 для страницы в Google Play: `docs/google-play/feature-1024x500.png` · (этот коммит)
+
 ## 2026-10-06
 
 - 23:55 · Claude · claude/awesome-mccarthy-dlbgor · Действие «Ссылки на сборки» доработано (ставит пакеты, само ждёт сборку Expo, запускается файлом `.github/build-links.trigger`). Готовы файлы со всеми обновлениями (коммит 51eb4a2): AAB для Google Play, версия 8; APK для RuStore, версия 7 — ссылки в задаче «📱 Essola в Expo Go» и в HANDOFF · (этот коммит)
