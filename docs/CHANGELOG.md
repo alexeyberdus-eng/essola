@@ -13,6 +13,7 @@
 
 ## 2026-10-07
 
+- 19:20 · Claude · claude/awesome-mccarthy-dlbgor · HANDOFF: закрытый тест Google Play опубликован, следующие шаги · (этот коммит)
 - 15:45 · Claude · claude/awesome-mccarthy-dlbgor · Картинка 1024×500 для страницы в Google Play: `docs/google-play/feature-1024x500.png` · (этот коммит)
 
 ## 2026-10-06
