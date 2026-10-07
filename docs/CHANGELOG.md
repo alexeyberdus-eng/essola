@@ -13,6 +13,7 @@
 
 ## 2026-10-07
 
+- 19:40 · Claude · claude/awesome-mccarthy-dlbgor · Контекст для второго ассистента: `CLAUDE.md` (Claude Code читает его сам), в `AGENTS.md` — правила работы нескольких ассистентов и аккаунты проекта, в `HANDOFF.md` — «Как начать» и список открытых задач · (этот коммит)
 - 19:20 · Claude · claude/awesome-mccarthy-dlbgor · HANDOFF: закрытый тест Google Play опубликован, следующие шаги · (этот коммит)
 - 15:45 · Claude · claude/awesome-mccarthy-dlbgor · Картинка 1024×500 для страницы в Google Play: `docs/google-play/feature-1024x500.png` · (этот коммит)
 

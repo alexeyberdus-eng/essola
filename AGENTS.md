@@ -8,6 +8,17 @@ and where it went live (Expo Go / сервер / RuStore) if it did.
 
 The owner is a beginner and writes in Russian: answer in Russian, in plain words.
 
+## People and accounts (no secrets here)
+
+- The owner runs an ИП in Russia. RuStore is published on the owner's account.
+- Google Play: a personal account of the owner's friend (Canada). Closed test «Alpha» was published on 07.10.2026;
+  12+ testers for 14 days are needed before the production release.
+- Apple: planned through the same friend's account, with the owner as Admin, and an App Transfer later. No iOS build yet.
+- Expo account `alex777essola`, project `essola`, free build plan: the build queue can take hours. The workflow
+  «Ссылки на сборки» (change `.github/build-links.trigger` and push) waits for the newest build and posts the links.
+- Admin panel: `https://functions.yandexcloud.net/d4eikcrvo6v275frt26v?admin` (password = secret `ADMIN_TOKEN`).
+- Privacy policy, terms and support pages: the same address with `?doc=privacy`, `?doc=terms`, `?doc=support`.
+
 ## What the product is
 
 Mobile app «essola lab» (Expo / React Native). Features:
@@ -34,8 +45,15 @@ Mobile app «essola lab» (Expo / React Native). Features:
 - Main working branch: `claude/awesome-mccarthy-dlbgor`. A push there **deploys automatically**:
   - `server/yandex-scan/**` → workflow «Deploy AI scan function» updates the live server;
   - `app/**` → workflow «EAS Update» publishes to the `preview` channel (Expo Go and the test APK).
-- Other agents (Codex) work in their own branch, for example `codex/<task>`, and open a PR into the main working
-  branch. Pushes to other branches deploy nothing (except `main`, which also runs «EAS Update» — don't push there). Never push to the same branch at the same time as another agent.
+- **Several agents at once.** Only one agent at a time works directly in the main working branch — the one the owner
+  named for that. Every other agent (a second Claude, Codex) works in its own branch and opens a PR into the main
+  working branch:
+  - start your branch from the main working branch, not from the repository's default branch (the default branch
+    `claude/vavyv-v95vm9` is old):
+    `git fetch origin claude/awesome-mccarthy-dlbgor && git checkout -B <your-branch> origin/claude/awesome-mccarthy-dlbgor`;
+  - before the PR, merge the latest main working branch into yours (no rebase or force-push of shared branches);
+  - pushes to other branches deploy nothing (except `main`, which also runs «EAS Update» — don't push there).
+  - Never push to the same branch at the same time as another agent.
 - Store users (RuStore, `production` channel) get changes only from the manual workflow «Выпустить обновление».
   Run it only when the owner asks.
 - A new APK or store build is needed only for native changes: modules, permissions, icon. Use the workflow
