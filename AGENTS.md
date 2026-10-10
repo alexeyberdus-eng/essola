@@ -74,8 +74,8 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
 
 ## Logs and diagnosis
 
-- Data backup: workflow «Резервная копия данных» (`.github/workflows/backup.yml`) packs the whole bucket, encrypts it
-  with the `BACKUP_PASSWORD` secret, keeps it 30 days as an artifact and copies it to the Timeweb server when
+- Data backup: workflow «Резервная копия данных» (`.github/workflows/backup.yml`) packs the bucket into two password-protected
+  7z archives (`BACKUP_PASSWORD`): the product base and all data, keeps them 30 days as artifacts and copies it to the Timeweb server when
   `TIMEWEB_HOST` / `TIMEWEB_SSH_KEY` exist. Run it by changing `.github/backup.trigger`.
 - Server logs: change `server/yandex-scan/logs.trigger` and push → workflow «AI scan function logs» prints the recent logs.
 - AI spend: admin panel → «Расходы и статистика».
