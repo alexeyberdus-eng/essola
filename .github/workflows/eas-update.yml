@@ -1,0 +1,138 @@
+# Publishes the app to Expo's servers (EAS Update) on every push and posts a permanent
+# Expo Go link + QR code to the issue "📱 Essola в Expo Go". No tunnel needed.
+name: EAS Update
+
+on:
+  push:
+    branches: [main, claude/awesome-mccarthy-dlbgor]
+    paths: ['app/**', '.github/workflows/eas-update.yml']
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Deploy AI scan function (Yandex Cloud)']
+    types: [completed]
+
+concurrency:
+  group: eas-update
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: '📱 Essola в Expo Go'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      # VK ID app id (public, not a secret value; kept in Secrets so it is set in one place). Empty = no VK button.
+      EXPO_PUBLIC_VK_ID: ${{ secrets.VK_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Point the app at the AI scan function
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        continue-on-error: true
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
+          (yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443 && yc config set folder-id "$YC_FOLDER_ID") || true
+          ID=$(yc serverless function get --name essola-scan --format json 2>/dev/null | jq -r .id 2>/dev/null || true)
+          # Known function id as a fallback, so a CLI hiccup never ships an app without the scan server.
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then ID=d4eikcrvo6v275frt26v; fi
+          if [ -n "$ID" ]; then
+            echo "EXPO_PUBLIC_SCAN_URL=https://functions.yandexcloud.net/$ID" >> "$GITHUB_ENV"
+            echo "EXPO_PUBLIC_SCAN_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check types and analyzer
+        run: |
+          npx tsc --noEmit
+          npm run -s test:analyzer
+
+      - name: Link Expo project
+        id: project
+        run: |
+          npx --yes eas-cli@latest whoami
+          npx --yes eas-cli@latest init --non-interactive --force
+          PROJECT_ID=$(node -p "require('./app.json').expo.extra.eas.projectId")
+          OWNER=$(npx --yes eas-cli@latest whoami | head -1 | awk '{print $1}')
+          # Point expo-updates at this project's update server.
+          node -e "const f='./app.json';const j=require(f);j.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+          echo "id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
+          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+          echo "Project $PROJECT_ID, owner $OWNER"
+
+      - name: Publish update
+        id: update
+        run: |
+          # The permanent Expo Go link resolves through the "preview" channel; make sure it exists
+          # and points at the "preview" branch (both commands are no-ops once set up).
+          npx --yes eas-cli@latest channel:create preview --non-interactive || true
+          npx --yes eas-cli@latest update --branch preview --message "${GITHUB_SHA::7}: $(git log -1 --pretty=%s | head -c 80)" --platform all --non-interactive --json > /tmp/update.json
+          cat /tmp/update.json
+          npx --yes eas-cli@latest channel:edit preview --branch preview --non-interactive || true
+          GROUP=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/update.json','utf8'))[0].group")
+          RUNTIME=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/update.json','utf8'))[0].runtimeVersion")
+          echo "group=$GROUP" >> "$GITHUB_OUTPUT"
+          echo "runtime=$RUNTIME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish QR code to the issue
+        uses: actions/github-script@v7
+        env:
+          PROJECT_ID: ${{ steps.project.outputs.id }}
+          OWNER: ${{ steps.project.outputs.owner }}
+          GROUP: ${{ steps.update.outputs.group }}
+          RUNTIME: ${{ steps.update.outputs.runtime }}
+        with:
+          script: |
+            const { PROJECT_ID, OWNER, GROUP, RUNTIME } = process.env;
+            // Branch link: always opens the newest update, so the QR never goes stale.
+            const latest = `exps://u.expo.dev/${PROJECT_ID}?channel-name=preview&runtime-version=${encodeURIComponent(RUNTIME)}`;
+            const exact = `exps://u.expo.dev/update/${GROUP}`;
+            const page = `https://expo.dev/accounts/${OWNER}/projects/essola/updates/${GROUP}`;
+            const qr = (u) => `https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=16&data=${encodeURIComponent(u)}`;
+            const body = [
+              '## Откройте Essola на телефоне',
+              '',
+              '1. Установите **Expo Go** и войдите в свой аккаунт Expo.',
+              '2. Наведите камеру iPhone на QR-код. Ссылка постоянная, компьютер для запуска не нужен.',
+              '',
+              `<img src="${qr(latest)}" width="280" alt="QR-код для Expo Go">`,
+              '',
+              'QR всегда открывает самую свежую версию. Если видите старую — закройте Essola в Expo Go (смахните вверх) и откройте снова.',
+              '',
+              'Если QR не сработал: Expo Go → «Enter URL manually»:',
+              '',
+              '```',
+              latest,
+              '```',
+              '',
+              `Только эта версия: \`${exact}\` · [страница на expo.dev](${page})`,
+              '',
+              `🟢 Версия \`${context.sha.slice(0, 7)}\`, опубликована ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК.`,
+            ].join('\n');
+            const { data: issues } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', per_page: 100 });
+            const existing = issues.find((i) => i.title === process.env.ISSUE_TITLE && !i.pull_request);
+            if (existing) await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
+            else await github.rest.issues.create({ ...context.repo, title: process.env.ISSUE_TITLE, body });
+            await core.summary.addHeading('Essola — EAS Update').addRaw(`<img src="${qr(latest)}" width="240">`).addCodeBlock(latest).addLink('expo.dev', page).write();

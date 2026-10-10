@@ -1,0 +1,56 @@
+# «Выпустить обновление»: sends the current app to people who installed it from RuStore (and later the
+# stores). Expo Go and the test APK get every change at once; store users get only what is released here,
+# after it was checked. Run: Actions → «Выпустить обновление» → Run workflow.
+name: Выпустить обновление
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'Что нового (коротко, для истории обновлений)'
+        type: string
+        default: ''
+
+concurrency:
+  group: release-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      EXPO_PUBLIC_VK_ID: ${{ secrets.VK_CLIENT_ID }}
+      EXPO_PUBLIC_SCAN_URL: https://functions.yandexcloud.net/d4eikcrvo6v275frt26v
+      NOTE: ${{ inputs.note }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Check types and analyzer
+        run: |
+          npx tsc --noEmit
+          npm run -s test:analyzer
+      - name: Publish to the production channel
+        run: |
+          echo "EXPO_PUBLIC_SCAN_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)" >> "$GITHUB_ENV"
+          export EXPO_PUBLIC_SCAN_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          npx --yes eas-cli@latest init --non-interactive --force
+          PROJECT_ID=$(node -p "require('./app.json').expo.extra.eas.projectId")
+          node -e "const f='./app.json';const j=require(f);j.expo.updates={url:'https://u.expo.dev/$PROJECT_ID'};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+          npx --yes eas-cli@latest channel:create production --non-interactive || true
+          npx --yes eas-cli@latest update --branch production --message "${NOTE:-${GITHUB_SHA::7}}" --platform all --non-interactive
+          npx --yes eas-cli@latest channel:edit production --branch production --non-interactive || true

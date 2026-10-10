@@ -1,0 +1,108 @@
+name: Deploy AI scan function (Yandex Cloud)
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['server/yandex-scan/**', '.github/workflows/deploy-scan.yml', 'app/src/data/legal.ts', 'app/src/lib/recipeCsv.ts']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      VLM_MODEL: ${{ secrets.YC_VLM_MODEL }}
+      # «Честный знак» / Национальный каталог: the participant's API key (НК → профиль → Данные участника).
+      NK_API_KEY: ${{ secrets.NK_API_KEY }}
+      VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
+      # Password of the web admin panel (<function url>?admin): any long phrase you invent.
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip until Yandex secrets are set
+        if: env.YC_SA_KEY == '' || env.YC_FOLDER_ID == '' || env.YC_API_KEY == ''
+        run: echo "Add YC_SA_KEY, YC_FOLDER_ID and YC_API_KEY to GitHub Secrets to deploy." && exit 0
+      - name: Install yc CLI
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          echo "$HOME/yc/bin" >> "$GITHUB_PATH"
+      - name: Deploy function
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        run: |
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          yc config set folder-id "$YC_FOLDER_ID"
+          yc serverless function get --name essola-scan >/dev/null 2>&1 || yc serverless function create --name essola-scan
+          yc serverless function allow-unauthenticated-invoke essola-scan || echo "::warning::Make the function public in the console (needs admin role)"
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          # The admin panel reads recipe tables with the same parser as the app.
+          npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
+          # Privacy policy, terms and rules for the web pages (?doc=…): the same texts as in the app.
+          npx -y esbuild@0.25.0 app/src/data/legal.ts --bundle --format=cjs --platform=node --outfile="$RUNNER_TEMP/legal.cjs"
+          node -e "console.log(JSON.stringify(require('$RUNNER_TEMP/legal.cjs').DOCS))" > server/yandex-scan/legal.json
+          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js legal.json)
+          BUCKET="essola-products-$YC_FOLDER_ID"
+          set +e
+          yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3
+          echo "bucket step exit: ${PIPESTATUS[0]}"
+          set -e
+          ENVV="YC_API_KEY=$YC_API_KEY,YC_FOLDER_ID=$YC_FOLDER_ID,APP_KEY=$APP_KEY,BUCKET=$BUCKET,NODE_OPTIONS=--max-old-space-size=3584"
+          [ -n "$VLM_MODEL" ] && ENVV="$ENVV,VLM_MODEL=$VLM_MODEL"
+          [ -n "$NK_API_KEY" ] && ENVV="$ENVV,NK_API_KEY=$NK_API_KEY"
+          [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
+          [ -n "$ADMIN_TOKEN" ] && ENVV="$ENVV,ADMIN_TOKEN=$ADMIN_TOKEN"
+          SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
+          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 4096m --execution-timeout 60s --source-path scan.zip"
+          # The service account lets the function call Search API with an IAM token; fall back to a plain version.
+          yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
+            || yc serverless function version create $V --environment "$ENVV" >/dev/null
+          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
+          echo "Function URL: https://functions.yandexcloud.net/$ID"
+      - name: Smoke test (AI describe)
+        if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
+        continue-on-error: true
+        run: |
+          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
+          for B in '{"mode":"review","kind":"Крем","items":["Aqua 75% (основа)","Glycerin 5% (увлажнитель)","Olivem 1000 6% (эмульгатор)","Squalane 10% (смягчающее)","Niacinamide 4% (актив)"],"notes":["В формуле есть вода — нужен консервант (0,5–1%)"]}' \
+                   '{"mode":"url","url":"https://goldapple.ru/19000039298-niacinamide-10-zinc-1-sebum-regulating-anti-acne"}' \
+                   '{"mode":"url","url":"https://www.letu.ru/product/l-oreal-paris-tonalnyi-krem-alliance-perfect-sovershennoe-sliyanie-vyravnivayushchii-i-uvlazhnyayushchii/3288"}' \
+                   '{"mode":"save","id":"zzsmoke","secret":"zzsmoke-secret-0123456789abc","url":"https://goldapple.ru/zz-smoke-test","title":"zz-smoke тест","ingredients":["Aqua","Glycerin","Niacinamide"]}' \
+                   '{"mode":"search","q":"zz-smoke"}' \
+                   '{"mode":"user.save","id":"zzsmoke","secret":"zzsmoke-secret-0123456789abc","nick":"smoke_test","name":"Smoke"}' \
+                   '{"mode":"social.comment","key":"zz-smoke","id":"zzsmoke","secret":"zzsmoke-secret-0123456789abc","nick":"smoke_test","text":"проверка"}' \
+                   '{"mode":"user.get","id":"zzsmoke","viewer":"x"}' \
+                   '{"mode":"forum.list"}' \
+                   '{"mode":"catalog","q":"la roche","size":2}' \
+                   '{"mode":"barcode.web","barcode":"3337875597197"}' \
+                   '{"mode":"nk","gtin":"03337875597197"}' \
+                   '{"mode":"nk","gtin":"04607043450067"}' \
+                   '{"mode":"catalog","sort":"best","size":2}' \
+                   '{"mode":"catalog","sort":"best","size":2,"page":2}' \
+                   '{"mode":"admin.check","admin":"wrong-password-smoke"}' \
+                   '{"mode":"link","url":"https://www.ozon.ru/product/cerave-foaming-cleanser-gel-dlya-umyvaniya-litsa-sredstvo-ochishchayushchee-dlya-zhirnoy-i-1116109550/"}' \
+                   '{"mode":"link","url":"https://www.wildberries.ru/catalog/14152358/detail.aspx"}' \
+                   '{"mode":"link","url":"https://www.wildberries.ru/catalog/1502673109/detail.aspx"}' \
+                   '{"mode":"link","url":"https://www.wildberries.ru/catalog/1462528818/detail.aspx?size=2186421521"}' \
+                   '{"mode":"link","url":"https://ozon.ru/t/yeYlGZI"}' \
+                   '{"mode":"catalog","q":"сераве увлажняющий крем","size":2}'; do
+            curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "$B" -w '\nHTTP %{http_code} in %{time_total}s\n'
+          done
+          for D in privacy terms support; do curl -s -o /dev/null -w "page $D HTTP %{http_code}\n" "https://functions.yandexcloud.net/$ID?doc=$D"; done
+          echo "Admin panel: https://functions.yandexcloud.net/$ID?admin"; curl -s -o /dev/null -w 'panel HTTP %{http_code}\n' "https://functions.yandexcloud.net/$ID?admin"
+          [ -z "$ADMIN_TOKEN" ] && echo "::warning::Add the ADMIN_TOKEN secret to open the admin panel"
+          echo "WB link with a real cosmetics card:"
+          NM=$(curl -s -m 20 "https://search.wb.ru/exactmatch/ru/common/v4/search?appType=1&curr=rub&dest=-1257786&query=cerave%20%D0%BA%D1%80%D0%B5%D0%BC&resultset=catalog" | jq -r '.data.products[0].id // empty')
+          echo "nm=$NM"
+          [ -n "$NM" ] && curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d "{\"mode\":\"link\",\"url\":\"https://www.wildberries.ru/catalog/$NM/detail.aspx\"}" | head -c 700; echo
+          echo "OBF search:"; curl -s -m 20 -A "Essola/1.0" "https://world.openbeautyfacts.org/cgi/search.pl?search_terms=cerave&search_simple=1&action=process&json=1&page_size=3&fields=code,product_name,brands,ingredients_text" | head -c 600; echo
+          printf '{"mode":"scan","image":"data:image/jpeg;base64,%s"}' "$(base64 -w0 server/yandex-scan/test-label.jpg)" > /tmp/scan.json
+          curl -s -m 90 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            --data-binary @/tmp/scan.json -w '\nHTTP %{http_code} in %{time_total}s\n'

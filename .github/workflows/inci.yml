@@ -1,0 +1,143 @@
+name: INKEEDecoder catalog (with the site owner's permission)
+
+on:
+  push:
+    paths: ['.github/workflows/inci.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inci
+  cancel-in-progress: false
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      parts: ${{ steps.p.outputs.parts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: p
+        run: |
+          N=$(node app/scripts/inci-crawl.mjs pages | tail -n 1)
+          echo "list pages: $N"
+          # Five list readers, each with its own range of pages.
+          echo "parts=$(node -e "const n=$N,k=5,s=Math.ceil(n/k);console.log(JSON.stringify([...Array(k)].map((_,i)=>({part:i,from:i*s,to:Math.min(n,(i+1)*s)}))))")" >> "$GITHUB_OUTPUT"
+
+  list:
+    needs: pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.pages.outputs.parts) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: mkdir -p out && node app/scripts/inci-crawl.mjs list ${{ matrix.from }} ${{ matrix.to }} out/ids-${{ matrix.part }}.json
+        continue-on-error: true
+        timeout-minutes: 140
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: inci-ids-${{ matrix.part }}
+          path: out/ids-*.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+  fetch:
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: inci-ids-*
+          path: out
+          merge-multiple: true
+      - name: Products already in the base
+        env:
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n >/dev/null
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          curl -s -f -o out/prev-index.json "https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID/inci/index.json" -H "X-YaCloud-SubjectToken: $(yc iam create-token)" || echo '[]' > out/prev-index.json
+          node -e "console.log(require('./out/prev-index.json').map(x=>x.k.replace('inci:','')).join('\n'))" > out/known.txt
+      - name: Fetch product pages
+        timeout-minutes: 330
+        continue-on-error: true
+        env:
+          KNOWN_IDS: out/known.txt
+        run: node app/scripts/inci-crawl.mjs fetch out ${{ matrix.shard }} 10 out/fetched
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: inci-fetched-${{ matrix.shard }}
+          path: out/fetched/
+          retention-days: 3
+
+  build:
+    needs: [list, fetch]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: out/fetched
+          pattern: inci-fetched-*
+          merge-multiple: true
+      - name: Yandex Cloud access and the existing base
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          echo "B=$B" >> "$GITHUB_ENV"
+          mkdir -p out/prev/x
+          if curl -s -f -o out/prev/inci-index.json "$B/inci/index.json" -H "X-YaCloud-SubjectToken: $TOKEN"; then
+            node -e "const c=require('crypto');const i=require('./out/prev/inci-index.json');console.log([...new Set(i.map(x=>c.createHash('sha1').update(x.k).digest('hex').slice(0,3)))].join('\n'))" > out/prev/shards.txt
+            cat out/prev/shards.txt | xargs -P 24 -I{} sh -c 'curl -s -f --retry 4 --retry-all-errors -o out/prev/x/{}.json "$0/inci/x/{}.json" -H "X-YaCloud-SubjectToken: $1" || true' "$B" "$TOKEN"
+          else
+            echo "no existing base"
+          fi
+      - name: Score and shard
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --yes tsx scripts/build-inci.ts ../out/fetched ../out/build ../out/prev
+      - name: Upload to Object Storage
+        run: |
+          cd out/build
+          ls x | xargs -P 12 -I{} sh -c 'curl -s -f --retry 6 --retry-all-errors --retry-delay 3 -o /dev/null -X PUT "$B/inci/x/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @x/{} || echo "fail {}"'
+          curl -sS -f -X PUT "$B/inci/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @inci-index.json -w 'index HTTP %{http_code}\n'

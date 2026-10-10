@@ -1,0 +1,43 @@
+name: CosIng (EU cosmetic ingredients, © European Union)
+
+# Official open data of the European Commission (reuse with attribution, Decision 2011/833/EU):
+# the ingredient inventory with functions and the Annex II–VI lists (banned / restricted / colourants /
+# preservatives / UV filters), built into one lookup the scan function serves to the app. Monthly refresh.
+on:
+  push:
+    paths: ['.github/workflows/cosing.yml', 'app/scripts/cosing-build.mjs']
+  schedule:
+    - cron: '17 3 2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Collect CosIng
+        run: node app/scripts/cosing-build.mjs out
+      - name: Upload to Object Storage
+        run: |
+          ls -la out
+          N=$(node -e "console.log(require('./out/cosing-meta.json').names)")
+          [ "$N" -gt 15000 ] || { echo "only $N names — not uploading"; exit 1; }
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          curl -sS -f -X PUT "$B/cosing/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @out/cosing-index.json -w 'index HTTP %{http_code}\n'
+          curl -sS -f -X PUT "$B/cosing/meta.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @out/cosing-meta.json -w 'meta HTTP %{http_code}\n'
+          node -e "const i=require('./out/cosing-index.json');for(const n of ['aqua','niacinamide','phenoxyethanol','salicylic acid','hydroquinone','limonene','titanium dioxide','retinol','alcohol denat.','parfum','methylisothiazolinone','triclosan','glycerin','ci 77491'])console.log(n, JSON.stringify(i[n]||null).slice(0,400))"

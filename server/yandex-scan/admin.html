@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>essola · панель</title>
+<style>
+  :root { --bg:#F7F5FF; --card:#fff; --ink:#1E1A33; --mute:#6E6890; --line:#E6E1FA; --violet:#7C66EE; --deep:#5E49D8; --tint:#F3EFFF; --red:#E0566B; --green:#2FA36B; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:24px; margin:0 0 16px; letter-spacing:-0.5px; } h1 span { color:var(--mute); font-weight:400; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:16px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .tab { border:0; background:var(--tint); color:var(--deep); padding:9px 16px; border-radius:99px; font-weight:600; cursor:pointer; font-size:14px; }
+  .tab.on { background:linear-gradient(135deg,#B7A6FF,#8A74F2 55%,#7A5FE8); color:#fff; }
+  button.main { border:0; background:linear-gradient(135deg,#B7A6FF,#8A74F2 55%,#7A5FE8); color:#fff; padding:11px 20px; border-radius:14px; font-weight:600; font-size:15px; cursor:pointer; }
+  button.main:disabled { opacity:.5; cursor:default; }
+  button.ghost { border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 12px; border-radius:10px; cursor:pointer; font-size:13px; }
+  input, textarea, select { width:100%; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit; background:#fff; color:var(--ink); }
+  textarea { min-height:70px; resize:vertical; }
+  label { display:block; font-size:13px; color:var(--mute); margin:10px 0 4px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .kpi { background:var(--tint); border-radius:14px; padding:14px; } .kpi b { display:block; font-size:22px; } .kpi small { color:var(--mute); }
+  .tblwrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mute); font-weight:500; }
+  td.n, th.n { text-align:right; }
+  .bars { display:flex; align-items:flex-end; gap:3px; height:120px; margin:8px 0 4px; }
+  .bar { flex:1; background:linear-gradient(180deg,#B7A6FF,#7A5FE8); border-radius:5px 5px 2px 2px; min-height:2px; position:relative; }
+  .bar:hover::after { content:attr(data-t); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; font-size:12px; padding:3px 6px; border-radius:6px; white-space:nowrap; }
+  .muted { color:var(--mute); font-size:13px; }
+  .err { color:var(--red); } .ok { color:var(--green); }
+  .stories { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+  .story { border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff; }
+  .story img { width:100%; aspect-ratio:9/16; object-fit:cover; background:var(--tint); display:block; }
+  .story div { padding:8px; font-size:13px; }
+  .preview { max-width:180px; border-radius:12px; margin-top:8px; display:none; }
+  .hidden { display:none; }
+  .report { border-bottom:1px solid var(--line); padding:10px 0; font-size:14px; } .report:last-child { border:0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>essola <span>· панель</span></h1>
+
+  <div id="login" class="card">
+    <h2>Вход</h2>
+    <p class="muted">Пароль панели — это секрет <b>ADMIN_TOKEN</b> в GitHub (Settings → Secrets → Actions). Браузер запомнит его, вводить каждый раз не нужно.</p>
+    <label>Пароль</label>
+    <input id="token" type="password" autocomplete="current-password">
+    <div class="row" style="margin-top:12px"><button class="main" id="enter">Войти</button><span id="loginMsg" class="err"></span></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="tabs">
+      <button class="tab on" data-tab="stats">Расходы и статистика</button>
+      <button class="tab" data-tab="stories">Истории</button>
+      <button class="tab" data-tab="recipes">Рецепты (CSV)</button>
+      <button class="tab" data-tab="club">Клуб</button>
+      <button class="tab" data-tab="reports">Жалобы и поддержка</button>
+      <button class="tab" data-tab="out" style="margin-left:auto">Выйти</button>
+    </div>
+
+    <section id="tab-stats">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">Расходы на ИИ и поиск</h2>
+          <select id="days" style="width:auto"><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option></select>
+        </div>
+        <p class="muted">Оценка по тарифам Yandex Cloud (без НДС-нюансов и скидок). Точная сумма — в биллинге облака.</p>
+        <div class="kpis" id="kpis"></div>
+        <div class="bars" id="bars"></div>
+        <div class="muted" id="barsCap"></div>
+      </div>
+      <div class="card"><h2>По видам запросов</h2><div class="tblwrap"><table id="modes"></table></div></div>
+      <div class="card"><h2>По дням</h2><div class="tblwrap"><table id="byDay"></table></div></div>
+    </section>
+
+    <section id="tab-stories" class="hidden">
+      <div class="card">
+        <h2>Новая история</h2>
+        <label>Картинка (вертикальная, лучше 1080×1920)</label>
+        <input id="sImg" type="file" accept="image/*">
+        <img id="sPrev" class="preview" alt="">
+        <label>Заголовок (до 40 символов)</label>
+        <input id="sTitle" maxlength="40" value="essola">
+        <label>Текст (до 300 символов)</label>
+        <textarea id="sText" maxlength="300"></textarea>
+        <label>Ссылка (необязательно)</label>
+        <input id="sLink" maxlength="200" placeholder="https://…">
+        <div class="row" style="margin-top:12px"><button class="main" id="sSend">Опубликовать</button><span id="sMsg"></span></div>
+      </div>
+      <div class="card"><h2>Опубликованные</h2><div class="stories" id="sList"></div></div>
+    </section>
+
+    <section id="tab-recipes" class="hidden">
+      <div class="card">
+        <h2>Загрузка рецептов из таблицы</h2>
+        <p class="muted">Первая строка — названия колонок: <span id="cols"></span>. Списки внутри ячейки — через «|», ингредиенты как «Масло жожоба — 9 мл». Разделитель «;», «,» или табуляция. Рецепты подписываются @essola.</p>
+        <input id="rFile" type="file" accept=".csv,text/csv,text/plain">
+        <p id="rInfo" class="muted"></p>
+        <div class="tblwrap"><table id="rPrev"></table></div>
+        <div class="row" style="margin-top:12px"><button class="main" id="rSend" disabled>Опубликовать</button><span id="rMsg"></span></div>
+      </div>
+      <div class="card"><h2>Уже загружены</h2><div class="tblwrap"><table id="rList"></table></div></div>
+    </section>
+
+    <section id="tab-club" class="hidden">
+      <div class="card">
+        <h2>Essola Клуб</h2>
+        <div class="kpis"><div class="kpi"><small>Участников</small><b id="cMembers">—</b></div></div>
+      </div>
+      <div class="card">
+        <h2>Промокод месяца</h2>
+        <p class="muted">Его видят только участники клуба, в приложении: Профиль → Essola Клуб. Чтобы убрать промокод, сотрите код и сохраните.</p>
+        <label>Код</label>
+        <input id="cCode" maxlength="40" placeholder="ESSOLA10">
+        <label>Что даёт (до 200 символов)</label>
+        <input id="cText" maxlength="200" placeholder="Скидка 10% на всю косметику Essola">
+        <label>Действует до</label>
+        <input id="cUntil" type="date">
+        <div class="row" style="margin-top:12px"><button class="main" id="cSave">Сохранить</button><span id="cMsg"></span></div>
+      </div>
+    </section>
+
+    <section id="tab-reports" class="hidden">
+      <div class="card"><h2>Жалобы пользователей</h2><div id="reports" class="muted">Загрузка…</div></div>
+    </section>
+  </div>
+</div>
+<script>/*CSV*/</script>
+<script>
+const KEY = '/*APP_KEY*/';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rub = (x) => (Math.round(x * 100) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+const num = (x) => Number(x || 0).toLocaleString('ru-RU');
+let token = '';
+try { token = localStorage.getItem('essola.admin') || ''; } catch {}
+
+async function api(mode, body = {}) {
+  const r = await fetch(location.pathname, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': KEY }, body: JSON.stringify({ mode, admin: token, ...body }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+  return j;
+}
+
+async function enter() {
+  $('loginMsg').textContent = '';
+  try {
+    await api('admin.check');
+    try { localStorage.setItem('essola.admin', token); } catch {}
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    loadStats();
+  } catch (e) {
+    $('loginMsg').textContent = e.message === 'not_admin' ? 'Неверный пароль' : e.message === 'locked' ? 'Слишком много попыток, попробуйте завтра' : 'Ошибка: ' + e.message;
+  }
+}
+$('enter').onclick = () => { token = $('token').value.trim(); enter(); };
+$('token').onkeydown = (e) => {
+  if (e.key === 'Enter') $('enter').click();
+};
+if (token) enter();
+
+document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
+  const t = b.dataset.tab;
+  if (t === 'out') { try { localStorage.removeItem('essola.admin'); } catch {} location.reload(); return; }
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach((s) => s.classList.toggle('hidden', s.id !== 'tab-' + t));
+  ({ stats: loadStats, stories: loadStories, recipes: loadRecipes, club: loadClub, reports: loadReports })[t]();
+}));
+
+const MODE_NAMES = { scan: 'Фото состава', label: 'Фото этикетки', describe: 'Описание средства', review: 'Технолог (конструктор)', 'review.lite': 'Технолог обычный (конструктор)', compare: 'Технолог (сравнение)', 'compare.lite': 'Технолог обычный (сравнение)',nk: 'Честный знак / штрихкод', 'barcode.web': 'Штрихкод в интернете', url: 'Ссылка на магазин', other: 'Прочее' };
+
+async function loadStats() {
+  const days = Number($('days').value);
+  const { days: list, base } = await api('admin.stats', { days });
+  let total = 0, calls = 0, search = 0, tokens = 0;
+  const modes = {};
+  for (const d of list) for (const [m, v] of Object.entries(d.modes)) {
+    total += v.rub; calls += v.calls; search += v.search; tokens += v.tokens;
+    const t = (modes[m] ??= { calls: 0, tokens: 0, rub: 0, search: 0 });
+    t.calls += v.calls; t.tokens += v.tokens; t.rub += v.rub; t.search += v.search;
+  }
+  const today = list[list.length - 1];
+  $('kpis').innerHTML = [
+    ['За период', rub(total)],
+    ['Сегодня', rub(today ? today.rub : 0)],
+    ['В среднем за день', rub(total / Math.max(1, list.filter((d) => d.rub > 0).length))],
+    ['Вызовов ИИ', num(calls)],
+    ['Поисков в интернете', num(search)],
+    ['Средств в базе', num(base.total)],
+  ].map(([l, v]) => `<div class="kpi"><small>${l}</small><b>${v}</b></div>`).join('');
+  const max = Math.max(...list.map((d) => d.rub), 0.01);
+  $('bars').innerHTML = list.map((d) => `<div class="bar" style="height:${Math.max(1, (d.rub / max) * 100)}%" data-t="${d.day}: ${rub(d.rub)}"></div>`).join('');
+  $('barsCap').textContent = list.length ? `${list[0].day} — ${list[list.length - 1].day}` : '';
+  $('modes').innerHTML = '<tr><th>Вид</th><th class="n">Вызовов ИИ</th><th class="n">Токенов</th><th class="n">Поисков</th><th class="n">Сумма</th></tr>' +
+    Object.entries(modes).sort((a, b) => b[1].rub - a[1].rub).map(([m, v]) => `<tr><td>${esc(MODE_NAMES[m] || m)}</td><td class="n">${num(v.calls)}</td><td class="n">${num(v.tokens)}</td><td class="n">${num(v.search)}</td><td class="n">${rub(v.rub)}</td></tr>`).join('');
+  $('byDay').innerHTML = '<tr><th>День</th><th class="n">Вызовов ИИ</th><th class="n">Поисков</th><th class="n">Сумма</th></tr>' +
+    [...list].reverse().filter((d) => d.rub > 0).map((d) => `<tr><td>${d.day}</td><td class="n">${num(Object.values(d.modes).reduce((a, v) => a + v.calls, 0))}</td><td class="n">${num(Object.values(d.modes).reduce((a, v) => a + v.search, 0))}</td><td class="n">${rub(d.rub)}</td></tr>`).join('');
+}
+$('days').onchange = loadStats;
+
+// ---- Stories ----
+let storyImg = '';
+$('sImg').onchange = async () => {
+  const f = $('sImg').files[0];
+  if (!f) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(f);
+  await img.decode();
+  // Phone screens are about 1080 wide; JPEG keeps it under the server's size limit.
+  const scale = Math.min(1, 1080 / img.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  let q = 0.85, data = '';
+  do { data = c.toDataURL('image/jpeg', q); q -= 0.1; } while (data.length > 880000 && q > 0.3);
+  storyImg = data.split(',')[1];
+  $('sPrev').src = data;
+  $('sPrev').style.display = 'block';
+};
+$('sSend').onclick = async () => {
+  $('sMsg').textContent = '';
+  if (!storyImg) return ($('sMsg').innerHTML = '<span class="err">Выберите картинку</span>');
+  $('sSend').disabled = true;
+  try {
+    await api('stories.add', { image: storyImg, title: $('sTitle').value, text: $('sText').value, link: $('sLink').value });
+    $('sMsg').innerHTML = '<span class="ok">Опубликовано</span>';
+    storyImg = ''; $('sImg').value = ''; $('sPrev').style.display = 'none'; $('sText').value = ''; $('sLink').value = '';
+    loadStories();
+  } catch (e) { $('sMsg').innerHTML = `<span class="err">Не получилось: ${esc(e.message)}</span>`; }
+  $('sSend').disabled = false;
+};
+async function loadStories() {
+  const { items } = await api('stories.list');
+  $('sList').innerHTML = items.length ? items.map((s) => `<div class="story"><img data-sid="${esc(s.id)}" alt=""><div><b>${esc(s.title)}</b><br><span class="muted">${esc(s.at.slice(0, 10))}</span><br><button class="ghost" data-del="${esc(s.id)}">Удалить</button></div></div>`).join('') : '<p class="muted">Пока нет историй</p>';
+  $('sList').querySelectorAll('img[data-sid]').forEach(async (im) => { const r = await api('stories.img', { sid: im.dataset.sid }).catch(() => null); if (r?.data) im.src = 'data:image/jpeg;base64,' + r.data; });
+  $('sList').querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => { if (!confirm('Удалить историю?')) return; await api('stories.remove', { sid: b.dataset.del }); loadStories(); }));
+}
+
+// ---- Recipes from CSV (the same parser as the app) ----
+let parsed = null;
+if (window.RecipeCsv) $('cols').textContent = RecipeCsv.CSV_COLUMNS.join(' | ');
+$('rFile').onchange = async () => {
+  const f = $('rFile').files[0];
+  if (!f) return;
+  if (!window.RecipeCsv) return ($('rInfo').innerHTML = '<span class="err">Разбор таблиц не загрузился — обновите страницу</span>');
+  let text = await f.text();
+  // Excel on Windows saves CSV in cp1251: re-read it if the text looks broken.
+  if (/�/.test(text)) text = new TextDecoder('windows-1251').decode(await f.arrayBuffer());
+  parsed = RecipeCsv.parseRecipesCsv(text, { idPrefix: 'csv' + Date.now().toString(36), editorial: true });
+  $('rInfo').innerHTML = `Рецептов: <b>${parsed.recipes.length}</b>` + (parsed.skipped.length ? ` · <span class="err">не прочитаны строки ${parsed.skipped.slice(0, 20).join(', ')}${parsed.skipped.length > 20 ? '…' : ''}</span> (нужны название, 2+ ингредиента и шаги)` : '');
+  $('rPrev').innerHTML = '<tr><th>Название</th><th>Категория</th><th class="n">Ингредиентов</th><th class="n">Шагов</th></tr>' + parsed.recipes.slice(0, 50).map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.category)}</td><td class="n">${r.ingredients.length}</td><td class="n">${r.steps.length}</td></tr>`).join('');
+  $('rSend').disabled = !parsed.recipes.length;
+};
+$('rSend').onclick = async () => {
+  if (!parsed?.recipes.length) return;
+  $('rSend').disabled = true;
+  try {
+    const { count } = await api('editorial.add', { recipes: parsed.recipes });
+    $('rMsg').innerHTML = `<span class="ok">Готово, всего рецептов от essola на сервере: ${count}</span>`;
+    parsed = null; $('rFile').value = ''; $('rPrev').innerHTML = ''; $('rInfo').textContent = '';
+    loadRecipes();
+  } catch (e) { $('rMsg').innerHTML = `<span class="err">Не получилось: ${esc(e.message)}</span>`; $('rSend').disabled = false; }
+};
+async function loadRecipes() {
+  const { items } = await api('editorial.list');
+  $('rList').innerHTML = items.length ? '<tr><th>Название</th><th>Категория</th><th></th></tr>' + items.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.category)}</td><td><button class="ghost" data-rdel="${esc(r.id)}">Удалить</button></td></tr>`).join('') : '<tr><td class="muted">Пока нет загруженных рецептов</td></tr>';
+  $('rList').querySelectorAll('[data-rdel]').forEach((b) => (b.onclick = async () => { if (!confirm('Удалить рецепт?')) return; await api('editorial.remove', { id: b.dataset.rdel }); loadRecipes(); }));
+}
+
+// ---- Club ----
+async function loadClub() {
+  const { members, promo } = await api('admin.club');
+  $('cMembers').textContent = num(members);
+  $('cCode').value = promo?.code || '';
+  $('cText').value = promo?.text || '';
+  $('cUntil').value = promo?.until || '';
+}
+$('cSave').onclick = async () => {
+  $('cMsg').textContent = '';
+  try {
+    await api('admin.promo', { code: $('cCode').value.trim(), text: $('cText').value.trim(), until: $('cUntil').value });
+    $('cMsg').innerHTML = '<span class="ok">Сохранено</span>';
+  } catch (e) { $('cMsg').innerHTML = `<span class="err">Не получилось: ${esc(e.message)}</span>`; }
+};
+
+// ---- Reports ----
+const KINDS = { recipe: 'рецепт', comment: 'комментарий', topic: 'тема форума', post: 'ответ на форуме', user: 'профиль', review: 'отзыв' };
+async function loadReports() {
+  const { items, support = [] } = await api('admin.reports');
+  const rep = items.length ? items.map((r) => `<div class="report"><b>${esc(KINDS[r.kind] || r.kind)}</b> · ${esc(r.at.slice(0, 16).replace('T', ' '))}<br>${esc(r.reason)}${r.text ? `<br><span class="muted">«${esc(r.text)}»</span>` : ''}<br><span class="muted">автор: ${esc(r.author || '—')} · объект: ${esc(r.target)}</span></div>`).join('') : 'Жалоб нет';
+  const sup = support.length ? support.map((m) => `<div class="report"><b>${esc(m.email)}</b> · ${esc(m.at.slice(0, 16).replace('T', ' '))}<br>${esc(m.text)}<br><a href="mailto:${esc(m.email)}">Ответить</a></div>`).join('') : 'Сообщений нет';
+  $('reports').innerHTML = `<h2>Жалобы</h2>${rep}<h2 style="margin-top:22px">Обращения в поддержку</h2>${sup}`;
+}
+</script>
+</body>
+</html>
