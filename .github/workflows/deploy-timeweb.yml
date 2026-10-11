@@ -181,6 +181,17 @@ jobs:
             systemctl disable --now nginx >/dev/null 2>&1 || true
             CF=/etc/caddy/Caddyfile
             echo "sites Caddy already serves:"; grep -E '^[^#[:space:]].*\{\s*$' "$CF" || true
+            # Our address is already set up in the main Caddyfile (an earlier setup): show it and stop, nothing changed.
+            if grep -qE "^$HOSTNAME_TW" "$CF"; then
+              sed -i '\#import /etc/caddy/essola.caddy#d' "$CF"
+              echo "=== Caddyfile (secrets hidden) ==="
+              sed -E 's/((basic_?auth|password|token|secret|key|hash)[^[:space:]]*)[[:space:]].*/\1 [hidden]/I' "$CF"
+              echo "=== listening ==="; ss -ltnp | grep LISTEN || true
+              echo "=== running services ==="; systemctl list-units --type=service --state=running --no-pager --plain | awk '{print $1}' | grep -vE '^(systemd|dbus|cron|ssh|getty|serial|polkit|rsyslog|snapd|unattended|networkd|multipathd|qemu|udisks|ModemManager|user@)' || true
+              echo "=== folders ==="; ls -la /srv /opt /var/www /root 2>/dev/null | head -60
+              command -v docker >/dev/null && docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' || true
+              exit 1
+            fi
             cat > /etc/caddy/essola.caddy <<CADDY
           $HOSTNAME_TW {
             request_body {
