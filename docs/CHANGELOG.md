@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 21:23 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка Timeweb: nginx запускается, а не только перезагружается (на свежем сервере он был остановлен) · (этот коммит)
 - 21:21 · Claude · claude/awesome-mccarthy-dlbgor · Пересылка VDSina работает (ChatGPT отвечает через Нидерланды); первый запуск «Сервер на Timeweb» с переносом данных · (этот коммит)
 - 21:20 · Claude · claude/awesome-mccarthy-dlbgor · Первый запуск «Пересылка к ChatGPT» на сервере VDSina (секреты добавлены) · (этот коммит)
 - 20:56 · Claude · claude/awesome-mccarthy-dlbgor · Сервер Timeweb (Москва, 2 ядра, 4 ГБ, Ubuntu 24.04): выкладка добавляет файл подкачки 2 ГБ про запас памяти · (этот коммит)

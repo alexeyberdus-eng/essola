@@ -189,10 +189,13 @@ jobs:
           NGX
           ln -sf /etc/nginx/sites-available/essola /etc/nginx/sites-enabled/essola
           rm -f /etc/nginx/sites-enabled/default
-          nginx -t && systemctl reload nginx
+          nginx -t
+          # Started for good (a fresh install may leave it stopped); if port 80 is taken, show by whom.
+          systemctl enable nginx >/dev/null 2>&1
+          systemctl restart nginx || { ss -ltnp | grep -E ':(80|443) ' || true; journalctl -u nginx -n 20 --no-pager; exit 1; }
           # A free Let's Encrypt certificate for the sslip.io address (renews itself).
           [ -d "/etc/letsencrypt/live/$HOSTNAME_TW" ] || certbot --nginx -d "$HOSTNAME_TW" --non-interactive --agree-tos --register-unsafely-without-email --redirect
-          systemctl reload nginx
+          systemctl restart nginx
           sleep 2; systemctl is-active essola; journalctl -u essola -n 15 --no-pager
           EOF
 
