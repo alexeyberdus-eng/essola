@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 21:20 · Claude · claude/awesome-mccarthy-dlbgor · Первый запуск «Пересылка к ChatGPT» на сервере VDSina (секреты добавлены) · (этот коммит)
 - 20:56 · Claude · claude/awesome-mccarthy-dlbgor · Сервер Timeweb (Москва, 2 ядра, 4 ГБ, Ubuntu 24.04): выкладка добавляет файл подкачки 2 ГБ про запас памяти · (этот коммит)
 - 20:16 · Claude · claude/awesome-mccarthy-dlbgor · Переезд: ChatGPT как основной ИИ (через пересылку за границей, `OPENAI_API_KEY`), GigaChat и Яндекс — запасные; выкладка «Пересылка к ChatGPT» на VDSina (`deploy-relay.yml`); основной сервер Timeweb можно подключать по паролю root; пошаговая инструкция `docs/MIGRATION.md` · (этот коммит)
 - 19:42 · Claude · claude/awesome-mccarthy-dlbgor · Сборка Android тоже берёт адрес сервера из `.github/scan-url` · (этот коммит)
