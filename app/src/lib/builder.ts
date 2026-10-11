@@ -54,7 +54,7 @@ export function preset(kind: Kind): Item[] {
       ];
     case 'serum':
       return [
-        it('Вода дистиллированная', 'Aqua', 84.3, 'water'),
+        it('Вода дистиллированная', 'Aqua', 85.3, 'water'),
         it('Глицерин', 'Glycerin', 5, 'water'),
         it('Ксантановая камедь', 'Xanthan Gum', 0.4, 'emulsifier'),
         it('Ниацинамид', 'Niacinamide', 5, 'active'),
@@ -81,6 +81,15 @@ export function preset(kind: Kind): Item[] {
       ];
   }
 }
+
+/** Ready formulas for an empty builder: one tap fills the kind, the area and a formula at 100%. */
+export const TEMPLATES: { title: string; text: string; kind: Kind; area: string; goal: string; icon: 'drop' | 'leaf' | 'bolt' | 'spark' | 'heart' }[] = [
+  { title: 'Лёгкий крем для лица', text: 'Сквалан, ши, ниацинамид', kind: 'cream', area: 'Лицо', goal: 'Увлажнение', icon: 'drop' },
+  { title: 'Тоник с розой', text: 'Гидролат, пантенол, бетаин', kind: 'toner', area: 'Лицо', goal: 'Успокоение', icon: 'leaf' },
+  { title: 'Сыворотка с ниацинамидом', text: 'Ниацинамид 5%, цинк, гиалуронка', kind: 'serum', area: 'Лицо', goal: 'Против акне', icon: 'bolt' },
+  { title: 'Масло-сыворотка', text: 'Сквалан, жожоба, шиповник', kind: 'oil', area: 'Лицо', goal: 'Питание', icon: 'spark' },
+  { title: 'Бальзам для губ', text: 'Ши, миндаль, воск', kind: 'balm', area: 'Губы', goal: 'Восстановление', icon: 'heart' },
+];
 
 /** Typical starting share when an ingredient is added from the base. */
 export function newItem(inciOrName: string): Item {

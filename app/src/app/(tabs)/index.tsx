@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { Hero } from '../../components/Hero';
+import { LinearGradient } from 'expo-linear-gradient';
+import type { IconName } from '../../components/Icon';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,18 @@ import { CATEGORIES, Category, LEVELS, Recipe, RECIPES } from '../../data/recipe
 import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
+
+const ACTIONS: { title: string; text: string; icon: IconName; href: string; colors: readonly [string, string] }[] = [
+  { title: 'Проверить состав', text: 'Фото или штрихкод', icon: 'scan', href: '/scanner', colors: ['#9C8BF5', '#6E57E6'] },
+  { title: 'Найти средство', text: '370 000 с оценкой', icon: 'search', href: '/shop', colors: ['#8FB8FF', '#5B7CF0'] },
+  { title: 'Собрать рецепт', text: 'Граммы и технолог', icon: 'flask', href: '/builder', colors: ['#F7A6C4', '#E0668F'] },
+];
+const LINKS: { title: string; icon: IconName; href: string }[] = [
+  { title: 'Подбор', icon: 'spark', href: '/match' },
+  { title: 'Знания', icon: 'book', href: '/knowledge' },
+  { title: 'Форум', icon: 'comment', href: '/forum' },
+  { title: 'Сравнить', icon: 'swap', href: '/compare' },
+];
 
 type Sort = 'for-you' | 'new' | 'hot' | 'easy' | 'saved';
 const SKINS = ['Сухая', 'Жирная', 'Комбинированная', 'Чувствительная', 'Нормальная'];
@@ -100,26 +113,28 @@ export default function FeedScreen() {
           <Text style={{ color: colors.muted, fontFamily: fonts.regular }}>сварим?</Text>
         </Text>
       </View>
-      <Hero kicker="Лента essola lab" title="Рецепты домашней косметики от технологов" text="Кремы, сыворотки и маски с точными граммами. «Подбор» найдёт рецепты и средства под ваши цели." style={{ marginTop: 12 }} />
-      <View style={styles.modes}>
-        <View style={[styles.mode, styles.modeOn]}>
-          <Icon name="flask" size={18} color="#fff" />
-          <Text style={[styles.modeText, { color: '#fff' }]} numberOfLines={1}>Рецепты</Text>
-        </View>
-        <Press haptic={false} onPress={() => { tap(); router.push('/knowledge'); }} style={styles.mode}>
-          <Icon name="book" size={18} color={colors.ink2} />
-          <Text style={styles.modeText} numberOfLines={1}>Знания</Text>
-        </Press>
-        <Press haptic={false} onPress={() => { tap(); router.push('/match' as never); }} style={styles.mode}>
-          <Icon name="spark" size={18} color={colors.violet} />
-          <Text style={[styles.modeText, { color: colors.violet }]} numberOfLines={1}>Подбор</Text>
-        </Press>
-        <Press haptic={false} onPress={() => { tap(); router.push('/forum' as never); }} style={styles.mode}>
-          <Icon name="user" size={18} color={colors.ink2} />
-          <Text style={styles.modeText} numberOfLines={1}>Форум</Text>
-        </Press>
+      {/* The three things people come for, one tap each; the rest is a quiet row of links below. */}
+      <View style={styles.actions}>
+        {ACTIONS.map((a) => (
+          <Press key={a.title} onPress={() => router.push(a.href as never)} style={styles.action} accessibilityLabel={a.title}>
+            <LinearGradient colors={a.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionIcon}>
+              <Icon name={a.icon} size={22} color="#fff" strokeWidth={1.9} />
+            </LinearGradient>
+            <Text style={styles.actionTitle} numberOfLines={2}>{a.title}</Text>
+            <Text style={styles.actionText} numberOfLines={2}>{a.text}</Text>
+          </Press>
+        ))}
+      </View>
+      <View style={styles.links}>
+        {LINKS.map((l) => (
+          <Press key={l.title} haptic={false} onPress={() => { tap(); router.push(l.href as never); }} style={styles.link} accessibilityLabel={l.title}>
+            <Icon name={l.icon} size={15} color={colors.violet} />
+            <Text style={styles.linkText}>{l.title}</Text>
+          </Press>
+        ))}
       </View>
 
+      <Text style={styles.section}>Рецепты</Text>
       <View style={styles.search}>
         <View style={styles.searchRow}>
           <Icon name="search" size={18} color={colors.muted} />
@@ -218,6 +233,15 @@ const styles = StyleSheet.create({
   add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   hello: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14 },
   h1: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: -1.1, color: colors.ink },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  action: { flex: 1, minHeight: 132, padding: 12, gap: 6, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#ECE8F8', ...shadow },
+  actionIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  actionTitle: { fontFamily: fonts.semibold, fontSize: 14.5, lineHeight: 18, letterSpacing: -0.2, color: colors.ink },
+  actionText: { fontFamily: fonts.regular, fontSize: 11.5, lineHeight: 15, color: colors.muted },
+  links: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 13, borderRadius: 99, backgroundColor: colors.tint },
+  linkText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violetDeep },
+  section: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.6, color: colors.ink, marginTop: 24 },
   modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', marginTop: 14 },
   mode: { flex: 1, height: 56, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
   modeOn: { backgroundColor: colors.accent },

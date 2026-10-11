@@ -15,7 +15,7 @@ import { summarize } from '../../lib/effects';
 import { Button, IconButton, Press, tap } from '../../components/ui';
 import { FN_ICON, FN_LABEL, INGREDIENTS } from '../../data/ingredients';
 import { identify, normalize } from '../../lib/analyze';
-import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, setDraft, total } from '../../lib/builder';
+import { checks, grams, Item, Kind, KINDS, newItem, PHASE_LABEL, PHASE_ORDER, phaseSums, pctText, predict, preset, setDraft, TEMPLATES, total } from '../../lib/builder';
 import { colors, fonts, PHASE_COLOR, scoreColor, shadow, space, TAB_SPACE } from '../../theme';
 
 const AREAS = ['Лицо', 'Тело', 'Волосы', 'Кожа головы', 'Губы', 'Руки и ногти', 'Вокруг глаз'];
@@ -209,6 +209,19 @@ export default function BuilderScreen() {
     setDropColor(PHASE_COLOR.water);
     setDrop((d) => d + 1);
   };
+  // A ready formula: the kind, area and goal switch with it, and the technologist starts from scratch.
+  const applyTemplate = (t: (typeof TEMPLATES)[number]) => {
+    tap('success');
+    setKind(t.kind);
+    setArea(t.area);
+    setGoal(t.goal);
+    setItems(preset(t.kind));
+    setReview(null);
+    applied.current = [];
+    edited.current = false;
+    setDropColor(PHASE_COLOR.water);
+    setDrop((d) => d + 1);
+  };
   const steps = useMemo(() => makeSteps(kind, items, volume), [kind, items, volume]);
   const save = () => {
     setDraft({ kind, volume, items, steps });
@@ -290,6 +303,23 @@ export default function BuilderScreen() {
             )}
           </View>
         ) : (
+          <>
+          {!items.length && (
+            <View style={styles.quick}>
+              <Text style={styles.quickTitle}>Готовые рецепты — один шаг</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tplRow} style={styles.tplScroll}>
+                {TEMPLATES.map((t) => (
+                  <Press key={t.title} haptic={false} onPress={() => applyTemplate(t)} style={styles.tpl} accessibilityLabel={`Шаблон: ${t.title}`}>
+                    <View style={styles.tplIcon}>
+                      <Icon name={t.icon} size={18} color={colors.violet} strokeWidth={2} />
+                    </View>
+                    <Text style={styles.tplTitle} numberOfLines={2}>{t.title}</Text>
+                    <Text style={styles.tplText} numberOfLines={2}>{t.text}</Text>
+                  </Press>
+                ))}
+              </ScrollView>
+            </View>
+          )}
           <View style={styles.quick}>
             <Text style={styles.quickTitle}>{items.length ? 'Часто добавляют' : 'С чего начать'}</Text>
             <View style={styles.quickWrap}>
@@ -301,6 +331,7 @@ export default function BuilderScreen() {
               ))}
             </View>
           </View>
+          </>
         )}
 
         {(['active', ...PHASE_ORDER.filter((x) => x !== 'active')] as typeof PHASE_ORDER).map((ph) => {
@@ -677,6 +708,12 @@ const styles = StyleSheet.create({
   plusSmall: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.violet, alignItems: 'center', justifyContent: 'center' },
   quick: { marginTop: 12, gap: 8 },
   quickTitle: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted },
+  tplScroll: { marginHorizontal: -space.gutter },
+  tplRow: { gap: 10, paddingHorizontal: space.gutter, paddingVertical: 4 },
+  tpl: { width: 148, padding: 12, borderRadius: 18, backgroundColor: colors.cardSolid, borderWidth: 1, borderColor: colors.line, gap: 6, ...shadow },
+  tplIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
+  tplTitle: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink },
+  tplText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
   quickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   quickChip: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 32, paddingHorizontal: 11, borderRadius: 99, backgroundColor: colors.tint },
   quickText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink },
