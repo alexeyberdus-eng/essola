@@ -316,7 +316,9 @@ async function fromShopPage(url) {
   }
 }
 
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json' };
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, X-App-Key', 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' };
+// Our HTML pages (policy, support, admin) never load inside another site's frame and never send referrers out.
+const htmlHeaders = (extra = {}) => ({ 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', ...extra });
 const reply = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) });
 
 // The admin panel (GET ?admin): one page, with the app's CSV parser bundled in at deploy time.
@@ -345,11 +347,10 @@ function docPage(name) {
   } catch {}
   const head = (title) => `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} — essola</title><style>body{margin:0;background:#F7F5FF;color:#1E1A33;font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}main{max-width:720px;margin:0 auto;padding:32px 20px 60px}h1{font-size:28px;letter-spacing:-.5px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 6px}.muted{color:#6E6890;font-size:14px}a{color:#5E49D8}nav a{margin-right:14px;font-size:14px}textarea,input{width:100%;box-sizing:border-box;border:1px solid #E6E1FA;border-radius:12px;padding:12px;font:inherit;background:#fff}button{margin-top:12px;border:0;border-radius:14px;padding:12px 20px;font:600 15px inherit;color:#fff;background:#7C66EE}</style></head><body><main><nav class="muted"><a href="?doc=privacy">Конфиденциальность</a><a href="?doc=terms">Условия</a><a href="?doc=rules">Правила</a><a href="?doc=support">Поддержка</a></nav>`;
   if (name === 'support') {
-    const key = String(process.env.APP_KEY || '').replace(/[^a-z0-9]/gi, '');
     return head('Поддержка') + `<h1>Поддержка essola</h1><p class="muted">Вопросы о приложении, данных и удалении аккаунта. Ответим на указанную почту.</p>
 <form id="f"><h2>Ваша почта</h2><input id="e" type="email" required autocomplete="email"><h2>Сообщение</h2><textarea id="m" rows="6" required></textarea><button>Отправить</button><p id="r" class="muted"></p></form>
 <p class="muted">Удалить аккаунт можно и в самом приложении: Профиль → Удалить аккаунт.</p>
-<script>document.getElementById('f').onsubmit=async(ev)=>{ev.preventDefault();const r=document.getElementById('r');r.textContent='Отправляем…';try{const x=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json','X-App-Key':'${key}'},body:JSON.stringify({mode:'support.msg',email:document.getElementById('e').value,text:document.getElementById('m').value})});r.textContent=x.ok?'Спасибо! Сообщение получено.':'Не получилось отправить, попробуйте позже.'}catch(e){r.textContent='Нет связи, попробуйте позже.'}};</script></main></body></html>`;
+<script>document.getElementById('f').onsubmit=async(ev)=>{ev.preventDefault();const r=document.getElementById('r');r.textContent='Отправляем…';try{const x=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'support.msg',email:document.getElementById('e').value,text:document.getElementById('m').value})});r.textContent=x.ok?'Спасибо! Сообщение получено.':'Не получилось отправить, попробуйте позже.'}catch(e){r.textContent='Нет связи, попробуйте позже.'}};</script></main></body></html>`;
   }
   const d = docs[name] || docs.privacy;
   if (!d) return head('essola') + '<h1>essola</h1></main></body></html>';
@@ -927,13 +928,13 @@ async function handle(event, context) {
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod === 'GET') {
     const q0 = event.queryStringParameters || {};
-    if (q0.doc) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=600' }, body: docPage(String(q0.doc).replace(/[^a-z]/g, '')) };
-    if (q0.admin !== undefined) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }, body: ADMIN_PAGE_OF() };
+    if (q0.doc) return { statusCode: 200, headers: htmlHeaders({ 'Cache-Control': 'public, max-age=600' }), body: docPage(String(q0.doc).replace(/[^a-z]/g, '')) };
+    if (q0.admin !== undefined) return { statusCode: 200, headers: htmlHeaders({ 'Cache-Control': 'no-store' }), body: ADMIN_PAGE_OF() };
     // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
     // The app registered its return address under the state beforehand (mode "vk.start").
     const q = event.queryStringParameters || {};
     // Some flows put the answer after "#": a tiny page moves it into the query and comes back.
-    if (!q.state) return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<script>if(location.hash.length>1)location.replace(location.pathname+"?"+location.hash.slice(1));else document.write("Вход отменён. Вернитесь в приложение.")</script>' };
+    if (!q.state) return { statusCode: 200, headers: htmlHeaders(), body: '<script>if(location.hash.length>1)location.replace(location.pathname+"?"+location.hash.slice(1));else document.write("Вход отменён. Вернитесь в приложение.")</script>' };
     console.log('vk bounce keys:', Object.keys(q).join(','), 'state:', String(q.state || '').slice(0, 12));
     const state = String(q.state || '').replace(/[^A-Za-z0-9_-]/g, '');
     const saved = state.length >= 16 ? await cacheGet(`vk/${state}.json`, context?.token?.access_token) : null;
@@ -950,7 +951,8 @@ async function handle(event, context) {
     // decided below by the session or the device secret. The admin panel has no app key: it may call only the
     // admin-only modes, each of which checks the admin token itself.
     const ADMIN_MODES = ['admin.check', 'admin.stats', 'admin.reports', 'admin.club', 'admin.promo', 'editorial.add', 'editorial.list', 'editorial.remove', 'stories.add', 'stories.list', 'stories.img', 'stories.remove'];
-    if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY && !(req.admin && ADMIN_MODES.includes(req.mode))) return reply(401, { error: 'unauthorized' });
+    // The public support page posts without the key too; that mode has its own daily limit.
+    if (process.env.APP_KEY && h['x-app-key'] !== process.env.APP_KEY && !(req.admin && ADMIN_MODES.includes(req.mode)) && req.mode !== 'support.msg') return reply(401, { error: 'unauthorized' });
     const textModel = process.env.TEXT_MODEL || 'yandexgpt-lite/latest';
     const iam = context?.token?.access_token;
     // What goes into a model prompt is cut to sane sizes before anything else: long fields only add cost.
@@ -1126,6 +1128,7 @@ async function handle(event, context) {
       const ck = `codes/${sha(email)}.json`;
       const prev = await get(ck, null);
       if (prev && Date.now() - prev.sentAt < 60e3) return reply(429, { error: 'too_often' });
+      if (!(await allow('mail', 8))) return reply(429, { error: 'too_often' });
       const code = String(crypto.randomInt(100000, 1000000));
       await put(ck, { hash: sha(`${email}:${code}`), exp: Date.now() + 10 * 60e3, tries: 0, sentAt: Date.now() });
       const sent = await sendCode(email, code, iam).then(() => true, () => false);
@@ -1248,6 +1251,7 @@ async function handle(event, context) {
     if (req.mode === 'recipe.publish') {
       const id = await actor();
       if (!id) return NO_ACTOR();
+      if (!(await allow('publish', 20))) return reply(429, { error: 'limit' });
       const r = req.recipe || {};
       if (!r.id || !r.title) return reply(400, { error: 'bad_recipe' });
       const user = await get(`users/${id}.json`, { id, nick: 'user' });
@@ -1388,6 +1392,7 @@ async function handle(event, context) {
     if (req.mode === 'forum.create') {
       const me = await actor();
       if (!me) return NO_ACTOR();
+      if (!(await allow('post', 40))) return reply(429, { error: 'limit' });
       await ensureUser(get, put, me, req.nick);
       const title = clean(req.title, 120);
       const text = clean(req.text, 4000);
@@ -1401,6 +1406,7 @@ async function handle(event, context) {
     if (req.mode === 'forum.reply') {
       const me = await actor();
       if (!me) return NO_ACTOR();
+      if (!(await allow('post', 40))) return reply(429, { error: 'limit' });
       await ensureUser(get, put, me, req.nick);
       const text = clean(req.text, 3000);
       const t = await loadTopic(clean(req.tid, 40));
@@ -1478,6 +1484,7 @@ async function handle(event, context) {
       // Product reviews: one per person (a new one replaces the old), with the person's stars next to it.
       const product = String(req.key || '').startsWith('product:');
       if (req.mode === 'social.comment' && me && clean(req.text, 500)) {
+        if (!(await allow('post', 40))) return reply(429, { error: 'limit' });
         await ensureUser(get, put, me, req.nick);
         const n = Math.round(Number(req.stars));
         if (product && n >= 1 && n <= 5) data.rates = { ...(data.rates || {}), [me]: n };

@@ -133,7 +133,7 @@ export default function ProfileScreen() {
               <Icon name="spark" size={19} color="#C0679E" strokeWidth={2} />
             </View>
             <Text style={styles.socialTitle} numberOfLines={1}>Essola Club</Text>
-            <Text style={styles.socialText} numberOfLines={2}>бонусы и промокоды, сейчас 0 ₽</Text>
+            <Text style={styles.socialText} numberOfLines={2}>больше сканов и промокоды — сейчас бесплатно</Text>
           </Press>
         </View>
 

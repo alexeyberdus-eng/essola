@@ -252,7 +252,7 @@ export default function BuilderScreen() {
         )}
         {/* What, where and why in one row: each opens its list, so the page needs no scrolling to set up. */}
         <View style={styles.pickers}>
-          <Dropdown label="Что делаем" options={KINDS.map((k) => ({ key: k.key, label: k.label }))} value={kind} onChange={(v) => v && choose(v as Kind)} />
+          <Dropdown label="Что делаем" options={KINDS.map((k) => ({ key: k.key, label: k.key === 'cream' ? 'Крем' : k.label }))} value={kind} onChange={(v) => v && choose(v as Kind)} />
           <Dropdown label="Зона" options={AREAS.map((a) => ({ key: a, label: a }))} value={area} onChange={(v) => v && setArea(v as string)} />
           <Dropdown label="Цель" options={GOALS.map((g) => ({ key: g, label: g }))} value={goal} onChange={(v) => setGoal((v as string) || null)} allowNone placeholder="Любая" />
         </View>

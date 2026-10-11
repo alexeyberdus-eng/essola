@@ -27,6 +27,8 @@ export function Press({
   disabled,
   haptic = true,
   accessibilityLabel,
+  accessibilityRole = 'button',
+  accessibilityState,
   hitSlop,
 }: {
   children: ReactNode;
@@ -35,6 +37,9 @@ export function Press({
   disabled?: boolean;
   haptic?: boolean;
   accessibilityLabel?: string;
+  /** Screen readers: 'tab', 'checkbox', 'link'… (default 'button'). */
+  accessibilityRole?: 'button' | 'tab' | 'checkbox' | 'link';
+  accessibilityState?: { selected?: boolean; checked?: boolean; disabled?: boolean };
   hitSlop?: number;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -44,7 +49,8 @@ export function Press({
   const to = (v: number) => Animated.spring(scale, { toValue: v, useNativeDriver: Platform.OS !== 'web', speed: 40, bounciness: 4 }).start();
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
+      accessibilityState={{ disabled: !!disabled, ...accessibilityState }}
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       hitSlop={hitSlop}

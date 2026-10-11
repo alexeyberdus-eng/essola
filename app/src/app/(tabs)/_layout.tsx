@@ -89,10 +89,10 @@ function TabBar({ state, navigation }: BarProps) {
                 );
               }
               return (
-                <Press key={route.key} haptic={false} onPress={() => { tap(); navigation.navigate(name); }} style={styles.slot} accessibilityLabel={tab.label}>
+                <Press key={route.key} haptic={false} onPress={() => { tap(); navigation.navigate(name); }} style={styles.slot} accessibilityLabel={tab.label} accessibilityRole="tab" accessibilityState={{ selected: on }}>
                   <View style={styles.item}>
-                    <Icon name={tab.icon} size={22} color={on ? colors.violet : '#9A9DB0'} strokeWidth={on ? 2 : 1.5} />
-                    <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1}>
+                    <Icon name={tab.icon} size={22} color={on ? colors.violet : TAB_IDLE} strokeWidth={on ? 2 : 1.5} />
+                    <Text style={[styles.label, on && styles.labelOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
                       {tab.label}
                     </Text>
                   </View>
@@ -105,6 +105,8 @@ function TabBar({ state, navigation }: BarProps) {
     </View>
   );
 }
+
+const TAB_IDLE = '#6B6E84';
 
 function softShadow() {
   return Platform.select({
@@ -133,7 +135,8 @@ const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   slot: { flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%' },
   item: { alignItems: 'center', gap: 3 },
-  label: { fontFamily: fonts.medium, fontSize: 9.5, color: '#9A9DB0' },
+  // 11 pt and a darker grey: readable on the white bar (contrast about 5:1, WCAG AA for small text).
+  label: { fontFamily: fonts.medium, fontSize: 11, color: TAB_IDLE },
   labelOn: { color: colors.violet, fontFamily: fonts.semibold },
   capsule: {
     position: 'absolute',

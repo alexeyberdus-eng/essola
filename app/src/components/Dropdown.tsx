@@ -52,7 +52,7 @@ export function Dropdown({
         {active && <LinearGradient colors={['#F4F0FF', '#EAE3FF']} style={StyleSheet.absoluteFill} />}
         <Text style={styles.caption} numberOfLines={1}>{label}</Text>
         <View style={styles.row}>
-          <Text style={[styles.value, active && { color: colors.violetDeep }]} numberOfLines={1}>{shown}</Text>
+          <Text style={[styles.value, active && { color: colors.violetDeep }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{shown}</Text>
           <Icon name="chevronDown" size={13} color={active ? colors.violet : colors.muted} strokeWidth={2.2} />
         </View>
       </Press>

@@ -79,7 +79,7 @@ export function Stories() {
                   <Bubble s={s} />
                 </LinearGradient>
               )}
-              <Text style={[styles.label, was && { color: colors.muted }]} numberOfLines={1}>
+              <Text style={[styles.label, was && { color: colors.muted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {s.title}
               </Text>
             </Press>

@@ -16,7 +16,8 @@ export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 async function call<T>(body: object): Promise<T> {
   const id = await myId();
   const who = { session: (await getSession()) ?? undefined, device: id, id, secret: await mySecret() };
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }) });
+  // A photo read by the model can take ~20 s; past a minute the screen stops waiting and says so.
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }), signal: AbortSignal.timeout(60000) });
   if (res.status === 429) throw new Error('LIMIT');
   if (!res.ok) throw new Error(`AI_${res.status}`);
   return (await res.json()) as T;

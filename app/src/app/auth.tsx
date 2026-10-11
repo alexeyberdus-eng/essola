@@ -270,6 +270,11 @@ export default function AuthScreen() {
           </View>
         )}
 
+        {/* No way to sign in right now (no Apple on this device, VK off, mail not ready or no connection): say so. */}
+        {step === 'email' && !emailOn && !vkEnabled && !(Platform.OS === 'ios' && appleAvailable) && (
+          <Text style={styles.note}>Вход сейчас недоступен — проверьте интернет и откройте этот экран ещё раз. Всё остальное работает и без аккаунта.</Text>
+        )}
+
         {error && <Text style={styles.error}>{error}</Text>}
 
       </ScrollView>
@@ -320,5 +325,6 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: colors.violet },
   consentText: { flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink },
   consentLink: { color: colors.violet, textDecorationLine: 'underline' },
+  note: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.muted, textAlign: 'center' },
   error: { fontFamily: fonts.regular, fontSize: 14, color: colors.bad, textAlign: 'center' },
 });

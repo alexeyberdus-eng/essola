@@ -61,7 +61,7 @@ type OBFProduct = {
 };
 
 /** One page of Open Beauty Facts: by text, by category, or the most scanned products when both are empty. */
-export async function pageOBF(q: string, tag: string | undefined, page: number): Promise<Found[]> {
+export async function pageOBF(q: string, tag: string | undefined, page: number, strict = false): Promise<Found[]> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
   const params = [
@@ -92,7 +92,8 @@ export async function pageOBF(q: string, tag: string | undefined, page: number):
         barcode: p.code,
       }))
       .filter((p) => p.title && p.text.length > 15);
-  } catch {
+  } catch (e) {
+    if (strict) throw e;
     return [];
   } finally {
     clearTimeout(t);
@@ -100,7 +101,7 @@ export async function pageOBF(q: string, tag: string | undefined, page: number):
 }
 
 /** Feed page: our pre-scored catalog first (fast, sorted on the server), Open Beauty Facts when it has nothing. */
-export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular', ing?: string): Promise<{ list: Found[]; sorted: boolean }> {
+export async function pageBase(q: string, tag: string | undefined, page: number, sort: Sort = 'popular', ing?: string): Promise<{ list: Found[]; sorted: boolean; failed?: boolean }> {
   const c = await catalogPage(q, tag, sort, page, ing);
   // With an ingredient chosen only our base can answer (Open Beauty Facts has no such filter).
   if (c && (c.total > 0 || page > 1 || ing)) {
@@ -111,7 +112,12 @@ export async function pageBase(q: string, tag: string | undefined, page: number,
     });
     return { list, sorted: true };
   }
-  return { list: await pageOBF(q, tag, page), sorted: false };
+  // Our server did not answer and Open Beauty Facts fails too: that is «no connection», not «nothing found».
+  try {
+    return { list: await pageOBF(q, tag, page, c === null), sorted: false };
+  } catch {
+    return { list: [], sorted: false, failed: true };
+  }
 }
 
 /** Warms the server and fills the saved first page so «База средств» opens instantly. Called once at app start. */
@@ -138,6 +144,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [end, setEnd] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [serverSorted, setServerSorted] = useState(false);
   // «Средства с ингредиентом»: chosen here or handed over from an ingredient page.
   const [ing, setIng] = useState<BaseIngredient | null>(() => takePendingIngredient());
@@ -177,6 +184,12 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
         pageBase(query, tag, p, sort, ing?.slug),
       ]);
       if (my !== seq.current) return;
+      // A failed load keeps what is already on screen and offers «Повторить».
+      setFailed(!!open.failed);
+      if (open.failed) {
+        setBusy(false);
+        return;
+      }
       setServerSorted(open.sorted);
       setItems((prev) => {
         const all = p === 1 ? [...ours, ...open.list] : [...prev, ...open.list];
@@ -232,7 +245,7 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
     <View style={{ paddingTop: insets.top + 10 }}>
       <Brand />
       {toggle}
-      <Hero kicker="База средств essola" title="Крупнейшая база косметических средств" text="Очень много кремов, сывороток, парфюмов и средств макияжа с оценкой состава — и персонально под вашу анкету." tone="sky" />
+      <Hero kicker="База средств essola" title="370 000 средств с разбором состава" text="Кремы, сыворотки, шампуни, макияж и парфюм — с оценкой состава и подбором под вашу анкету." tone="sky" />
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         <Press onPress={() => { tap(); router.push('/compare' as never); }} style={[styles.matchBtn, styles.compareBtn]} accessibilityLabel="Сравнить два средства">
           <Icon name="swap" size={17} color={colors.violetDeep} />
@@ -340,13 +353,32 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
         initialNumToRender={10}
         windowSize={7}
         ListEmptyComponent={
-          busy ? null : (
+          busy ? (
+            <ActivityIndicator color={colors.violet} style={{ marginVertical: 28 }} />
+          ) : failed ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Нет связи с базой. Проверьте интернет и попробуйте ещё раз.</Text>
+              <Press onPress={() => load(1)} style={styles.retry} accessibilityLabel="Повторить">
+                <Icon name="history" size={15} color={colors.violet} />
+                <Text style={styles.retryText}>Повторить</Text>
+              </Press>
+            </View>
+          ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>Ничего не нашли — попробуйте название на латинице или отсканируйте средство: оно попадёт в базу.</Text>
             </View>
           )
         }
-        ListFooterComponent={busy && page >= 1 && items.length ? <ActivityIndicator color={colors.violet} style={{ marginVertical: 18 }} /> : null}
+        ListFooterComponent={
+          busy && page >= 1 && items.length ? (
+            <ActivityIndicator color={colors.violet} style={{ marginVertical: 18 }} />
+          ) : failed && items.length ? (
+            <Press onPress={() => load(items.length ? page + 1 : 1)} style={[styles.retry, { alignSelf: 'center', marginVertical: 18 }]} accessibilityLabel="Повторить">
+              <Icon name="history" size={15} color={colors.violet} />
+              <Text style={styles.retryText}>Нет связи — повторить</Text>
+            </Press>
+          ) : null
+        }
         renderItem={({ item: { p, overall, score, me, n } }) => (
           <Press haptic={false} onPress={() => open(p, overall)} style={styles.row}>
             {p.image ? (
@@ -414,4 +446,6 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   empty: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: '#F4F0FF' },
   emptyText: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 19, color: colors.ink2 },
+  retry: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 12, paddingHorizontal: 14, height: 38, borderRadius: 12, backgroundColor: '#F3EFFF' },
+  retryText: { fontFamily: fonts.semibold, fontSize: 13.5, color: colors.violet },
 });

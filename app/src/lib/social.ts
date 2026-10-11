@@ -13,7 +13,7 @@ async function call<T>(body: object): Promise<T> {
   // The device secret proves to the server that a guest id is really this phone's (ids are public).
   const session = (await getSession()) ?? undefined;
   const secret = await mySecret();
-  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ session, secret, ...body }) });
+  const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ session, secret, ...body }), signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`SOCIAL_${res.status}`);
   return (await res.json()) as T;
 }
