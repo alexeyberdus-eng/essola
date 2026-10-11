@@ -5,7 +5,7 @@ name: EAS Update
 on:
   push:
     branches: [main, claude/awesome-mccarthy-dlbgor]
-    paths: ['app/**', '.github/workflows/eas-update.yml']
+    paths: ['app/**', '.github/workflows/eas-update.yml', '.github/scan-url']
   workflow_dispatch:
   workflow_run:
     workflows: ['Deploy AI scan function (Yandex Cloud)']

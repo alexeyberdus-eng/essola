@@ -259,3 +259,8 @@ jobs:
           curl -s -m 30 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"catalog","q":"крем","size":2}' | head -c 400; echo
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","device":"ci-check","ingredients":["Aqua","Glycerin","Niacinamide","Panthenol","Phenoxyethanol"]}' -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 900
+          # A composition the cache hasn't seen (order shuffled), so a model really answers; then who answered.
+          LIST=$(printf '"%s"\n' Aqua Glycerin Niacinamide Squalane "Sodium Hyaluronate" Allantoin Panthenol Tocopherol "Centella Asiatica Extract" Phenoxyethanol | shuf | paste -sd, -)
+          curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d "{\"mode\":\"describe\",\"device\":\"ci-check2\",\"ingredients\":[$LIST]}" -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 1200
+          $SSH 'journalctl -u essola -n 40 --no-pager | grep -E "ai provider failed|model reply" | tail -4 | cut -c1-260' || true
