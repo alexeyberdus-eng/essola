@@ -242,7 +242,17 @@ jobs:
         run: |
           U="https://$HOSTNAME_TW"
           echo "Server address: $U"
-          curl -s -o /dev/null -w "privacy page HTTP %{http_code}\n" "$U/?doc=privacy"
+          # nginx was just restarted: give it a few tries.
+          for i in 1 2 3 4 5 6; do C=$(curl -s -o /dev/null -w "%{http_code}" "$U/?doc=privacy" || true); [ "$C" = 200 ] && break; sleep 5; done
+          echo "privacy page HTTP $C"
+          # From the server itself: does the ChatGPT relay answer?
+          $SSH 'set -a; . /etc/essola.env; set +a
+            [ -z "${OPENAI_BASE_URL:-}" ] && { echo "no relay configured"; exit 0; }
+            echo "relay: $OPENAI_BASE_URL"
+            getent hosts "$(echo "$OPENAI_BASE_URL" | cut -d/ -f3)" || echo "DNS: cannot resolve"
+            curl -sS -m 20 -o /dev/null -w "relay via curl: HTTP %{http_code} in %{time_total}s\n" "$OPENAI_BASE_URL/models" -H "Authorization: Bearer $OPENAI_API_KEY" -H "X-Relay-Token: $RELAY_TOKEN" 2>&1 | tail -2
+            ls -l /srv/essola/app/russian-ca.pem; head -c 60 /srv/essola/app/russian-ca.pem; echo
+            node -e "fetch(process.env.OPENAI_BASE_URL+\"/models\",{headers:{Authorization:\"Bearer \"+process.env.OPENAI_API_KEY,\"X-Relay-Token\":process.env.RELAY_TOKEN}}).then(r=>console.log(\"relay via node: HTTP\",r.status)).catch(e=>console.log(\"relay via node failed:\",e.cause&&e.cause.code||\"\",String(e.cause||e).slice(0,200)))"' || true
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 30 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"catalog","q":"крем","size":2}' | head -c 400; echo
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \

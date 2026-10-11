@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 22:03 · Claude · claude/awesome-mccarthy-dlbgor · Сервер essola в Москве (195.133.57.125) работает: страницы, база, «Что даёт средство». Проверка выкладки ждёт перезапуска nginx и проверяет пересылку к ChatGPT прямо с сервера · (этот коммит)
 - 21:59 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка сервера essola на новый сервер VDSina (Москва, 195.133.57.125) с переносом данных · (этот коммит)
 - 21:57 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка сервера essola на новый сервер VDSina (Россия) с переносом данных · (этот коммит)
 - 21:57 · Claude · claude/awesome-mccarthy-dlbgor · Новый сервер essola (VDSina, Россия, 2 ядра / 4 ГБ / 100 ГБ): пересылка к ChatGPT пускает его адрес · (этот коммит)
