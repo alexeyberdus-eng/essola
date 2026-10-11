@@ -1401,6 +1401,7 @@ async function handle(event, context) {
         const token = await yandexIam(iam).catch((e) => (console.log('postbox iam', String(e).slice(0, 200)), null));
         const r = token ? await fetch(`https://postbox.cloud.yandex.net/v2/email/identities/${(process.env.MAIL_FROM || 'noreply@essola.ru').split('@')[1]}`, { headers: { 'X-YaCloud-SubjectToken': token }, signal: AbortSignal.timeout(5000) }).catch(() => null) : null;
         const j = r && r.ok ? await r.json().catch(() => ({})) : {};
+        if (!j.VerifiedForSendingStatus) console.log('postbox identity', r ? r.status : 'no answer', r && !r.ok ? (await r.text().catch(() => '')).slice(0, 200) : JSON.stringify(j).slice(0, 200));
         mailReady.ok = !!j.VerifiedForSendingStatus;
         mailReady.at = now;
       }
