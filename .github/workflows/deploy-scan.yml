@@ -22,6 +22,9 @@ jobs:
       VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
       # Password of the web admin panel (<function url>?admin): any long phrase you invent.
       ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+      # Second AI provider (Sber GigaChat): takes over when Yandex AI fails.
+      GIGACHAT_KEY: ${{ secrets.GIGACHAT_KEY }}
+      GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
     steps:
       - uses: actions/checkout@v4
       - name: Skip until Yandex secrets are set
@@ -47,7 +50,8 @@ jobs:
           # Privacy policy, terms and rules for the web pages (?doc=…): the same texts as in the app.
           npx -y esbuild@0.25.0 app/src/data/legal.ts --bundle --format=cjs --platform=node --outfile="$RUNNER_TEMP/legal.cjs"
           node -e "console.log(JSON.stringify(require('$RUNNER_TEMP/legal.cjs').DOCS))" > server/yandex-scan/legal.json
-          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js legal.json)
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o server/yandex-scan/russian-ca.pem || : > server/yandex-scan/russian-ca.pem
+          (cd server/yandex-scan && zip -q ../../scan.zip index.js forum-seed.json admin.html admin-csv.js legal.json russian-ca.pem)
           BUCKET="essola-products-$YC_FOLDER_ID"
           set +e
           yc storage bucket create --name "$BUCKET" --folder-id "$YC_FOLDER_ID" 2>&1 | tail -3
@@ -58,6 +62,7 @@ jobs:
           [ -n "$NK_API_KEY" ] && ENVV="$ENVV,NK_API_KEY=$NK_API_KEY"
           [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
           [ -n "$ADMIN_TOKEN" ] && ENVV="$ENVV,ADMIN_TOKEN=$ADMIN_TOKEN"
+          [ -n "$GIGACHAT_KEY" ] && ENVV="$ENVV,GIGACHAT_KEY=$GIGACHAT_KEY,GIGACHAT_SCOPE=${GIGACHAT_SCOPE:-GIGACHAT_API_PERS},NODE_EXTRA_CA_CERTS=/function/code/russian-ca.pem"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
           V="--function-id $FN_ID --runtime nodejs18 --entrypoint index.handler --memory 4096m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.

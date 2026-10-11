@@ -194,8 +194,66 @@ async function search(queryText, iam) {
 }
 
 // Shared product cache in Object Storage: one JSON per product, keyed by barcode or shop link.
-const BUCKET = process.env.BUCKET;
 const crypto = require('crypto');
+// Own server (Timeweb): the same keys as files under DATA_DIR instead of the Yandex bucket.
+const DATA_DIR = process.env.DATA_DIR ? require('path').resolve(process.env.DATA_DIR) : '';
+const BUCKET = process.env.BUCKET || (DATA_DIR ? 'disk' : '');
+const fsp = require('fs/promises');
+/** Path of a key on disk; keys with «..» or a leading slash never leave DATA_DIR. */
+function diskPath(key) {
+  const k = String(key);
+  if (!k || k.startsWith('/') || k.split('/').includes('..')) throw new Error('bad_key');
+  return `${DATA_DIR}/${k}`;
+}
+async function diskWalk(dir, base, out) {
+  const items = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const it of items) {
+    if (it.name.endsWith('.tmp')) continue;
+    const key = base ? `${base}/${it.name}` : it.name;
+    if (it.isDirectory()) await diskWalk(`${dir}/${it.name}`, key, out);
+    else out.push(key);
+  }
+}
+/** Storage calls: bucket or disk. get → parsed JSON or null; put/del → ok; list → keys (sorted, ≤1000) or null on error. */
+const store = {
+  async get(key, iam) {
+    if (DATA_DIR) {
+      const t = await fsp.readFile(diskPath(key), 'utf8').catch(() => null);
+      return t == null ? null : JSON.parse(t);
+    }
+    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { headers: { 'X-YaCloud-SubjectToken': iam } });
+    return res.ok ? await res.json() : null;
+  },
+  async put(key, iam, body, timeout) {
+    if (DATA_DIR) {
+      const f = diskPath(key);
+      await fsp.mkdir(require('path').dirname(f), { recursive: true });
+      // Write then rename: a reader never sees half a file.
+      const tmp = `${f}.${process.pid}.${Date.now()}.tmp`;
+      await fsp.writeFile(tmp, body);
+      await fsp.rename(tmp, f);
+      return { ok: true };
+    }
+    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'PUT', headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' }, body, ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}) });
+    return { ok: res.ok, status: res.status, text: () => res.text() };
+  },
+  async list(prefix, iam, timeout) {
+    if (DATA_DIR) {
+      const p = String(prefix);
+      const dir = p.endsWith('/') ? p.slice(0, -1) : p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+      const out = [];
+      await diskWalk(dir ? diskPath(dir) : DATA_DIR, dir, out);
+      return out.filter((k) => k.startsWith(p)).sort().slice(0, 1000);
+    }
+    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}?list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`, { headers: { 'X-YaCloud-SubjectToken': iam }, ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}) });
+    if (!res.ok) return null;
+    return [...(await res.text()).matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+  },
+  async del(key, iam) {
+    if (DATA_DIR) return fsp.unlink(diskPath(key)).catch(() => {});
+    await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'DELETE', headers: { 'X-YaCloud-SubjectToken': iam } });
+  },
+};
 const keyFor = ({ barcode, url }) => (barcode ? `bc/${String(barcode).replace(/\D/g, '')}.json` : url ? `url/${crypto.createHash('sha1').update(normUrl(url)).digest('hex')}.json` : null);
 function normUrl(u) {
   try {
@@ -208,8 +266,7 @@ function normUrl(u) {
 async function cacheGet(key, iam) {
   if (!BUCKET || !key || !iam) return null;
   try {
-    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { headers: { 'X-YaCloud-SubjectToken': iam } });
-    return res.ok ? await res.json() : null;
+    return await store.get(key, iam);
   } catch (e) {
     console.log('cache get failed', String(e));
     return null;
@@ -219,11 +276,7 @@ async function cachePut(key, iam, data, raw = false) {
   if (!BUCKET || !key || !iam) return;
   if (!raw && data && data.title && Array.isArray(data.ingredients)) await indexAdd(iam, key, data.title, data.source, data.ingredients.length).catch(() => {});
   try {
-    const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, {
-      method: 'PUT',
-      headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
-      body: JSON.stringify(raw ? data : { ...data, at: new Date().toISOString() }),
-    });
+    const res = await store.put(key, iam, JSON.stringify(raw ? data : { ...data, at: new Date().toISOString() }));
     if (!res.ok) console.log('cache put', res.status, (await res.text()).slice(0, 200));
   } catch (e) {
     console.log('cache put failed', String(e));
@@ -390,22 +443,18 @@ function imageOk(dataUrl, max) {
 /** For the daily limits: storage errors are reported, not hidden, so a paid call is refused when the count can't be kept. */
 async function putStrict(key, iam, data) {
   if (!BUCKET || !iam) return false;
-  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'PUT', headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' }, body: JSON.stringify(data), signal: AbortSignal.timeout(5000) }).catch(() => null);
+  const res = await store.put(key, iam, JSON.stringify(data), 5000).catch(() => null);
   return !!res && res.ok;
 }
 async function listStrict(prefix, iam) {
   if (!BUCKET || !iam) return null;
-  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}?list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`, { headers: { 'X-YaCloud-SubjectToken': iam }, signal: AbortSignal.timeout(5000) }).catch(() => null);
-  if (!res || !res.ok) return null;
-  return [...(await res.text()).matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+  return store.list(prefix, iam, 5000).catch(() => null);
 }
 
 /** Keys under a prefix in the bucket (up to 1000). */
 async function cacheList(prefix, iam) {
   if (!BUCKET || !iam) return [];
-  const res = await fetch(`https://storage.yandexcloud.net/${BUCKET}?list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`, { headers: { 'X-YaCloud-SubjectToken': iam } }).catch(() => null);
-  if (!res || !res.ok) return [];
-  return [...(await res.text()).matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+  return (await store.list(prefix, iam).catch(() => null)) || [];
 }
 
 // Admins are recognised by the SHA-256 of their account email (the address itself is not in the code).
@@ -414,7 +463,7 @@ const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32
 let lastUsage;
 // ---- Spending: every model call and web search is counted per day and kind of request; each function instance
 // writes its own file (stats/<day>/<instance>.json), the admin panel adds them up. Prices are per 1000 tokens, ₽.
-const PRICE = { lite: 0.2, pro: 0.8, vision: 0.22, search: 0.26 };
+const PRICE = { lite: 0.2, pro: 0.8, vision: 0.22, search: 0.26, gLite: 0.065, gPro: 0.5, gMax: 0.65 };
 const INSTANCE = crypto.randomBytes(5).toString('hex');
 let curMode = 'other';
 const stats = {};
@@ -442,16 +491,103 @@ async function flushStats(iam, force = false) {
 }
 const kindOf = (model) => (/lite/.test(model) ? 'lite' : /yandexgpt/.test(model) ? 'pro' : 'vision');
 
-async function chat(model, messages, maxTokens, raw = false, extra = {}) {
+async function yandexChat(model, messages, maxTokens, extra) {
   const res = await fetch(LLM_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.YC_API_KEY}`, 'OpenAI-Project': process.env.YC_FOLDER_ID, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: `gpt://${process.env.YC_FOLDER_ID}/${model}`, messages, temperature: 0.1, max_tokens: maxTokens, ...extra }),
+    // With a second provider configured, a stuck Yandex call gives way to it instead of eating the whole request.
+    ...(process.env.GIGACHAT_KEY ? { signal: AbortSignal.timeout(25000) } : {}),
   });
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
-  lastUsage = json?.usage;
   track(kindOf(model), Number(json?.usage?.total_tokens) || 0);
+  return json;
+}
+
+// ---- GigaChat (Sber): a second AI provider. Key = «ключ авторизации» from Studio (GIGACHAT_KEY), scope
+// GIGACHAT_API_PERS (personal space) or GIGACHAT_API_B2B / _CORP (business). Its certificates are issued by the
+// Russian Trusted Root CA: the server trusts it through NODE_EXTRA_CA_CERTS.
+const GIGA_OAUTH = process.env.GIGACHAT_OAUTH_URL || 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth';
+const GIGA_API = (process.env.GIGACHAT_API_URL || 'https://gigachat.devices.sberbank.ru/api/v1').replace(/\/$/, '');
+let gigaToken = null;
+async function gigaAuth() {
+  if (gigaToken && gigaToken.until > Date.now() + 60e3) return gigaToken.value;
+  const res = await fetch(GIGA_OAUTH, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${process.env.GIGACHAT_KEY}`, RqUID: crypto.randomUUID(), 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: `scope=${encodeURIComponent(process.env.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS')}`,
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`gigachat auth ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  gigaToken = { value: j.access_token, until: Number(j.expires_at) || Date.now() + 25 * 60e3 };
+  return gigaToken.value;
+}
+/** A photo for GigaChat goes in as an uploaded file; the message then refers to it by id. */
+async function gigaUpload(dataUrl, token) {
+  const m = String(dataUrl).match(/^data:(image\/[a-z]+);base64,(.+)$/);
+  if (!m) throw new Error('gigachat bad image');
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from(m[2], 'base64')], { type: m[1] }), `photo.${m[1].split('/')[1]}`);
+  form.append('purpose', 'general');
+  const res = await fetch(`${GIGA_API}/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form, signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`gigachat upload ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return (await res.json()).id;
+}
+// Our model tiers map onto GigaChat's: lite → Lite, the technologist → Pro, photos → Max (the one that reads images).
+const gigaModel = (kind) => (kind === 'lite' ? process.env.GIGA_LITE || 'GigaChat-2' : kind === 'pro' ? process.env.GIGA_PRO || 'GigaChat-2-Pro' : process.env.GIGA_MAX || 'GigaChat-2-Max');
+async function gigaChat(model, messages, maxTokens) {
+  const token = await gigaAuth();
+  const kind = kindOf(model);
+  const msgs = [];
+  for (const m of messages) {
+    if (typeof m.content === 'string') {
+      msgs.push({ role: m.role, content: m.content });
+      continue;
+    }
+    // OpenAI-style parts: text joins up, images become attachments.
+    const parts = Array.isArray(m.content) ? m.content : [];
+    const text = parts.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+    const images = parts.filter((p) => p.type === 'image_url').map((p) => p.image_url?.url || p.image_url);
+    const attachments = await Promise.all(images.map((u) => gigaUpload(u, token)));
+    msgs.push({ role: m.role, content: text, ...(attachments.length ? { attachments } : {}) });
+  }
+  const gm = gigaModel(kind);
+  const res = await fetch(`${GIGA_API}/chat/completions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ model: gm, messages: msgs, temperature: 0.1, max_tokens: maxTokens }),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!res.ok) throw new Error(`gigachat ${gm} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const json = await res.json();
+  track(/Max/i.test(gm) ? 'gMax' : /Pro/i.test(gm) ? 'gPro' : 'gLite', Number(json?.usage?.total_tokens) || 0);
+  return json;
+}
+
+/** Which AI answers: AI_PRIMARY (yandex | gigachat), the other one takes over when the first fails. */
+function providers() {
+  const have = { yandex: !!process.env.YC_API_KEY && !!process.env.YC_FOLDER_ID, gigachat: !!process.env.GIGACHAT_KEY };
+  const first = process.env.AI_PRIMARY === 'gigachat' || !have.yandex ? 'gigachat' : 'yandex';
+  return [first, first === 'yandex' ? 'gigachat' : 'yandex'].filter((p) => have[p]);
+}
+
+async function chat(model, messages, maxTokens, raw = false, extra = {}) {
+  let json, err;
+  for (const p of providers()) {
+    try {
+      json = p === 'gigachat' ? await gigaChat(model, messages, maxTokens) : await yandexChat(model, messages, maxTokens, extra);
+      break;
+    } catch (e) {
+      err = e;
+      console.log('ai provider failed', p, String(e).slice(0, 200));
+      // A request Yandex rejects as malformed (400) is retried by the caller without the extra options.
+      if (p === 'yandex' && / 400:/.test(String(e.message)) && Object.keys(extra).length) throw e;
+    }
+  }
+  if (!json) throw err || new Error('no_ai_provider');
+  lastUsage = json?.usage;
   const msg = json?.choices?.[0]?.message ?? {};
   const text = (msg.content || msg.reasoning_content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
   console.log('model reply', json?.choices?.[0]?.finish_reason, JSON.stringify(json?.usage), text.slice(0, 300));
@@ -858,7 +994,7 @@ async function ensureUser(get, put, id, nick) {
 const sha = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
 async function cacheDel(key, iam) {
   if (!BUCKET || !key || !iam) return;
-  await fetch(`https://storage.yandexcloud.net/${BUCKET}/${key}`, { method: 'DELETE', headers: { 'X-YaCloud-SubjectToken': iam } }).catch(() => {});
+  await store.del(key, iam).catch(() => {});
 }
 
 const mailReady = { ok: false, at: 0 };

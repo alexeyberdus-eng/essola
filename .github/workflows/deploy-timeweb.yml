@@ -1,0 +1,185 @@
+# «Сервер на Timeweb»: the same server code (server/yandex-scan) on our own VPS, independent of Yandex Cloud.
+#  - installs Node, nginx and a free HTTPS certificate (address <ip-with-dashes>.sslip.io until essola.ru is pointed here);
+#  - copies the code, writes the settings from GitHub secrets, runs it as a systemd service «essola»;
+#  - data lives in /srv/essola/data; the first run (or a commit message with [restore-data]) fills it from the
+#    newest «Резервная копия данных» archive.
+# Needs secrets TIMEWEB_HOST (server IP) and TIMEWEB_SSH_KEY (private key with root access); runs when this file,
+# .github/timeweb.trigger or the server code changes.
+name: Сервер на Timeweb
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/timeweb.trigger', '.github/workflows/deploy-timeweb.yml', 'server/yandex-scan/**', 'app/src/data/legal.ts', 'app/src/lib/recipeCsv.ts']
+  workflow_dispatch:
+
+concurrency:
+  group: timeweb
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+      VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
+      NK_API_KEY: ${{ secrets.NK_API_KEY }}
+      GIGACHAT_KEY: ${{ secrets.GIGACHAT_KEY }}
+      GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
+      AI_PRIMARY: ${{ vars.AI_PRIMARY }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Server secrets
+        run: |
+          if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
+            echo "::warning::Add TIMEWEB_HOST and TIMEWEB_SSH_KEY secrets to deploy to Timeweb."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != '1'
+
+      - name: Build the bundle
+        if: env.SKIP != '1'
+        run: |
+          npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
+          npx -y esbuild@0.25.0 app/src/data/legal.ts --bundle --format=cjs --platform=node --outfile="$RUNNER_TEMP/legal.cjs"
+          node -e "console.log(JSON.stringify(require('$RUNNER_TEMP/legal.cjs').DOCS))" > server/yandex-scan/legal.json
+          # GigaChat's certificates are issued by the Russian Trusted Root CA (Минцифры).
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o server/yandex-scan/russian-ca.pem \
+            || echo "::warning::Russian CA not downloaded: GigaChat calls will fail TLS"
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          HOSTNAME_TW="$(echo "$TIMEWEB_HOST" | tr . -).sslip.io"
+          echo "HOSTNAME_TW=$HOSTNAME_TW" >> "$GITHUB_ENV"
+          # Settings for the service: one KEY=value per line, readable only by root.
+          {
+            echo "NODE_ENV=production"
+            echo "PORT=8080"
+            echo "DATA_DIR=/srv/essola/data"
+            echo "APP_KEY=$APP_KEY"
+            echo "NODE_EXTRA_CA_CERTS=/srv/essola/app/russian-ca.pem"
+            [ -n "$YC_API_KEY" ] && echo "YC_API_KEY=$YC_API_KEY"
+            [ -n "$YC_FOLDER_ID" ] && echo "YC_FOLDER_ID=$YC_FOLDER_ID"
+            [ -n "$ADMIN_TOKEN" ] && echo "ADMIN_TOKEN=$ADMIN_TOKEN"
+            [ -n "$VK_CLIENT_ID" ] && echo "VK_CLIENT_ID=$VK_CLIENT_ID"
+            [ -n "$NK_API_KEY" ] && echo "NK_API_KEY=$NK_API_KEY"
+            [ -n "$GIGACHAT_KEY" ] && echo "GIGACHAT_KEY=$GIGACHAT_KEY"
+            echo "GIGACHAT_SCOPE=${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}"
+            echo "AI_PRIMARY=${AI_PRIMARY:-gigachat}"
+          } > "$RUNNER_TEMP/essola.env"
+          install -m 600 /dev/null "$RUNNER_TEMP/key"
+          printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
+          echo "SSH=ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 root@$TIMEWEB_HOST" >> "$GITHUB_ENV"
+
+      - name: Prepare the server (Node, nginx, certificate tools)
+        if: env.SKIP != '1'
+        run: |
+          $SSH 'bash -s' <<'EOF'
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
+            apt-get install -y -qq nodejs >/dev/null
+          fi
+          command -v nginx >/dev/null || apt-get install -y -qq nginx >/dev/null
+          command -v certbot >/dev/null || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+          command -v 7z >/dev/null || apt-get install -y -qq p7zip-full >/dev/null
+          command -v rsync >/dev/null || apt-get install -y -qq rsync >/dev/null
+          mkdir -p /srv/essola/app /srv/essola/data
+          node -v; nginx -v 2>&1; free -m | head -2; df -h /srv | tail -1
+          EOF
+
+      - name: Copy the code and settings
+        if: env.SKIP != '1'
+        run: |
+          sudo apt-get install -y -qq rsync >/dev/null 2>&1 || true
+          rsync -az --delete -e "ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new" \
+            server/yandex-scan/index.js server/yandex-scan/server.js server/yandex-scan/forum-seed.json server/yandex-scan/admin.html \
+            server/yandex-scan/admin-csv.js server/yandex-scan/legal.json server/yandex-scan/russian-ca.pem "root@$TIMEWEB_HOST:/srv/essola/app/"
+          scp -i "$RUNNER_TEMP/key" -o StrictHostKeyChecking=accept-new "$RUNNER_TEMP/essola.env" "root@$TIMEWEB_HOST:/etc/essola.env"
+          $SSH 'chmod 600 /etc/essola.env'
+
+      - name: Data from the newest backup (first run or [restore-data])
+        if: env.SKIP != '1'
+        run: |
+          MSG=$(git log -1 --format=%B)
+          EMPTY=$($SSH '[ -z "$(ls -A /srv/essola/data 2>/dev/null)" ] && echo yes || echo no')
+          if [ "$EMPTY" != yes ] && ! echo "$MSG" | grep -q '\[restore-data\]'; then echo "data already there"; exit 0; fi
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/backup.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].id')
+          echo "backup run: $RUN"
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --pattern 'essola-vse-dannye-*' --dir backup
+          F=$(find backup -name 'essola-vse-dannye-*.7z' | head -1)
+          ls -lh "$F"
+          command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null; }
+          mkdir data && 7z x -p"$BACKUP_PASSWORD" -odata "$F" >/dev/null
+          echo "files: $(find data -type f | wc -l)"; du -sh data
+          rsync -az -e "ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new" data/ "root@$TIMEWEB_HOST:/srv/essola/data/"
+          rm -rf data backup
+
+      - name: Service, nginx and HTTPS
+        if: env.SKIP != '1'
+        run: |
+          $SSH "HOSTNAME_TW=$HOSTNAME_TW bash -s" <<'EOF'
+          set -e
+          # The product base is held in memory: give Node three quarters of the RAM.
+          MEM=$(free -m | awk '/Mem:/ {print int($2*0.75)}')
+          cat > /etc/systemd/system/essola.service <<UNIT
+          [Unit]
+          Description=essola server
+          After=network.target
+          [Service]
+          EnvironmentFile=/etc/essola.env
+          Environment=NODE_OPTIONS=--max-old-space-size=$MEM
+          WorkingDirectory=/srv/essola/app
+          ExecStart=/usr/bin/node /srv/essola/app/server.js
+          Restart=always
+          RestartSec=3
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          sed -i 's/^ *//' /etc/systemd/system/essola.service
+          systemctl daemon-reload
+          systemctl enable essola >/dev/null 2>&1
+          systemctl restart essola
+          cat > /etc/nginx/sites-available/essola <<NGX
+          server {
+            listen 80;
+            server_name $HOSTNAME_TW api.essola.ru;
+            client_max_body_size 12m;
+            location / {
+              proxy_pass http://127.0.0.1:8080;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_read_timeout 90s;
+            }
+          }
+          NGX
+          ln -sf /etc/nginx/sites-available/essola /etc/nginx/sites-enabled/essola
+          rm -f /etc/nginx/sites-enabled/default
+          nginx -t && systemctl reload nginx
+          # A free Let's Encrypt certificate for the sslip.io address (renews itself).
+          [ -d "/etc/letsencrypt/live/$HOSTNAME_TW" ] || certbot --nginx -d "$HOSTNAME_TW" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+          systemctl reload nginx
+          sleep 2; systemctl is-active essola; journalctl -u essola -n 15 --no-pager
+          EOF
+
+      - name: Check
+        if: env.SKIP != '1'
+        run: |
+          U="https://$HOSTNAME_TW"
+          echo "Server address: $U"
+          curl -s -o /dev/null -w "privacy page HTTP %{http_code}\n" "$U/?doc=privacy"
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          curl -s -m 30 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"catalog","q":"крем","size":2}' | head -c 400; echo
+          curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d '{"mode":"describe","device":"ci-check","ingredients":["Aqua","Glycerin","Niacinamide","Panthenol","Phenoxyethanol"]}' -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 900
