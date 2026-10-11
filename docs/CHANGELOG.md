@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 21:59 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка сервера essola на новый сервер VDSina (Москва, 195.133.57.125) с переносом данных · (этот коммит)
 - 21:57 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка сервера essola на новый сервер VDSina (Россия) с переносом данных · (этот коммит)
 - 21:57 · Claude · claude/awesome-mccarthy-dlbgor · Новый сервер essola (VDSina, Россия, 2 ядра / 4 ГБ / 100 ГБ): пересылка к ChatGPT пускает его адрес · (этот коммит)
 - 21:50 · Claude · claude/awesome-mccarthy-dlbgor · Старый сервер очищен (Caddy-настройки как были, дашборд работает). Выкладка «Сервер на Timeweb» теперь сама отказывается работать на сервере с дашбордом (где есть Caddy) · (этот коммит)
