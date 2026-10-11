@@ -4,6 +4,11 @@
 name: Выпустить обновление
 
 on:
+  # Also by changing .github/release.trigger (the default branch is old, so «Run workflow» may not show it).
+  # Only when the owner asks.
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/release.trigger']
   workflow_dispatch:
     inputs:
       note:
