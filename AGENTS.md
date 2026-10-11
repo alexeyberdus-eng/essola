@@ -16,7 +16,11 @@ The owner is a beginner and writes in Russian: answer in Russian, in plain words
 - Apple: planned through the same friend's account, with the owner as Admin, and an App Transfer later. No iOS build yet.
 - Expo account `alex777essola`, project `essola`, free build plan: the build queue can take hours. The workflow
   «Ссылки на сборки» (change `.github/build-links.trigger` and push) waits for the newest build and posts the links.
-- Admin panel: `https://functions.yandexcloud.net/d4eikcrvo6v275frt26v?admin` (password = secret `ADMIN_TOKEN`).
+- Server (since 11.10.2026): own VDSina VPS in Moscow, `https://195-133-57-125.sslip.io` (workflow «Сервер на Timeweb»,
+  secrets `TIMEWEB_HOST`/`TIMEWEB_PASSWORD`); ChatGPT through the relay `89.124.112.88` (workflow «Пересылка к ChatGPT»).
+  The address the app uses is in `.github/scan-url`. The old Yandex function is the fallback for store users.
+- Admin panel: `https://195-133-57-125.sslip.io/?admin` (old: `https://functions.yandexcloud.net/d4eikcrvo6v275frt26v?admin`; password = secret `ADMIN_TOKEN`).
+- The owner's other Timeweb server (`201.24.54.210`, Caddy) hosts their WB/Ozon dashboard: never touch it.
 - Privacy policy, terms and support pages: the same address with `?doc=privacy`, `?doc=terms`, `?doc=support`.
 
 ## What the product is
