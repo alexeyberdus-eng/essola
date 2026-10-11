@@ -20,7 +20,13 @@ U:КОДЫ через запятую (1–3) — строго по типу ср
 Коды E: HYD увлажнение, BAR барьер и питание, SOFT смягчение, SOO успокоение, BRI ровный тон, EXF обновление, AGE упругость, ANT антиоксиданты, SEB жирность и поры, CLN очищение, UV защита от солнца, HAIR гладкость волос, GROW кожа головы, TEX текстура.
 Коды W: FRAG отдушка, ALC сушащий спирт, SLS жёсткие ПАВ, COMED комедогенные масла, FEWACT мало активов для задачи, LOWACT активы в конце списка, IRR раздражающие компоненты, PRES спорный консервант.
 Коды U: FACE лицо, EYE вокруг глаз, BODY тело, HAND руки, LIP губы, HAIR волосы, SCALP кожа головы, AM утром, PM вечером, DAILY ежедневно, WEEK 1–2 раза в неделю, RINSE смыть, SPF с SPF днём, DRY сухая кожа, OILY жирная кожа, SENS чувствительная кожа.
-Без медицинских обещаний, без выдуманных ингредиентов.`;
+Без медицинских обещаний, без выдуманных ингредиентов.
+Пример ответа:
+L:Лёгкий увлажняющий крем для лица; с увлажнением справляется хорошо, активов немного.
+E:HYD:глицерин, гиалуронат натрия
+E:BAR:сквалан, церамиды
+W:FRAG
+U:FACE,AM,PM`;
 const EFFECT = {
   HYD: ['Увлажнение', 'удержание влаги и увлажнение кожи'],
   BAR: ['Барьер и питание', 'восстановление защитного барьера и питание'],
@@ -66,17 +72,27 @@ function decodeDescribe(text) {
   const where = [];
   const how = [];
   for (const raw of String(text || '').split('\n')) {
-    const line = raw.trim().replace(/^[-*•]\s*/, '');
-    const m = line.match(/^([LEWU])\s*:\s*(.*)$/i);
+    // Models dress the codes up in different ways («**E:** HYD — …», «E: HYD (…)»): strip that first.
+    const line = raw.trim().replace(/\*\*|`/g, '').replace(/^[-*•]\s*/, '');
+    const m = line.match(/^([LEWU])\s*[:：]\s*(.*)$/i);
     if (!m) continue;
     const [k, v] = [m[1].toUpperCase(), m[2].trim()];
     if (k === 'L') out.lead = v;
     else if (k === 'E') {
-      const [code, ...rest] = v.split(':');
-      const e = EFFECT[code.trim().toUpperCase()];
-      const ings = rest.join(':').trim().replace(/\.$/, '');
+      const cm = v.match(/^([A-Z]{2,5})\b\s*[:：—–=,(-]?\s*(.*)$/i);
+      // A code (HYD) or, from a looser model, the effect's own name («Увлажнение: …»).
+      let e = cm && EFFECT[cm[1].toUpperCase()];
+      let ings = e ? cm[2] : '';
+      if (!e) {
+        const hit = Object.values(EFFECT).find(([title]) => v.toLowerCase().startsWith(title.toLowerCase()));
+        if (hit) [e, ings] = [hit, v.slice(hit[0].length).replace(/^\s*[:—–=,-]\s*/, '')];
+      }
+      ings = String(ings || '').replace(/[).]+$/, '').trim();
       if (e && ings && out.effects.length < 4) out.effects.push({ title: e[0], text: `${ings.charAt(0).toUpperCase()}${ings.slice(1)} — ${e[1]}.` });
-    } else if (k === 'W') out.weak = WEAK[v.toUpperCase()] || (v === '-' ? '' : v.length > 6 ? v : '');
+    } else if (k === 'W') {
+      const code = v.split(/[\s,:(—–-]/)[0].toUpperCase();
+      out.weak = WEAK[code] || (v === '-' ? '' : v.length > 6 && !/^[A-Z]{2,6}$/.test(v) ? v : '');
+    }
     else if (k === 'U') for (const c of v.split(/\s*,\s*/)) {
       const t = USE[c.trim().toUpperCase()];
       if (!t) continue;
@@ -2036,11 +2052,12 @@ async function handle(event, context) {
       // One description per composition for everyone: opening the same product again costs no tokens.
       const dk = `desc3/${crypto.createHash('sha1').update(`${req.kind || ''}|${list}`).digest('hex')}.json`;
       const hit = await cacheGet(dk, iam);
-      if (hit && hit.lead) return reply(200, hit);
+      // An answer the server couldn't decode into effects is not kept: it is asked again next time.
+      if (hit && hit.lead && hit.effects?.length) return reply(200, hit);
       const out = await shared(dk, async () => {
         if (!(await allow('describe', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return null;
         const o = decodeDescribe(await chat(textModel, [{ role: 'system', content: DESCRIBE }, { role: 'user', content: `${req.kind ? `Средство: ${String(req.kind).slice(0, 160)}. ` : ''}Состав: ${list}` }], 220, true));
-        if (o && o.lead) await cachePut(dk, iam, o, true);
+        if (o && o.lead && o.effects.length) await cachePut(dk, iam, o, true);
         return o;
       });
       if (!out) return reply(429, { error: 'limit' });
