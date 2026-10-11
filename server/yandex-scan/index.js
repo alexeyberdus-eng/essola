@@ -1100,9 +1100,29 @@ function smtpReachable() {
     sock.once('data', (d) => done(String(d).startsWith('220')));
   });
 }
-function smtpSend(to, subject, text, html) {
-  const host = smtpHost();
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER;
+// Our own server (MAIL_LOCAL=1): Postfix on this machine signs letters with DKIM for essola.ru and delivers them
+// itself on port 25; the app talks to it on 127.0.0.1 without a password.
+const mailLocal = () => process.env.MAIL_LOCAL === '1';
+const port25 = { ok: false, at: 0 };
+function outbound25() {
+  if (port25.at && Date.now() - port25.at < (port25.ok ? 3600e3 : 5 * 60e3)) return Promise.resolve(port25.ok);
+  return new Promise((resolve) => {
+    const sock = require('net').connect({ host: 'gmail-smtp-in.l.google.com', port: 25 });
+    const done = (ok, why) => {
+      if (!ok) console.log('port 25 closed', why || '');
+      Object.assign(port25, { ok, at: Date.now() });
+      sock.destroy();
+      resolve(ok);
+    };
+    sock.setTimeout(6000, () => done(false, 'timeout'));
+    sock.on('error', (e) => done(false, e.code || String(e)));
+    sock.once('data', (d) => done(String(d).startsWith('220')));
+  });
+}
+function smtpSend(to, subject, text, html, local = false) {
+  const host = local ? '127.0.0.1' : smtpHost();
+  // A mailbox may send only from its own address; our own server sends from noreply@essola.ru.
+  const from = local ? process.env.MAIL_FROM || 'noreply@essola.ru' : process.env.SMTP_USER;
   const b64 = (x) => Buffer.from(String(x), 'utf8').toString('base64');
   const wrap = (x) => x.replace(/.{1,76}/g, '$&\r\n');
   const boundary = `essola${crypto.randomBytes(8).toString('hex')}`;
@@ -1120,7 +1140,7 @@ function smtpSend(to, subject, text, html) {
     `--${boundary}--`,
   ].join('\r\n');
   return new Promise((resolve, reject) => {
-    const sock = require('tls').connect({ host, port: Number(process.env.SMTP_PORT) || 465, servername: host });
+    const sock = local ? require('net').connect({ host, port: 25 }) : require('tls').connect({ host, port: Number(process.env.SMTP_PORT) || 465, servername: host });
     const fail = (e) => {
       sock.destroy();
       reject(e instanceof Error ? e : new Error(String(e)));
@@ -1131,9 +1151,7 @@ function smtpSend(to, subject, text, html) {
     const steps = [
       [null, '220'],
       ['EHLO essola', '250'],
-      ['AUTH LOGIN', '334'],
-      [b64(process.env.SMTP_USER), '334'],
-      [b64(process.env.SMTP_PASS), '235'],
+      ...(local ? [] : [['AUTH LOGIN', '334'], [b64(process.env.SMTP_USER), '334'], [b64(process.env.SMTP_PASS), '235']]),
       [`MAIL FROM:<${from}>`, '250'],
       [`RCPT TO:<${to}>`, '25'],
       ['DATA', '354'],
@@ -1186,9 +1204,13 @@ async function yandexIam(iam) {
 /** The sign-in code by email: an ordinary mailbox (SMTP) when set, otherwise Yandex Cloud Postbox. */
 async function sendCode(email, code, iam) {
   const html = `<div style="font-family:Arial,sans-serif;font-size:16px;color:#15172B"><p>Ваш код для входа в <b>essola lab</b>:</p><p style="font-size:32px;letter-spacing:6px;font-weight:bold;color:#7C66EE">${code}</p><p style="color:#7D8096">Код действует 10 минут. Если вы не запрашивали вход, просто удалите это письмо.</p></div>`;
-  if (smtpOn()) {
-    await smtpSend(email, `Код входа: ${code}`, `Ваш код для входа в essola lab: ${code}. Код действует 10 минут.`, html).catch((e) => {
-      console.log('smtp', String(e).slice(0, 300));
+  const subject = `Код входа: ${code}`;
+  const text = `Ваш код для входа в essola lab: ${code}. Код действует 10 минут.`;
+  // Our own server first, then the mailbox, then Postbox.
+  const local = mailLocal() && (await outbound25());
+  if (local || (smtpOn() && (await smtpReachable()))) {
+    await smtpSend(email, subject, text, html, local).catch((e) => {
+      console.log('smtp', local ? 'local' : 'mailbox', String(e).slice(0, 300));
       throw new Error('mail_failed');
     });
     return;
@@ -1413,7 +1435,8 @@ async function handle(event, context) {
     }
     if (req.mode === 'auth.config') {
       // Email sign-in is offered once the sender domain is confirmed in Postbox (its DNS records are in place).
-      if (smtpOn()) return reply(200, { email: await smtpReachable() });
+      if (mailLocal() && (await outbound25())) return reply(200, { email: true });
+      if (smtpOn() && (await smtpReachable())) return reply(200, { email: true });
       const now = Date.now();
       if (!mailReady.at || now - mailReady.at > (mailReady.ok ? 6 * 3600e3 : 5 * 60e3)) {
         const token = await yandexIam(iam).catch((e) => (console.log('postbox iam', String(e).slice(0, 200)), null));

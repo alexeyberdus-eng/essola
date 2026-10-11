@@ -98,6 +98,9 @@ jobs:
             [ -n "$SMTP_PASS" ] && echo "SMTP_PASS=$SMTP_PASS"
             [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=$SMTP_HOST"
             [ -n "$YC_SA_KEY" ] && echo "YC_SA_KEY_B64=$(printf '%s' "$YC_SA_KEY" | base64 -w0)"
+            # Our own server sends the sign-in letters (Postfix + DKIM, step «Mail» below).
+            echo "MAIL_LOCAL=1"
+            echo "MAIL_FROM=noreply@essola.ru"
             true
           } > "$RUNNER_TEMP/essola.env"
           # SSH by key, or by the root password when the hosting gave only that.
@@ -147,6 +150,50 @@ jobs:
             server/yandex-scan/index.js server/yandex-scan/server.js server/yandex-scan/forum-seed.json server/yandex-scan/admin.html \
             server/yandex-scan/admin-csv.js server/yandex-scan/legal.json server/yandex-scan/russian-ca.pem "root@$TIMEWEB_HOST:/srv/essola/app/"
           $SSH 'umask 077; cat > /etc/essola.env' < "$RUNNER_TEMP/essola.env"
+
+      - name: Mail (Postfix + DKIM for essola.ru, send-only)
+        if: env.SKIP != '1'
+        run: |
+          $SSH 'bash -s' <<'EOF'
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v postfix >/dev/null || ! command -v opendkim >/dev/null; then
+            echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections
+            echo "postfix postfix/mailname string mail.essola.ru" | debconf-set-selections
+            apt-get install -y -qq postfix opendkim opendkim-tools dnsutils >/dev/null
+          fi
+          # Postfix: only accepts letters from this machine, signs them through OpenDKIM, delivers them itself.
+          postconf -e "myhostname = mail.essola.ru" "myorigin = essola.ru" "inet_interfaces = loopback-only" \
+            "mydestination =" "smtp_tls_security_level = may" "smtpd_milters = inet:127.0.0.1:8891" \
+            "non_smtpd_milters = inet:127.0.0.1:8891" "milter_default_action = accept" "smtp_helo_name = mail.essola.ru"
+          echo "mail.essola.ru" > /etc/mailname
+          # DKIM key (made once, kept): selector «essola», so the old «postbox» key in DNS stays untouched.
+          mkdir -p /etc/opendkim/keys
+          [ -f /etc/opendkim/keys/essola.private ] || opendkim-genkey -b 2048 -d essola.ru -s essola -D /etc/opendkim/keys
+          chown -R opendkim:opendkim /etc/opendkim/keys && chmod 600 /etc/opendkim/keys/essola.private
+          cat > /etc/opendkim.conf <<CONF
+          Syslog yes
+          Mode s
+          Domain essola.ru
+          Selector essola
+          KeyFile /etc/opendkim/keys/essola.private
+          Canonicalization relaxed/simple
+          Socket inet:8891@127.0.0.1
+          UserID opendkim
+          CONF
+          sed -i 's/^ *//' /etc/opendkim.conf
+          systemctl enable opendkim postfix >/dev/null 2>&1
+          systemctl restart opendkim postfix
+          echo "=== Records for reg.ru (essola.ru → DNS) ==="
+          IP=$(curl -s -4 https://ifconfig.me || hostname -I | cut -d" " -f1)
+          echo "A     mail                $IP"
+          echo "TXT   essola._domainkey   $(tr -d '\n\t' < /etc/opendkim/keys/essola.txt | sed -E 's/.*\( *//; s/ *\).*//; s/" *"//g; s/"//g')"
+          echo "TXT   _dmarc              v=DMARC1; p=none"
+          echo "SPF now on essola.ru: $(dig +short TXT essola.ru | grep -i spf1 || echo none)"
+          echo "MX now on essola.ru: $(dig +short MX essola.ru | tr '\n' ' ' || true)"
+          echo "PTR of $IP: $(dig +short -x $IP)"
+          echo "port 25 out: $(timeout 6 bash -c '</dev/tcp/gmail-smtp-in.l.google.com/25' 2>/dev/null && echo open || echo closed)"
+          EOF
 
       - name: Data from the newest backup (first run or [restore-data])
         if: env.SKIP != '1'
