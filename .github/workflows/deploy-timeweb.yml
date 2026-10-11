@@ -68,7 +68,7 @@ jobs:
           # Settings for the service: one KEY=value per line, readable only by root.
           {
             echo "NODE_ENV=production"
-            echo "PORT=8080"
+            echo "PORT=8787"
             echo "DATA_DIR=/srv/essola/data"
             echo "APP_KEY=$APP_KEY"
             echo "NODE_EXTRA_CA_CERTS=/srv/essola/app/russian-ca.pem"
@@ -174,29 +174,51 @@ jobs:
           systemctl daemon-reload
           systemctl enable essola >/dev/null 2>&1
           systemctl restart essola
-          cat > /etc/nginx/sites-available/essola <<NGX
+          # Port 80/443 may already belong to another web server on this machine (Caddy here): then our site is
+          # added to it as one more block, and nothing else it serves is touched. Otherwise nginx + certbot.
+          echo "already listening:"; ss -ltnp | grep -E ':(80|443|8787) ' || true
+          if systemctl is-active --quiet caddy; then
+            systemctl disable --now nginx >/dev/null 2>&1 || true
+            CF=/etc/caddy/Caddyfile
+            echo "sites Caddy already serves:"; grep -E '^[^#[:space:]].*\{\s*$' "$CF" || true
+            cat > /etc/caddy/essola.caddy <<CADDY
+          $HOSTNAME_TW {
+            request_body {
+              max_size 12MB
+            }
+            reverse_proxy 127.0.0.1:8787 {
+              header_up X-Real-IP {remote_host}
+            }
+          }
+          CADDY
+            sed -i 's/^ *//' /etc/caddy/essola.caddy
+            grep -q 'import /etc/caddy/essola.caddy' "$CF" || { cp "$CF" "$CF.bak-essola"; printf '\nimport /etc/caddy/essola.caddy\n' >> "$CF"; }
+            caddy validate --config "$CF" --adapter caddyfile >/dev/null
+            systemctl reload caddy
+          else
+            cat > /etc/nginx/sites-available/essola <<NGX
           server {
             listen 80;
             server_name $HOSTNAME_TW api.essola.ru;
             client_max_body_size 12m;
             location / {
-              proxy_pass http://127.0.0.1:8080;
+              proxy_pass http://127.0.0.1:8787;
               proxy_set_header Host \$host;
               proxy_set_header X-Real-IP \$remote_addr;
               proxy_read_timeout 90s;
             }
           }
           NGX
-          ln -sf /etc/nginx/sites-available/essola /etc/nginx/sites-enabled/essola
-          rm -f /etc/nginx/sites-enabled/default
-          nginx -t
-          # Started for good (a fresh install may leave it stopped); if port 80 is taken, show by whom.
-          systemctl enable nginx >/dev/null 2>&1
-          systemctl restart nginx || { ss -ltnp | grep -E ':(80|443) ' || true; journalctl -u nginx -n 20 --no-pager; exit 1; }
-          # A free Let's Encrypt certificate for the sslip.io address (renews itself).
-          [ -d "/etc/letsencrypt/live/$HOSTNAME_TW" ] || certbot --nginx -d "$HOSTNAME_TW" --non-interactive --agree-tos --register-unsafely-without-email --redirect
-          systemctl restart nginx
-          sleep 2; systemctl is-active essola; journalctl -u essola -n 15 --no-pager
+            ln -sf /etc/nginx/sites-available/essola /etc/nginx/sites-enabled/essola
+            rm -f /etc/nginx/sites-enabled/default
+            nginx -t
+            systemctl enable nginx >/dev/null 2>&1
+            systemctl restart nginx || { journalctl -u nginx -n 20 --no-pager; exit 1; }
+            # A free Let's Encrypt certificate for the sslip.io address (renews itself).
+            [ -d "/etc/letsencrypt/live/$HOSTNAME_TW" ] || certbot --nginx -d "$HOSTNAME_TW" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+            systemctl restart nginx
+          fi
+          sleep 5; systemctl is-active essola; journalctl -u essola -n 15 --no-pager
           EOF
 
       - name: Check
