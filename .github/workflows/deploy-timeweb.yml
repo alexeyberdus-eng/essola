@@ -118,6 +118,8 @@ jobs:
           command -v 7z >/dev/null || apt-get install -y -qq p7zip-full >/dev/null
           command -v rsync >/dev/null || apt-get install -y -qq rsync >/dev/null
           mkdir -p /srv/essola/app /srv/essola/data
+          # A 2 GB swap file as a safety net: the product base is held in memory and 4 GB is just enough.
+          if [ ! -f /swapfile ]; then fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
           node -v; nginx -v 2>&1; free -m | head -2; df -h /srv | tail -1
           EOF
 
