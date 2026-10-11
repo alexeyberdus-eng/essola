@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 00:10 · Claude · claude/awesome-mccarthy-dlbgor · VDSina открыла порты 465/587: письма с кодом идут через ящик Mail.ru. Собственная отправка (Postfix + DKIM) пока выключена (включается переменной MAIL_LOCAL=1) · (этот коммит)
 - 23:56 · Claude · claude/awesome-mccarthy-dlbgor · VDSina открыла порты 465/587 — письма с кодом уходят через ящик Mail.ru. OpenDKIM: указан файл PID (иначе служба не запускалась) · (этот коммит)
 - 23:54 · Claude · claude/awesome-mccarthy-dlbgor · OpenDKIM: указан файл PID (иначе служба не запускалась) · (этот коммит)
 - 23:51 · Claude · claude/awesome-mccarthy-dlbgor · Почта с собственного сервера: Postfix + подпись DKIM для essola.ru, письма с кодом входа от noreply@essola.ru без сторонних сервисов (бесплатно). Заработает, когда VDSina откроет исходящий порт 25 и владелец добавит записи в reg.ru; до тех пор — ящик Mail.ru или Postbox · (этот коммит)

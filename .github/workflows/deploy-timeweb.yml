@@ -99,8 +99,7 @@ jobs:
             [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=$SMTP_HOST"
             [ -n "$YC_SA_KEY" ] && echo "YC_SA_KEY_B64=$(printf '%s' "$YC_SA_KEY" | base64 -w0)"
             # Our own server sends the sign-in letters (Postfix + DKIM, step «Mail» below).
-            echo "MAIL_LOCAL=1"
-            echo "MAIL_FROM=noreply@essola.ru"
+            [ "${{ vars.MAIL_LOCAL }}" = "1" ] && echo "MAIL_LOCAL=1" && echo "MAIL_FROM=noreply@essola.ru"
             true
           } > "$RUNNER_TEMP/essola.env"
           # SSH by key, or by the root password when the hosting gave only that.
@@ -152,7 +151,8 @@ jobs:
           $SSH 'umask 077; cat > /etc/essola.env' < "$RUNNER_TEMP/essola.env"
 
       - name: Mail (Postfix + DKIM for essola.ru, send-only)
-        if: env.SKIP != '1'
+        # Off for now: the letters go through the Mail.ru mailbox. Turn on with the repository variable MAIL_LOCAL=1.
+        if: env.SKIP != '1' && vars.MAIL_LOCAL == '1'
         run: |
           $SSH 'bash -s' <<'EOF'
           set -e
