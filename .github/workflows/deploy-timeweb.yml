@@ -276,3 +276,4 @@ jobs:
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d "{\"mode\":\"describe\",\"device\":\"ci-check2\",\"ingredients\":[$LIST]}" -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 1200
           $SSH 'journalctl -u essola -n 30 --no-pager -o cat | tail -12 | cut -c1-300' || true
+          $SSH 'journalctl -u essola -n 200 --no-pager -o cat | grep -iE "postbox|iam |smtp" | tail -5 | cut -c1-300' || true
