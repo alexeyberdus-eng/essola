@@ -37,15 +37,10 @@ jobs:
         run: |
           printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
           yc config set folder-id "$YC_FOLDER_ID"
-          # Yandex Cloud sometimes drops a call (DeadlineExceeded / Canceled): retry, and create the function only when
-          # it really does not exist — a timeout on «get» must not turn into «create».
-          for i in 1 2 3 4; do
-            OUT=$(yc serverless function get --name essola-scan 2>&1) && break
-            if echo "$OUT" | grep -qi 'not found'; then yc serverless function create --name essola-scan && break; fi
-            [ "$i" = 4 ] && { echo "$OUT"; exit 1; }
-            echo "Yandex Cloud did not answer (try $i), waiting"; sleep 30
-          done
-          yc serverless function allow-unauthenticated-invoke essola-scan || echo "::warning::Make the function public in the console (needs admin role)"
+          # The live function's id (it is in the public address, not a secret). Deploying by id skips the lookup by
+          # name, which Yandex Cloud sometimes stops answering (DeadlineExceeded) while everything else works.
+          FN_ID=d4eikcrvo6v275frt26v
+          yc serverless function allow-unauthenticated-invoke "$FN_ID" || echo "::warning::Make the function public in the console (needs admin role)"
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           # The admin panel reads recipe tables with the same parser as the app.
           npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
@@ -64,7 +59,7 @@ jobs:
           [ -n "$VK_CLIENT_ID" ] && ENVV="$ENVV,VK_CLIENT_ID=$VK_CLIENT_ID"
           [ -n "$ADMIN_TOKEN" ] && ENVV="$ENVV,ADMIN_TOKEN=$ADMIN_TOKEN"
           SA_ID=$(jq -r .service_account_id "$RUNNER_TEMP/sa.json")
-          V="--function-name essola-scan --runtime nodejs18 --entrypoint index.handler --memory 4096m --execution-timeout 60s --source-path scan.zip"
+          V="--function-id $FN_ID --runtime nodejs18 --entrypoint index.handler --memory 4096m --execution-timeout 60s --source-path scan.zip"
           # The service account lets the function call Search API with an IAM token; fall back to a plain version.
           for i in 1 2 3; do
             yc serverless function version create $V --service-account-id "$SA_ID" --environment "$ENVV" >/dev/null \
@@ -72,13 +67,12 @@ jobs:
             [ "$i" = 3 ] && exit 1
             echo "new version failed (try $i), waiting"; sleep 30
           done
-          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
-          echo "Function URL: https://functions.yandexcloud.net/$ID"
+          echo "Function URL: https://functions.yandexcloud.net/$FN_ID"
       - name: Smoke test (AI describe)
         if: env.YC_SA_KEY != '' && env.YC_FOLDER_ID != '' && env.YC_API_KEY != ''
         continue-on-error: true
         run: |
-          ID=$(yc serverless function get --name essola-scan --format json | jq -r .id)
+          ID=d4eikcrvo6v275frt26v
           APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
           curl -s -m 60 -X POST "https://functions.yandexcloud.net/$ID" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","ingredients":["Aqua","Glycerin","Niacinamide","Squalane","Ceramide NP"]}' -w '\nHTTP %{http_code}\n'
