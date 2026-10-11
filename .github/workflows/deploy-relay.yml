@@ -1,0 +1,101 @@
+# «Пересылка к ChatGPT»: a tiny server abroad (VDSina, Netherlands) that passes our main server's AI requests on
+# to OpenAI, which does not answer Russian addresses. It keeps no keys and no data: the OpenAI key travels in each
+# request from our server; the relay only checks our token (X-Relay-Token) and, when known, the main server's IP.
+#  - nginx + a free HTTPS certificate on <ip-with-dashes>.sslip.io;
+#  - checks that OpenAI answers through it.
+# Secrets: RELAY_HOST (IP) and RELAY_SSH_KEY (private key) or RELAY_PASSWORD (root password), OPENAI_API_KEY.
+# Runs when this file or .github/relay.trigger changes.
+name: Пересылка к ChatGPT
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/relay.trigger', '.github/workflows/deploy-relay.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: relay
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELAY_HOST: ${{ secrets.RELAY_HOST }}
+      RELAY_SSH_KEY: ${{ secrets.RELAY_SSH_KEY }}
+      RELAY_PASSWORD: ${{ secrets.RELAY_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+    steps:
+      - name: Secrets and connection
+        run: |
+          if [ -z "$RELAY_HOST" ] || { [ -z "$RELAY_SSH_KEY" ] && [ -z "$RELAY_PASSWORD" ]; } || [ -z "$OPENAI_API_KEY" ]; then
+            echo "::warning::Add RELAY_HOST, RELAY_SSH_KEY (or RELAY_PASSWORD) and OPENAI_API_KEY secrets."
+            echo "SKIP=1" >> "$GITHUB_ENV"; exit 0
+          fi
+          OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          if [ -n "$RELAY_SSH_KEY" ]; then
+            install -m 600 /dev/null "$RUNNER_TEMP/key"; printf '%s\n' "$RELAY_SSH_KEY" > "$RUNNER_TEMP/key"
+            echo "SSH=ssh -i $RUNNER_TEMP/key $OPTS root@$RELAY_HOST" >> "$GITHUB_ENV"
+          else
+            sudo apt-get install -y -qq sshpass >/dev/null
+            echo "SSHPASS=$RELAY_PASSWORD" >> "$GITHUB_ENV"
+            echo "SSH=sshpass -e ssh $OPTS -o PubkeyAuthentication=no root@$RELAY_HOST" >> "$GITHUB_ENV"
+          fi
+          # The token both sides know without another secret: derived from the OpenAI key.
+          echo "RELAY_TOKEN=$(printf 'essola-relay:%s' "$OPENAI_API_KEY" | sha256sum | cut -c1-40)" >> "$GITHUB_ENV"
+          echo "RELAY_NAME=$(echo "$RELAY_HOST" | tr . -).sslip.io" >> "$GITHUB_ENV"
+
+      - name: nginx, HTTPS and the pass-through
+        if: env.SKIP != '1'
+        run: |
+          $SSH "RELAY_TOKEN=$RELAY_TOKEN RELAY_NAME=$RELAY_NAME MAIN_IP=$TIMEWEB_HOST bash -s" <<'EOF'
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v nginx >/dev/null || ! command -v certbot >/dev/null; then
+            apt-get update -qq
+            apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null
+          fi
+          # Only our main server may use it (when its address is known), and only with the token.
+          ALLOW=""
+          [ -n "$MAIN_IP" ] && ALLOW="allow $MAIN_IP; deny all;"
+          cat > /etc/nginx/sites-available/relay <<NGX
+          server {
+            listen 80;
+            server_name $RELAY_NAME;
+            client_max_body_size 12m;
+            location = / { return 204; }
+            location /v1/ {
+              $ALLOW
+              if (\$http_x_relay_token != "$RELAY_TOKEN") { return 403; }
+              proxy_pass https://api.openai.com;
+              proxy_ssl_server_name on;
+              proxy_set_header Host api.openai.com;
+              proxy_set_header X-Relay-Token "";
+              proxy_set_header X-Forwarded-For "";
+              proxy_set_header X-Real-IP "";
+              proxy_read_timeout 120s;
+              proxy_send_timeout 120s;
+            }
+          }
+          NGX
+          ln -sf /etc/nginx/sites-available/relay /etc/nginx/sites-enabled/relay
+          rm -f /etc/nginx/sites-enabled/default
+          # No request bodies in the logs: they carry compositions, nothing personal, but there is no need to keep them.
+          nginx -t && systemctl reload nginx || systemctl restart nginx
+          [ -d "/etc/letsencrypt/live/$RELAY_NAME" ] || certbot --nginx -d "$RELAY_NAME" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+          systemctl reload nginx
+          echo "relay ready"
+          EOF
+
+      - name: Does OpenAI answer through it?
+        if: env.SKIP != '1'
+        run: |
+          echo "Relay address: https://$RELAY_NAME/v1"
+          # From GitHub's runner the IP allow-list blocks us when the main server is known: check from the relay itself.
+          $SSH "curl -s -o /dev/null -w 'OpenAI from the relay: HTTP %{http_code}\n' https://api.openai.com/v1/models -H 'Authorization: Bearer $OPENAI_API_KEY'"
+          $SSH "curl -s -m 60 https://api.openai.com/v1/chat/completions -H 'Authorization: Bearer $OPENAI_API_KEY' -H 'Content-Type: application/json' -d '{\"model\":\"gpt-5.4-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"Ответь одним словом: работает?\"}],\"max_completion_tokens\":300}'" | head -c 600; echo

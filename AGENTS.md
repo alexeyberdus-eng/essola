@@ -79,7 +79,9 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
   `TIMEWEB_HOST` / `TIMEWEB_SSH_KEY` exist. Run it by changing `.github/backup.trigger`.
 - Server logs: change `server/yandex-scan/logs.trigger` and push → workflow «AI scan function logs» prints the recent logs.
 - AI spend: admin panel → «Расходы и статистика».
-- Secrets live only in GitHub → Settings → Secrets: `YC_*`, `EXPO_TOKEN`, `ADMIN_TOKEN`, `VK_CLIENT_ID`, and Apple keys later.
+- Secrets live only in GitHub → Settings → Secrets: `YC_*`, `EXPO_TOKEN`, `ADMIN_TOKEN`, `VK_CLIENT_ID`, `BACKUP_PASSWORD`,
+  `OPENAI_API_KEY`, `GIGACHAT_KEY`, `TIMEWEB_*`, `RELAY_*`, and Apple keys later.
+- Moving off Yandex Cloud (October 2026): plan and steps in `docs/MIGRATION.md`.
   Never put keys in code, chat or files. Never ask the owner to paste them.
 
 ## AI cost rules (keep spend low)

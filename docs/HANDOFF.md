@@ -34,7 +34,10 @@
 - **Переезд с Яндекс Облака (в работе).** 11.10 Яндекс Облако перестало отвечать (ИИ и выкладка функций).
   - Готово: хранение на диске (`DATA_DIR` в `index.js`), обёртка `server.js`, GigaChat как второй ИИ (`AI_PRIMARY`,
     `GIGACHAT_KEY`, `GIGACHAT_SCOPE`), выкладка `.github/workflows/deploy-timeweb.yml` (адрес `<ip-через-дефис>.sslip.io`).
-  - Ждём от владельца: секреты `TIMEWEB_HOST`, `TIMEWEB_SSH_KEY`; `GIGACHAT_KEY` (владелец создал проект в Studio).
+  - Выбрано: ChatGPT (ключ на друге в Канаде) через пересылку VDSina (Нидерланды), основной сервер — Timeweb (Россия).
+    Пошагово — `docs/MIGRATION.md`. Порядок ИИ: OpenAI → GigaChat → Яндекс (`AI_PRIMARY`).
+  - Ждём секреты: `OPENAI_API_KEY`, `RELAY_HOST` + `RELAY_PASSWORD`/`RELAY_SSH_KEY`, `TIMEWEB_HOST` +
+    `TIMEWEB_PASSWORD`/`TIMEWEB_SSH_KEY`; `GIGACHAT_KEY` (проект в Studio создан).
   - После проверки сервера: записать его адрес в `.github/scan-url` → приложение переключится через EAS Update;
     для RuStore — «Выпустить обновление»; APK/AAB тоже читают адрес при сборке.
   - Не перенесено: почта с кодом входа (Yandex Postbox) и веб-поиск (Yandex Search API) — без Яндекса не работают.

@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 20:16 · Claude · claude/awesome-mccarthy-dlbgor · Переезд: ChatGPT как основной ИИ (через пересылку за границей, `OPENAI_API_KEY`), GigaChat и Яндекс — запасные; выкладка «Пересылка к ChatGPT» на VDSina (`deploy-relay.yml`); основной сервер Timeweb можно подключать по паролю root; пошаговая инструкция `docs/MIGRATION.md` · (этот коммит)
 - 19:42 · Claude · claude/awesome-mccarthy-dlbgor · Сборка Android тоже берёт адрес сервера из `.github/scan-url` · (этот коммит)
 - 19:42 · Claude · claude/awesome-mccarthy-dlbgor · Подготовка к переезду с Яндекс Облака: сервер умеет хранить данные на диске (`DATA_DIR`) и работать на своём сервере (`server/yandex-scan/server.js`); второй ИИ — GigaChat (секрет `GIGACHAT_KEY`), подменяет Яндекс при сбое; выкладка «Сервер на Timeweb» (`deploy-timeweb.yml`) — ставит всё сама, переносит данные из резервной копии, включает HTTPS; ждёт секретов `TIMEWEB_HOST` и `TIMEWEB_SSH_KEY`. Адрес сервера для приложения теперь в одном файле `.github/scan-url` · (этот коммит)
 - 19:38 · Claude · claude/awesome-mccarthy-dlbgor · Свежая резервная копия перед переездом на Timeweb (Яндекс Облако сбоит) · (этот коммит)

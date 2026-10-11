@@ -463,7 +463,7 @@ const ADMINS = ['5d94e597ea00166f5be0b0512fa5847f2f44bd49f682d6c8644f6571f434d32
 let lastUsage;
 // ---- Spending: every model call and web search is counted per day and kind of request; each function instance
 // writes its own file (stats/<day>/<instance>.json), the admin panel adds them up. Prices are per 1000 tokens, ₽.
-const PRICE = { lite: 0.2, pro: 0.8, vision: 0.22, search: 0.26, gLite: 0.065, gPro: 0.5, gMax: 0.65 };
+const PRICE = { lite: 0.2, pro: 0.8, vision: 0.22, search: 0.26, gLite: 0.065, gPro: 0.5, gMax: 0.65, oNano: 0.02, oMini: 0.15 };
 const INSTANCE = crypto.randomBytes(5).toString('hex');
 let curMode = 'other';
 const stats = {};
@@ -497,7 +497,7 @@ async function yandexChat(model, messages, maxTokens, extra) {
     headers: { Authorization: `Bearer ${process.env.YC_API_KEY}`, 'OpenAI-Project': process.env.YC_FOLDER_ID, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: `gpt://${process.env.YC_FOLDER_ID}/${model}`, messages, temperature: 0.1, max_tokens: maxTokens, ...extra }),
     // With a second provider configured, a stuck Yandex call gives way to it instead of eating the whole request.
-    ...(process.env.GIGACHAT_KEY ? { signal: AbortSignal.timeout(25000) } : {}),
+    ...(process.env.GIGACHAT_KEY || process.env.OPENAI_API_KEY ? { signal: AbortSignal.timeout(25000) } : {}),
   });
   if (!res.ok) throw new Error(`${model} ${res.status}: ${await res.text()}`);
   const json = await res.json();
@@ -566,24 +566,55 @@ async function gigaChat(model, messages, maxTokens) {
   return json;
 }
 
-/** Which AI answers: AI_PRIMARY (yandex | gigachat), the other one takes over when the first fails. */
+// ---- OpenAI (ChatGPT). OpenAI does not answer Russian addresses, so calls go through our relay abroad
+// (OPENAI_BASE_URL, e.g. https://<relay>/v1), which checks RELAY_TOKEN and passes the request on unchanged.
+const openaiModel = (kind) => (kind === 'lite' ? process.env.OPENAI_LITE || 'gpt-5.4-nano' : process.env.OPENAI_PRO || 'gpt-5.4-mini');
+async function openaiChat(model, messages, maxTokens) {
+  const om = openaiModel(kindOf(model));
+  const base = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const call = (effort) =>
+    fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json', ...(process.env.RELAY_TOKEN ? { 'X-Relay-Token': process.env.RELAY_TOKEN } : {}) },
+      // GPT-5 models think before answering and that thinking counts against the limit: keep it minimal and
+      // leave room for it, or a short answer comes back empty.
+      body: JSON.stringify({ model: om, messages, max_completion_tokens: maxTokens + 1500, ...(effort ? { reasoning_effort: effort } : {}) }),
+      signal: AbortSignal.timeout(40000),
+    });
+  const effort = process.env.OPENAI_REASONING ?? 'minimal';
+  let res = await call(effort);
+  // A model that doesn't know this effort level: ask again without it.
+  if (res.status === 400 && effort) {
+    const t = await res.text();
+    if (!/reasoning/i.test(t)) throw new Error(`openai ${om} 400: ${t.slice(0, 300)}`);
+    res = await call('');
+  }
+  if (!res.ok) throw new Error(`openai ${om} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const json = await res.json();
+  track(/nano/.test(om) ? 'oNano' : 'oMini', Number(json?.usage?.total_tokens) || 0);
+  if (!json?.choices?.[0]?.message?.content) throw new Error(`openai ${om} empty answer (${json?.choices?.[0]?.finish_reason})`);
+  return json;
+}
+
+/** Which AI answers, in order: AI_PRIMARY first (openai | gigachat | yandex), then the others as stand-ins. */
 function providers() {
-  const have = { yandex: !!process.env.YC_API_KEY && !!process.env.YC_FOLDER_ID, gigachat: !!process.env.GIGACHAT_KEY };
-  const first = process.env.AI_PRIMARY === 'gigachat' || !have.yandex ? 'gigachat' : 'yandex';
-  return [first, first === 'yandex' ? 'gigachat' : 'yandex'].filter((p) => have[p]);
+  const have = { openai: !!process.env.OPENAI_API_KEY, gigachat: !!process.env.GIGACHAT_KEY, yandex: !!process.env.YC_API_KEY && !!process.env.YC_FOLDER_ID };
+  const order = ['openai', 'gigachat', 'yandex'];
+  const first = have[process.env.AI_PRIMARY] ? process.env.AI_PRIMARY : order.find((p) => have[p]);
+  return [first, ...order.filter((p) => p !== first)].filter((p) => p && have[p]);
 }
 
 async function chat(model, messages, maxTokens, raw = false, extra = {}) {
   let json, err;
   for (const p of providers()) {
     try {
-      json = p === 'gigachat' ? await gigaChat(model, messages, maxTokens) : await yandexChat(model, messages, maxTokens, extra);
+      json = p === 'openai' ? await openaiChat(model, messages, maxTokens) : p === 'gigachat' ? await gigaChat(model, messages, maxTokens) : await yandexChat(model, messages, maxTokens, extra);
       break;
     } catch (e) {
       err = e;
       console.log('ai provider failed', p, String(e).slice(0, 200));
       // A request Yandex rejects as malformed (400) is retried by the caller without the extra options.
-      if (p === 'yandex' && / 400:/.test(String(e.message)) && Object.keys(extra).length) throw e;
+      if (p === 'yandex' && / 400:/.test(String(e.message)) && Object.keys(extra).length && p === providers().at(-1)) throw e;
     }
   }
   if (!json) throw err || new Error('no_ai_provider');

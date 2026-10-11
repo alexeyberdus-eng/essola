@@ -3,6 +3,7 @@
 #  - copies the code, writes the settings from GitHub secrets, runs it as a systemd service «essola»;
 #  - data lives in /srv/essola/data; the first run (or a commit message with [restore-data]) fills it from the
 #    newest «Резервная копия данных» archive.
+# AI: ChatGPT through the relay (OPENAI_API_KEY + RELAY_HOST), then GigaChat (GIGACHAT_KEY), then Yandex.
 # Needs secrets TIMEWEB_HOST (server IP) and TIMEWEB_SSH_KEY (private key with root access); runs when this file,
 # .github/timeweb.trigger or the server code changes.
 name: Сервер на Timeweb
@@ -28,12 +29,15 @@ jobs:
     env:
       TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
       TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+      TIMEWEB_PASSWORD: ${{ secrets.TIMEWEB_PASSWORD }}
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
       YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
       ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
       VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
       NK_API_KEY: ${{ secrets.NK_API_KEY }}
       GIGACHAT_KEY: ${{ secrets.GIGACHAT_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RELAY_HOST: ${{ secrets.RELAY_HOST }}
       GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
       AI_PRIMARY: ${{ vars.AI_PRIMARY }}
       BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
@@ -41,8 +45,8 @@ jobs:
     steps:
       - name: Server secrets
         run: |
-          if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
-            echo "::warning::Add TIMEWEB_HOST and TIMEWEB_SSH_KEY secrets to deploy to Timeweb."
+          if [ -z "$TIMEWEB_HOST" ] || { [ -z "$TIMEWEB_SSH_KEY" ] && [ -z "$TIMEWEB_PASSWORD" ]; }; then
+            echo "::warning::Add TIMEWEB_HOST and TIMEWEB_SSH_KEY (or TIMEWEB_PASSWORD) secrets to deploy to Timeweb."
             echo "SKIP=1" >> "$GITHUB_ENV"
           fi
 
@@ -75,11 +79,29 @@ jobs:
             [ -n "$NK_API_KEY" ] && echo "NK_API_KEY=$NK_API_KEY"
             [ -n "$GIGACHAT_KEY" ] && echo "GIGACHAT_KEY=$GIGACHAT_KEY"
             echo "GIGACHAT_SCOPE=${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}"
-            echo "AI_PRIMARY=${AI_PRIMARY:-gigachat}"
+            # ChatGPT through the relay abroad (workflow «Пересылка к ChatGPT»), GigaChat and Yandex as stand-ins.
+            if [ -n "$OPENAI_API_KEY" ]; then
+              echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+              if [ -n "$RELAY_HOST" ]; then
+                echo "OPENAI_BASE_URL=https://$(echo "$RELAY_HOST" | tr . -).sslip.io/v1"
+                echo "RELAY_TOKEN=$(printf 'essola-relay:%s' "$OPENAI_API_KEY" | sha256sum | cut -c1-40)"
+              fi
+            fi
+            echo "AI_PRIMARY=${AI_PRIMARY:-openai}"
           } > "$RUNNER_TEMP/essola.env"
-          install -m 600 /dev/null "$RUNNER_TEMP/key"
-          printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
-          echo "SSH=ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 root@$TIMEWEB_HOST" >> "$GITHUB_ENV"
+          # SSH by key, or by the root password when the hosting gave only that.
+          OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          if [ -n "$TIMEWEB_SSH_KEY" ]; then
+            install -m 600 /dev/null "$RUNNER_TEMP/key"
+            printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
+            RSH="ssh -i $RUNNER_TEMP/key $OPTS"
+          else
+            sudo apt-get install -y -qq sshpass >/dev/null
+            echo "SSHPASS=$TIMEWEB_PASSWORD" >> "$GITHUB_ENV"
+            RSH="sshpass -e ssh $OPTS -o PubkeyAuthentication=no"
+          fi
+          echo "RSH=$RSH" >> "$GITHUB_ENV"
+          echo "SSH=$RSH root@$TIMEWEB_HOST" >> "$GITHUB_ENV"
 
       - name: Prepare the server (Node, nginx, certificate tools)
         if: env.SKIP != '1'
@@ -103,11 +125,10 @@ jobs:
         if: env.SKIP != '1'
         run: |
           sudo apt-get install -y -qq rsync >/dev/null 2>&1 || true
-          rsync -az --delete -e "ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new" \
+          rsync -az --delete -e "$RSH" \
             server/yandex-scan/index.js server/yandex-scan/server.js server/yandex-scan/forum-seed.json server/yandex-scan/admin.html \
             server/yandex-scan/admin-csv.js server/yandex-scan/legal.json server/yandex-scan/russian-ca.pem "root@$TIMEWEB_HOST:/srv/essola/app/"
-          scp -i "$RUNNER_TEMP/key" -o StrictHostKeyChecking=accept-new "$RUNNER_TEMP/essola.env" "root@$TIMEWEB_HOST:/etc/essola.env"
-          $SSH 'chmod 600 /etc/essola.env'
+          $SSH 'umask 077; cat > /etc/essola.env' < "$RUNNER_TEMP/essola.env"
 
       - name: Data from the newest backup (first run or [restore-data])
         if: env.SKIP != '1'
@@ -123,7 +144,7 @@ jobs:
           command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null; }
           mkdir data && 7z x -p"$BACKUP_PASSWORD" -odata "$F" >/dev/null
           echo "files: $(find data -type f | wc -l)"; du -sh data
-          rsync -az -e "ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new" data/ "root@$TIMEWEB_HOST:/srv/essola/data/"
+          rsync -az -e "$RSH" data/ "root@$TIMEWEB_HOST:/srv/essola/data/"
           rm -rf data backup
 
       - name: Service, nginx and HTTPS
