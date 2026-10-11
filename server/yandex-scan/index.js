@@ -1145,6 +1145,25 @@ function smtpSend(to, subject, text, html) {
   });
 }
 
+// On our own server there is no function service account: an IAM token for Postbox is made from the same
+// service account key (YC_SA_KEY_B64 = base64 of the key JSON), as `yc` does: a PS256-signed JWT exchanged at IAM.
+let yIam = null;
+async function yandexIam(iam) {
+  if (!DATA_DIR) return iam;
+  if (yIam && yIam.until > Date.now() + 5 * 60e3) return yIam.value;
+  const key = JSON.parse(Buffer.from(process.env.YC_SA_KEY_B64 || '', 'base64').toString('utf8') || '{}');
+  if (!key.private_key) throw new Error('no_sa_key');
+  const b64u = (x) => Buffer.from(typeof x === 'string' ? x : JSON.stringify(x)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const body = `${b64u({ typ: 'JWT', alg: 'PS256', kid: key.id })}.${b64u({ iss: key.service_account_id, aud: 'https://iam.api.cloud.yandex.net/iam/v1/tokens', iat: now, exp: now + 3600 })}`;
+  const sig = crypto.sign('sha256', Buffer.from(body), { key: key.private_key, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: 32 }).toString('base64url');
+  const res = await fetch('https://iam.api.cloud.yandex.net/iam/v1/tokens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jwt: `${body}.${sig}` }), signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`iam ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  yIam = { value: j.iamToken, until: Date.parse(j.expiresAt) || Date.now() + 3600e3 };
+  return yIam.value;
+}
+
 /** The sign-in code by email: an ordinary mailbox (SMTP) when set, otherwise Yandex Cloud Postbox. */
 async function sendCode(email, code, iam) {
   const html = `<div style="font-family:Arial,sans-serif;font-size:16px;color:#15172B"><p>Ваш код для входа в <b>essola lab</b>:</p><p style="font-size:32px;letter-spacing:6px;font-weight:bold;color:#7C66EE">${code}</p><p style="color:#7D8096">Код действует 10 минут. Если вы не запрашивали вход, просто удалите это письмо.</p></div>`;
@@ -1155,9 +1174,10 @@ async function sendCode(email, code, iam) {
     });
     return;
   }
+  const token = await yandexIam(iam);
   const res = await fetch('https://postbox.cloud.yandex.net/v2/email/outbound-emails', {
     method: 'POST',
-    headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
+    headers: { 'X-YaCloud-SubjectToken': token, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       FromEmailAddress: `essola lab <${process.env.MAIL_FROM || 'noreply@essola.ru'}>`,
       Destination: { ToAddresses: [email] },
@@ -1377,7 +1397,8 @@ async function handle(event, context) {
       if (smtpOn()) return reply(200, { email: true });
       const now = Date.now();
       if (!mailReady.at || now - mailReady.at > (mailReady.ok ? 6 * 3600e3 : 5 * 60e3)) {
-        const r = await fetch(`https://postbox.cloud.yandex.net/v2/email/identities/${(process.env.MAIL_FROM || 'noreply@essola.ru').split('@')[1]}`, { headers: { 'X-YaCloud-SubjectToken': iam }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+        const token = await yandexIam(iam).catch((e) => (console.log('postbox iam', String(e).slice(0, 200)), null));
+        const r = token ? await fetch(`https://postbox.cloud.yandex.net/v2/email/identities/${(process.env.MAIL_FROM || 'noreply@essola.ru').split('@')[1]}`, { headers: { 'X-YaCloud-SubjectToken': token }, signal: AbortSignal.timeout(5000) }).catch(() => null) : null;
         const j = r && r.ok ? await r.json().catch(() => ({})) : {};
         mailReady.ok = !!j.VerifiedForSendingStatus;
         mailReady.at = now;

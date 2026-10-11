@@ -32,6 +32,8 @@ jobs:
       TIMEWEB_PASSWORD: ${{ secrets.TIMEWEB_PASSWORD }}
       YC_API_KEY: ${{ secrets.YC_API_KEY }}
       YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      # The service account key: lets the server get Yandex IAM tokens for Postbox (sign-in emails from noreply@essola.ru).
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
       ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
       VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
       NK_API_KEY: ${{ secrets.NK_API_KEY }}
@@ -95,6 +97,7 @@ jobs:
             [ -n "$SMTP_USER" ] && echo "SMTP_USER=$SMTP_USER"
             [ -n "$SMTP_PASS" ] && echo "SMTP_PASS=$SMTP_PASS"
             [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=$SMTP_HOST"
+            [ -n "$YC_SA_KEY" ] && echo "YC_SA_KEY_B64=$(printf '%s' "$YC_SA_KEY" | base64 -w0)"
             true
           } > "$RUNNER_TEMP/essola.env"
           # SSH by key, or by the root password when the hosting gave only that.
@@ -267,6 +270,7 @@ jobs:
           curl -s -m 30 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"catalog","q":"крем","size":2}' | head -c 400; echo
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","device":"ci-check","ingredients":["Aqua","Glycerin","Niacinamide","Panthenol","Phenoxyethanol"]}' -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 900
+          curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"auth.config"}' | sed 's/^/sign-in options: /'; echo
           # A composition the cache hasn't seen (order shuffled), so a model really answers; then who answered.
           LIST=$(printf '"%s"\n' Aqua Glycerin Niacinamide Squalane "Sodium Hyaluronate" Allantoin Panthenol Tocopherol "Centella Asiatica Extract" Phenoxyethanol | shuf | paste -sd, -)
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
