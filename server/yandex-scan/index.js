@@ -87,7 +87,9 @@ function decodeDescribe(text) {
         const hit = Object.values(EFFECT).find(([title]) => v.toLowerCase().startsWith(title.toLowerCase()));
         if (hit) [e, ings] = [hit, v.slice(hit[0].length).replace(/^\s*[:—–=,-]\s*/, '')];
       }
-      ings = String(ings || '').replace(/[).]+$/, '').trim();
+      ings = String(ings || '').replace(/\.+$/, '').trim();
+      // «HYD (глицерин)» leaves a stray «)»; a real «(Aqua)» keeps its own.
+      if ((ings.match(/\)/g) || []).length > (ings.match(/\(/g) || []).length) ings = ings.replace(/\)\s*$/, '').trim();
       if (e && ings && out.effects.length < 4) out.effects.push({ title: e[0], text: `${ings.charAt(0).toUpperCase()}${ings.slice(1)} — ${e[1]}.` });
     } else if (k === 'W') {
       const code = v.split(/[\s,:(—–-]/)[0].toUpperCase();
