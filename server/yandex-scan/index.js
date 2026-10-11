@@ -88,7 +88,7 @@ function decodeDescribe(text) {
         if (hit) [e, ings] = [hit, v.slice(hit[0].length).replace(/^\s*[:—–=,-]\s*/, '')];
       }
       // A doubled code («ANT:BRI:токоферол») keeps only the ingredients.
-      ings = String(ings || '').replace(/^([/,]?\s*[A-Z]{2,5}\s*:\s*)+/, '').replace(/\.+$/, '').trim();
+      ings = String(ings || '').replace(/^([/,]?\s*[A-Z]{2,5}\s*:\s*)+/, '').replace(/\b[A-Z]{2,5}\s*:\s*/g, '').replace(/\.+$/, '').trim();
       // «HYD (глицерин)» leaves a stray «)»; a real «(Aqua)» keeps its own.
       if ((ings.match(/\)/g) || []).length > (ings.match(/\(/g) || []).length) ings = ings.replace(/\)\s*$/, '').trim();
       if (e && ings && out.effects.length < 4) out.effects.push({ title: e[0], text: `${ings.charAt(0).toUpperCase()}${ings.slice(1)} — ${e[1]}.` });
@@ -1085,7 +1085,7 @@ const smtpOn = () => !!(process.env.SMTP_USER && process.env.SMTP_PASS && smtpHo
 // Email sign-in is offered only while the mail server is reachable (hosts often close mail ports on new servers).
 const smtpReach = { ok: false, at: 0 };
 function smtpReachable() {
-  if (smtpReach.at && Date.now() - smtpReach.at < (smtpReach.ok ? 3600e3 : 5 * 60e3)) return Promise.resolve(smtpReach.ok);
+  if (smtpReach.at && Date.now() - smtpReach.at < (smtpReach.ok ? 3600e3 : 60e3)) return Promise.resolve(smtpReach.ok);
   return new Promise((resolve) => {
     const host = smtpHost();
     const done = (ok, why) => {
@@ -1095,7 +1095,7 @@ function smtpReachable() {
       resolve(ok);
     };
     const sock = require('tls').connect({ host, port: Number(process.env.SMTP_PORT) || 465, servername: host });
-    sock.setTimeout(6000, () => done(false, 'timeout'));
+    sock.setTimeout(12000, () => done(false, 'timeout'));
     sock.on('error', (e) => done(false, e.code || String(e)));
     sock.once('data', (d) => done(String(d).startsWith('220')));
   });
@@ -1114,7 +1114,7 @@ function outbound25() {
       sock.destroy();
       resolve(ok);
     };
-    sock.setTimeout(6000, () => done(false, 'timeout'));
+    sock.setTimeout(12000, () => done(false, 'timeout'));
     sock.on('error', (e) => done(false, e.code || String(e)));
     sock.once('data', (d) => done(String(d).startsWith('220')));
   });
