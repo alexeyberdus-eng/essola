@@ -88,7 +88,7 @@ function decodeDescribe(text) {
         if (hit) [e, ings] = [hit, v.slice(hit[0].length).replace(/^\s*[:—–=,-]\s*/, '')];
       }
       // A doubled code («ANT:BRI:токоферол») keeps only the ingredients.
-      ings = String(ings || '').replace(/^([A-Z]{2,5}\s*:\s*)+/, '').replace(/\.+$/, '').trim();
+      ings = String(ings || '').replace(/^([/,]?\s*[A-Z]{2,5}\s*:\s*)+/, '').replace(/\.+$/, '').trim();
       // «HYD (глицерин)» leaves a stray «)»; a real «(Aqua)» keeps its own.
       if ((ings.match(/\)/g) || []).length > (ings.match(/\(/g) || []).length) ings = ings.replace(/\)\s*$/, '').trim();
       if (e && ings && out.effects.length < 4) out.effects.push({ title: e[0], text: `${ings.charAt(0).toUpperCase()}${ings.slice(1)} — ${e[1]}.` });
@@ -1082,6 +1082,24 @@ async function verifyVk(accessToken) {
 const SMTP_HOSTS = { 'mail.ru': 'smtp.mail.ru', 'bk.ru': 'smtp.mail.ru', 'list.ru': 'smtp.mail.ru', 'inbox.ru': 'smtp.mail.ru', 'internet.ru': 'smtp.mail.ru', 'gmail.com': 'smtp.gmail.com', 'yandex.ru': 'smtp.yandex.ru', 'ya.ru': 'smtp.yandex.ru' };
 const smtpHost = () => process.env.SMTP_HOST || SMTP_HOSTS[String(process.env.SMTP_USER || '').split('@')[1]] || '';
 const smtpOn = () => !!(process.env.SMTP_USER && process.env.SMTP_PASS && smtpHost());
+// Email sign-in is offered only while the mail server is reachable (hosts often close mail ports on new servers).
+const smtpReach = { ok: false, at: 0 };
+function smtpReachable() {
+  if (smtpReach.at && Date.now() - smtpReach.at < (smtpReach.ok ? 3600e3 : 5 * 60e3)) return Promise.resolve(smtpReach.ok);
+  return new Promise((resolve) => {
+    const host = smtpHost();
+    const done = (ok, why) => {
+      if (!ok) console.log('smtp not reachable', host, why || '');
+      Object.assign(smtpReach, { ok, at: Date.now() });
+      sock.destroy();
+      resolve(ok);
+    };
+    const sock = require('tls').connect({ host, port: Number(process.env.SMTP_PORT) || 465, servername: host });
+    sock.setTimeout(6000, () => done(false, 'timeout'));
+    sock.on('error', (e) => done(false, e.code || String(e)));
+    sock.once('data', (d) => done(String(d).startsWith('220')));
+  });
+}
 function smtpSend(to, subject, text, html) {
   const host = smtpHost();
   const from = process.env.MAIL_FROM || process.env.SMTP_USER;
@@ -1395,7 +1413,7 @@ async function handle(event, context) {
     }
     if (req.mode === 'auth.config') {
       // Email sign-in is offered once the sender domain is confirmed in Postbox (its DNS records are in place).
-      if (smtpOn()) return reply(200, { email: true });
+      if (smtpOn()) return reply(200, { email: await smtpReachable() });
       const now = Date.now();
       if (!mailReady.at || now - mailReady.at > (mailReady.ok ? 6 * 3600e3 : 5 * 60e3)) {
         const token = await yandexIam(iam).catch((e) => (console.log('postbox iam', String(e).slice(0, 200)), null));
