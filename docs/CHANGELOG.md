@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 19:42 · Claude · claude/awesome-mccarthy-dlbgor · Сборка Android тоже берёт адрес сервера из `.github/scan-url` · (этот коммит)
 - 19:42 · Claude · claude/awesome-mccarthy-dlbgor · Подготовка к переезду с Яндекс Облака: сервер умеет хранить данные на диске (`DATA_DIR`) и работать на своём сервере (`server/yandex-scan/server.js`); второй ИИ — GigaChat (секрет `GIGACHAT_KEY`), подменяет Яндекс при сбое; выкладка «Сервер на Timeweb» (`deploy-timeweb.yml`) — ставит всё сама, переносит данные из резервной копии, включает HTTPS; ждёт секретов `TIMEWEB_HOST` и `TIMEWEB_SSH_KEY`. Адрес сервера для приложения теперь в одном файле `.github/scan-url` · (этот коммит)
 - 19:38 · Claude · claude/awesome-mccarthy-dlbgor · Свежая резервная копия перед переездом на Timeweb (Яндекс Облако сбоит) · (этот коммит)
 - 18:33 · Claude · claude/awesome-mccarthy-dlbgor · Выкладка сервера идёт по номеру функции, без поиска по имени: этот запрос Яндекс Облако не выполняло больше полутора часов · (этот коммит)
