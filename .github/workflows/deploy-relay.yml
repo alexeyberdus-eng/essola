@@ -87,7 +87,9 @@ jobs:
           rm -f /etc/nginx/sites-enabled/default
           # No request bodies in the logs: they carry compositions, nothing personal, but there is no need to keep them.
           nginx -t && systemctl reload nginx || systemctl restart nginx
-          [ -d "/etc/letsencrypt/live/$RELAY_NAME" ] || certbot --nginx -d "$RELAY_NAME" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+          # The config above is rewritten on every run, so HTTPS is put back into it each time: an existing
+          # certificate is kept (no new one is issued), only the 443 block and the redirect are added again.
+          certbot --nginx -d "$RELAY_NAME" --non-interactive --agree-tos --register-unsafely-without-email --redirect --keep-until-expiring
           systemctl reload nginx
           echo "relay ready"
           EOF
