@@ -180,10 +180,13 @@ jobs:
           Canonicalization relaxed/simple
           Socket inet:8891@127.0.0.1
           UserID opendkim
+          PidFile /run/opendkim/opendkim.pid
+          UMask 007
           CONF
           sed -i 's/^ *//' /etc/opendkim.conf
           systemctl enable opendkim postfix >/dev/null 2>&1
-          systemctl restart opendkim postfix
+          systemctl restart opendkim || { journalctl -u opendkim -n 15 --no-pager; exit 1; }
+          systemctl restart postfix
           echo "=== Records for reg.ru (essola.ru → DNS) ==="
           IP=$(curl -s -4 https://ifconfig.me || hostname -I | cut -d" " -f1)
           echo "A     mail                $IP"
