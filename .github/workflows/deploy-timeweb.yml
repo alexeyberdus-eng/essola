@@ -271,6 +271,8 @@ jobs:
           curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
             -d '{"mode":"describe","device":"ci-check","ingredients":["Aqua","Glycerin","Niacinamide","Panthenol","Phenoxyethanol"]}' -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 900
           curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"auth.config"}' | sed 's/^/sign-in options: /'; echo
+          # Mail ports: some hosts close them on new servers.
+          $SSH 'for p in 465 587 25; do timeout 6 bash -c "</dev/tcp/smtp.mail.ru/$p" 2>/dev/null && echo "smtp.mail.ru:$p open" || echo "smtp.mail.ru:$p closed"; done; timeout 8 openssl s_client -quiet -connect smtp.mail.ru:465 </dev/null 2>/dev/null | head -1 | sed "s/^/greeting on 465: /"' || true
           # Mail: one test letter to the sending mailbox itself (nobody else gets it).
           $SSH 'cd /srv/essola/app && set -a && . /etc/essola.env && set +a && [ -n "${SMTP_USER:-}" ] && node -e "require(\"./index.js\")._smtpSend(process.env.SMTP_USER, \"essola: проверка почты\", \"Письмо с сервера essola: отправка работает.\", \"<p>Письмо с сервера essola: отправка работает.</p>\").then(() => console.log(\"smtp test: sent\"), (e) => console.log(\"smtp test failed:\", e.message))" || echo "smtp: not configured"' || true
           # A composition the cache hasn't seen (order shuffled), so a model really answers; then who answered.
