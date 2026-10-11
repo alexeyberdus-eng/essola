@@ -1076,9 +1076,85 @@ async function verifyVk(accessToken) {
   return { id: String(u.user_id), email: u.email || null, name: [u.first_name, u.last_name].filter(Boolean).join(' ') || null };
 }
 
-/** The sign-in code by email, through Yandex Cloud Postbox (the function's service account sends it). */
+// ---- Mail through any ordinary mailbox (SMTP over TLS, port 465): SMTP_USER + SMTP_PASS (an app password),
+// SMTP_HOST when the address isn't Mail.ru / Gmail / Yandex. Used instead of Postbox when set.
+const SMTP_HOSTS = { 'mail.ru': 'smtp.mail.ru', 'bk.ru': 'smtp.mail.ru', 'list.ru': 'smtp.mail.ru', 'inbox.ru': 'smtp.mail.ru', 'internet.ru': 'smtp.mail.ru', 'gmail.com': 'smtp.gmail.com', 'yandex.ru': 'smtp.yandex.ru', 'ya.ru': 'smtp.yandex.ru' };
+const smtpHost = () => process.env.SMTP_HOST || SMTP_HOSTS[String(process.env.SMTP_USER || '').split('@')[1]] || '';
+const smtpOn = () => !!(process.env.SMTP_USER && process.env.SMTP_PASS && smtpHost());
+function smtpSend(to, subject, text, html) {
+  const host = smtpHost();
+  const from = process.env.MAIL_FROM || process.env.SMTP_USER;
+  const b64 = (x) => Buffer.from(String(x), 'utf8').toString('base64');
+  const wrap = (x) => x.replace(/.{1,76}/g, '$&\r\n');
+  const boundary = `essola${crypto.randomBytes(8).toString('hex')}`;
+  const message = [
+    `From: =?UTF-8?B?${b64('essola lab')}?= <${from}>`,
+    `To: <${to}>`,
+    `Subject: =?UTF-8?B?${b64(subject)}?=`,
+    `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
+    `Message-ID: <${crypto.randomBytes(12).toString('hex')}@${from.split('@')[1]}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(text)),
+    `--${boundary}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(html)),
+    `--${boundary}--`,
+  ].join('\r\n');
+  return new Promise((resolve, reject) => {
+    const sock = require('tls').connect({ host, port: Number(process.env.SMTP_PORT) || 465, servername: host });
+    const fail = (e) => {
+      sock.destroy();
+      reject(e instanceof Error ? e : new Error(String(e)));
+    };
+    sock.setTimeout(15000, () => fail('smtp_timeout'));
+    sock.on('error', fail);
+    // The conversation: each step waits for the server's full reply and checks its code.
+    const steps = [
+      [null, '220'],
+      ['EHLO essola', '250'],
+      ['AUTH LOGIN', '334'],
+      [b64(process.env.SMTP_USER), '334'],
+      [b64(process.env.SMTP_PASS), '235'],
+      [`MAIL FROM:<${from}>`, '250'],
+      [`RCPT TO:<${to}>`, '25'],
+      ['DATA', '354'],
+      [`${message.replace(/\r\n\./g, '\r\n..')}\r\n.`, '250'],
+      ['QUIT', '221'],
+    ];
+    let buf = '';
+    let i = 0;
+    const next = () => {
+      if (i >= steps.length) return;
+      const [cmd] = steps[i];
+      if (cmd !== null) sock.write(`${cmd}\r\n`);
+    };
+    sock.on('data', (d) => {
+      buf += d;
+      // A reply is complete when its last line is «NNN text» (no dash after the code).
+      if (!/(^|\r\n)\d{3} [^\r\n]*\r\n$/.test(buf)) return;
+      const code = (buf.match(/(?:^|\r\n)(\d{3}) [^\r\n]*\r\n$/) || [])[1] || '';
+      const want = steps[i][1];
+      if (!code.startsWith(want)) return fail(new Error(`smtp ${i}: ${buf.trim().slice(0, 200)}`));
+      buf = '';
+      i++;
+      if (i === steps.length - 1) resolve(true);
+      if (i >= steps.length) return sock.end();
+      next();
+    });
+    next();
+  });
+}
+
+/** The sign-in code by email: an ordinary mailbox (SMTP) when set, otherwise Yandex Cloud Postbox. */
 async function sendCode(email, code, iam) {
   const html = `<div style="font-family:Arial,sans-serif;font-size:16px;color:#15172B"><p>Ваш код для входа в <b>essola lab</b>:</p><p style="font-size:32px;letter-spacing:6px;font-weight:bold;color:#7C66EE">${code}</p><p style="color:#7D8096">Код действует 10 минут. Если вы не запрашивали вход, просто удалите это письмо.</p></div>`;
+  if (smtpOn()) {
+    await smtpSend(email, `Код входа: ${code}`, `Ваш код для входа в essola lab: ${code}. Код действует 10 минут.`, html).catch((e) => {
+      console.log('smtp', String(e).slice(0, 300));
+      throw new Error('mail_failed');
+    });
+    return;
+  }
   const res = await fetch('https://postbox.cloud.yandex.net/v2/email/outbound-emails', {
     method: 'POST',
     headers: { 'X-YaCloud-SubjectToken': iam, 'Content-Type': 'application/json' },
@@ -1298,6 +1374,7 @@ async function handle(event, context) {
     }
     if (req.mode === 'auth.config') {
       // Email sign-in is offered once the sender domain is confirmed in Postbox (its DNS records are in place).
+      if (smtpOn()) return reply(200, { email: true });
       const now = Date.now();
       if (!mailReady.at || now - mailReady.at > (mailReady.ok ? 6 * 3600e3 : 5 * 60e3)) {
         const r = await fetch(`https://postbox.cloud.yandex.net/v2/email/identities/${(process.env.MAIL_FROM || 'noreply@essola.ru').split('@')[1]}`, { headers: { 'X-YaCloud-SubjectToken': iam }, signal: AbortSignal.timeout(5000) }).catch(() => null);
@@ -2143,4 +2220,5 @@ module.exports._balanceReview = balanceReview;
 
 module.exports._decodeDescribe = decodeDescribe;
 module.exports._decodeCompare = decodeCompare;
+module.exports._smtpSend = smtpSend;
 module.exports._imageOk = imageOk;

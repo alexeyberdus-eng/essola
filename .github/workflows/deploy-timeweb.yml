@@ -37,6 +37,10 @@ jobs:
       NK_API_KEY: ${{ secrets.NK_API_KEY }}
       GIGACHAT_KEY: ${{ secrets.GIGACHAT_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Sign-in codes by email through an ordinary mailbox (Mail.ru etc.): login and an app password.
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
       RELAY_HOST: ${{ secrets.RELAY_HOST }}
       GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
       AI_PRIMARY: ${{ vars.AI_PRIMARY }}
@@ -88,6 +92,10 @@ jobs:
               fi
             fi
             echo "AI_PRIMARY=${AI_PRIMARY:-openai}"
+            [ -n "$SMTP_USER" ] && echo "SMTP_USER=$SMTP_USER"
+            [ -n "$SMTP_PASS" ] && echo "SMTP_PASS=$SMTP_PASS"
+            [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=$SMTP_HOST"
+            true
           } > "$RUNNER_TEMP/essola.env"
           # SSH by key, or by the root password when the hosting gave only that.
           OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"

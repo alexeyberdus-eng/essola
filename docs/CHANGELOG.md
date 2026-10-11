@@ -13,6 +13,7 @@
 
 ## 2026-10-11
 
+- 22:28 · Claude · claude/awesome-mccarthy-dlbgor · Письма с кодом входа — через обычный почтовый ящик (Mail.ru и т. п., секреты `SMTP_USER`, `SMTP_PASS`) вместо Яндекс Postbox; пока секретов нет, вход по почте в приложении просто скрыт · (этот коммит)
 - 22:27 · Claude · claude/awesome-mccarthy-dlbgor · «Выпустить обновление» по команде владельца: RuStore и закрытый тест Google Play переходят на новый сервер (Москва, ChatGPT), новая главная, готовые рецепты, исправления аудита. Действие теперь запускается и файлом `.github/release.trigger`. Выкачено: RuStore, Google Play (тест) · (этот коммит)
 - 22:19 · Claude · claude/awesome-mccarthy-dlbgor · HANDOFF и AGENTS: адреса нового сервера и пересылки, что осталось (почта, VK, RuStore) · (этот коммит)
 - 22:11 · Claude · claude/awesome-mccarthy-dlbgor · Expo Go переключён на новый сервер essola (`https://195-133-57-125.sslip.io`, Москва; ИИ — ChatGPT через пересылку). RuStore пока на Яндексе — до команды владельца. Мелочь: скобки в списке ингредиентов не обрезаются. Выкачено: сервер, Expo Go · (этот коммит)
