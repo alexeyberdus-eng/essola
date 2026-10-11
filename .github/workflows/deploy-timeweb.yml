@@ -108,6 +108,11 @@ jobs:
         run: |
           $SSH 'bash -s' <<'EOF'
           set -e
+          # Never on the owner's dashboard server (it runs Caddy): essola has a server of its own.
+          if systemctl is-active --quiet caddy || [ -f /etc/caddy/Caddyfile ]; then
+            echo "This is the dashboard server (Caddy found): nothing changed. Point TIMEWEB_HOST at the essola server."
+            exit 1
+          fi
           export DEBIAN_FRONTEND=noninteractive
           if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
             curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
