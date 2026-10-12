@@ -41,6 +41,22 @@ export async function mySecret() {
   return s;
 }
 
+let cachedInstall: string | null = null;
+/**
+ * Id of this installation: unlike the profile id it survives signing out, so the daily limits stay with the phone
+ * (signing out and back in no longer starts a fresh count). It carries nothing personal.
+ */
+export async function installId() {
+  if (cachedInstall) return cachedInstall;
+  let id = await readJSON<string | null>('essola.install', null);
+  if (!id) {
+    id = `i${Array.from(Crypto.getRandomBytes(12), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+    await writeJSON('essola.install', id);
+  }
+  cachedInstall = id;
+  return id;
+}
+
 /** Stable anonymous id of this device's profile. */
 export async function myId() {
   if (cachedId) return cachedId;

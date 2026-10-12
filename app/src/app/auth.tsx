@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   at: { fontFamily: fonts.semibold, fontSize: 16, color: colors.violet },
   wrap: { flexGrow: 1, paddingHorizontal: space.gutter + 4, gap: space.xl },
   top: { flexDirection: 'row', justifyContent: 'flex-end' },
-  close: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  close: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F0F6' },
   brand: { alignItems: 'center', gap: 10, marginTop: space.md },
   title: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 31, letterSpacing: -0.9, color: colors.ink, textAlign: 'center' },
   perks: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: colors.honeySoft },

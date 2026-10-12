@@ -1,10 +1,9 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, LAVENDER } from '../theme';
+import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
-import { Press, tap } from './ui';
+import { Press, SOFT, tap } from './ui';
 
 type Option = { key: string; label: string };
 
@@ -49,7 +48,6 @@ export function Dropdown({
   return (
     <>
       <Press haptic={false} onPress={() => { tap(); setOpen(true); }} style={[styles.pill, active && styles.pillOn, style]} accessibilityLabel={`${label}: ${shown}`}>
-        {active && <LinearGradient colors={['#F4F0FF', '#EAE3FF']} style={StyleSheet.absoluteFill} />}
         <Text style={styles.caption} numberOfLines={1}>{label}</Text>
         <View style={styles.row}>
           <Text style={[styles.value, active && { color: colors.violetDeep }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{shown}</Text>
@@ -78,7 +76,6 @@ export function Dropdown({
           </ScrollView>
           {multi && (
             <Press onPress={() => setOpen(false)} style={styles.done}>
-              <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
               <Text style={styles.doneText}>Готово</Text>
             </Press>
           )}
@@ -102,9 +99,10 @@ function Option({ label, on, multi, onPress }: { label: string; on: boolean; mul
 }
 
 const styles = StyleSheet.create({
-  pill: { flex: 1, minWidth: 0, height: 54, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1', overflow: 'hidden' },
-  pillOn: { borderColor: 'rgba(138,116,242,0.45)' },
-  caption: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted },
+  // A soft filled field (no border, no gradient): grey when empty, a light violet tint once something is chosen.
+  pill: { flex: 1, minWidth: 0, height: 54, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 16, backgroundColor: SOFT, overflow: 'hidden' },
+  pillOn: { backgroundColor: '#EEE9FF' },
+  caption: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted, letterSpacing: 0.1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   value: { flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   shade: { flex: 1, backgroundColor: 'rgba(21,23,43,0.28)' },
@@ -113,11 +111,11 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   reset: { fontFamily: fonts.semibold, fontSize: 14, color: colors.violet },
-  opt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#F7F6FC' },
-  optOn: { backgroundColor: '#EFEAFF' },
+  opt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 52, paddingHorizontal: 16, borderRadius: 16, backgroundColor: SOFT },
+  optOn: { backgroundColor: '#EEE9FF' },
   optText: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
   box: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: '#C9C4E0', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  boxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  done: { height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 14 },
+  boxOn: { backgroundColor: colors.violet, borderColor: colors.violet },
+  done: { height: 52, borderRadius: 99, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 14, backgroundColor: colors.ink },
   doneText: { fontFamily: fonts.semibold, fontSize: 16, color: '#fff' },
 });

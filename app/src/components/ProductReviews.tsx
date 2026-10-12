@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   time: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   text: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2 },
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, backgroundColor: '#FBFAFE' },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, backgroundColor: '#F1F0F6' },
   mineCard: { borderTopWidth: 0, paddingTop: 12, padding: 12, borderRadius: 16, backgroundColor: '#F6F3FF' },
   edit: { fontFamily: fonts.semibold, fontSize: 13, color: colors.violet, marginTop: 4 },
   formBox: { gap: 10 },

@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   composer: { marginTop: 14, padding: 16, borderRadius: 22, backgroundColor: '#fff', borderWidth: 1, borderColor: '#EAE6F7', gap: 10 },
   compHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   compTitle: { fontFamily: fonts.display, fontSize: 19, color: colors.ink },
-  input: { minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#FBFAFE' },
+  input: { minHeight: 46, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#F1F0F6' },
   area: { minHeight: 110, textAlignVertical: 'top' },
   error: { fontFamily: fonts.medium, fontSize: 13, color: colors.bad },
 });

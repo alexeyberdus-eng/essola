@@ -6,6 +6,9 @@ import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, StyleProp
 import { colors, fonts, glowShadow, LAVENDER, radius, shadow, STRIP, type } from '../theme';
 import { Icon, IconName } from './Icon';
 
+/** The soft filled surface of secondary controls (chips, icon buttons, selects). */
+export const SOFT = '#F1F0F6';
+
 export function T({ v = 'body', style, ...rest }: TextProps & { v?: keyof typeof type }) {
   return <Text {...rest} style={[type[v], style]} />;
 }
@@ -68,12 +71,13 @@ export function Press({
 }
 
 type ButtonVariant = 'honey' | 'dark' | 'outline' | 'brass';
-// 'honey' is the primary action: dark olive with a brass edge (name kept for existing screens).
-const BTN: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
-  honey: { bg: colors.accent, fg: colors.onDark, border: 'rgba(255,255,255,0.35)' },
-  dark: { bg: colors.accent, fg: colors.onDark },
-  brass: { bg: colors.brass, fg: colors.olive },
-  outline: { bg: colors.card, fg: colors.ink, border: '#DCD8EE' },
+// Flat, solid and fully rounded (2026 look): the primary action is ink, like the «lab» plate in the logo;
+// 'brass' is the violet accent; 'outline' is a soft filled secondary (no border). Names kept for existing screens.
+const BTN: Record<ButtonVariant, { bg: string; fg: string }> = {
+  honey: { bg: colors.ink, fg: '#FFFFFF' },
+  dark: { bg: colors.ink, fg: '#FFFFFF' },
+  brass: { bg: colors.violet, fg: '#FFFFFF' },
+  outline: { bg: SOFT, fg: colors.ink },
 };
 
 export function Button({
@@ -100,19 +104,15 @@ export function Button({
     <Press
       onPress={onPress}
       disabled={disabled || loading}
-      style={[s.btn, { backgroundColor: c.bg }, c.border ? { borderWidth: 1, borderColor: c.border } : null, variant !== 'outline' && glowShadow, variant === 'outline' && shadow, style]}
+      style={[s.btn, { backgroundColor: c.bg }, variant !== 'outline' && s.btnLift, style]}
     >
-      {(variant === 'honey' || variant === 'dark') && (
-        <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, s.btnFill]} />
-      )}
-      {variant === 'brass' && <LinearGradient colors={[colors.brassLight, colors.brassDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, s.btnFill]} />}
       {loading ? (
         <ActivityIndicator color={c.fg} />
       ) : (
         <View style={s.btnContent}>
-          {icon && <Icon name={icon} size={18} color={c.fg} strokeWidth={1.8} />}
+          {icon && <Icon name={icon} size={18} color={c.fg} strokeWidth={2} />}
           <Text style={[s.btnText, { color: c.fg }]}>{label}</Text>
-          {iconRight && <Icon name={iconRight} size={18} color={c.fg} strokeWidth={1.8} />}
+          {iconRight && <Icon name={iconRight} size={18} color={c.fg} strokeWidth={2} />}
         </View>
       )}
     </Press>
@@ -245,13 +245,14 @@ export function LinkText({ label, onPress }: { label: string; onPress: () => voi
 
 const s = StyleSheet.create({
   btnContent: { flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1 },
-  btnFill: { borderRadius: 18 },
-  btn: { height: 54, borderRadius: 18, overflow: 'hidden', paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  btnText: { fontFamily: fonts.semibold, fontSize: 15 },
-  iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: '#E4E1F1', backgroundColor: colors.card, ...shadow, alignItems: 'center', justifyContent: 'center' },
-  seg: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
-  segSm: { height: 30, paddingHorizontal: 12, borderRadius: 99 },
-  segOn: { backgroundColor: colors.olive, borderColor: colors.olive },
+  btn: { height: 52, borderRadius: 99, overflow: 'hidden', paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  // A soft, ink-tinted lift instead of a coloured glow.
+  btnLift: { shadowColor: '#15172B', shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
+  btnText: { fontFamily: fonts.semibold, fontSize: 15, letterSpacing: -0.1 },
+  iconBtn: { width: 44, height: 44, borderRadius: 99, backgroundColor: SOFT, alignItems: 'center', justifyContent: 'center' },
+  seg: { height: 36, paddingHorizontal: 15, borderRadius: 99, backgroundColor: SOFT, justifyContent: 'center' },
+  segSm: { height: 32, paddingHorizontal: 12, borderRadius: 99 },
+  segOn: { backgroundColor: colors.ink },
   segText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink2 },
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start' },
   tagText: { fontFamily: fonts.medium, fontSize: 11.5 },

@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginTop: 18, marginBottom: 8 },
   pickers: { flexDirection: 'row', gap: 6, marginTop: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
+  chip: { height: 36, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#F1F0F6', justifyContent: 'center' },
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipPick: { backgroundColor: colors.violet, borderColor: colors.violet },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },

@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AskTech } from '../../components/AskTech';
 import { Icon } from '../../components/Icon';
 import { ProductArt } from '../../components/ProductArt';
 import { RecipeCard } from '../../components/RecipeCard';
@@ -97,6 +98,7 @@ export default function ProductScreen() {
             <Text style={styles.inciText}>{site.inci}</Text>
           </View>
         )}
+        {!!site.inci && <AskTech title={p.title} items={site.inci.split(/,\s*/).filter(Boolean)} />}
         {!!site.site && (
           <Press haptic={false} onPress={() => Linking.openURL(site.site!).catch(() => {})} style={styles.more}>
             <Text style={styles.moreText}>Подробнее на essola.ru: происхождение, протоколы, формулы</Text>

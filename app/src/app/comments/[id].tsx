@@ -204,6 +204,6 @@ const styles = StyleSheet.create({
   replying: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surf, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   replyingText: { fontFamily: fonts.medium, fontSize: 12.5, color: colors.ink2 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  input: { flex: 1, minHeight: 40, maxHeight: 110, borderRadius: 20, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink },
+  input: { flex: 1, minHeight: 40, maxHeight: 110, borderRadius: 20, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontFamily: fonts.regular, fontSize: 14.5, color: colors.ink, backgroundColor: '#F1F0F6' },
   post: { fontFamily: fonts.semibold, fontSize: 14, color: colors.honeyText },
 });

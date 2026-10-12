@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
 import { TechnologistOpinion } from '../../components/Summary';
+import { AskTech } from '../../components/AskTech';
 import { aiEnabled, catalogSimilar, SimilarItem, useAiSummary } from '../../lib/ai';
 import { signature } from '../../lib/signature';
 import { ProductReviews } from '../../components/ProductReviews';
@@ -292,6 +293,7 @@ export default function AnalysisScreen() {
         )}
 
         {op && <TechnologistOpinion s={summary} op={op} />}
+        {!special && <AskTech title={named ?? ''} items={items.map(euName)} />}
 
         {!!scan.url && (
           <Press onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={styles.buy} accessibilityLabel="Купить">
@@ -601,7 +603,7 @@ const styles = StyleSheet.create({
   mono: { fontFamily: fonts.monoMedium, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted },
   anTitle: { fontFamily: fonts.semibold, fontSize: 14.5, color: colors.ink, marginTop: 2 },
   anSub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
-  go: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', alignItems: 'center', justifyContent: 'center' },
+  go: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F0F6', alignItems: 'center', justifyContent: 'center' },
   store: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 38, borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
   storeText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.ink2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },

@@ -285,7 +285,7 @@ function IngredientCard({ ing }: { ing: Ingredient }) {
 const styles = StyleSheet.create({
   top: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 12 },
   h1: { fontFamily: fonts.display, fontSize: 30, letterSpacing: -1.1, color: colors.ink },
-  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', padding: 4, marginTop: 4 },
+  seg: { flexDirection: 'row', height: 44, borderRadius: 15, backgroundColor: '#F1F0F6', padding: 4, marginTop: 4 },
   knob: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 12, backgroundColor: colors.cardSolid, ...shadow },
   segItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   segItemOn: { backgroundColor: colors.accent },

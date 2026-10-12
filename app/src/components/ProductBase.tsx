@@ -1,7 +1,5 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Hero } from './Hero';
-import { SOFT } from './SoftHero';
 import { router } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -248,11 +246,10 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
       <Hero kicker="База средств essola" title="370 000 средств с разбором состава" text="Кремы, сыворотки, шампуни, макияж и парфюм — с оценкой состава и подбором под вашу анкету." tone="sky" />
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         <Press onPress={() => { tap(); router.push('/compare' as never); }} style={[styles.matchBtn, styles.compareBtn]} accessibilityLabel="Сравнить два средства">
-          <Icon name="swap" size={17} color={colors.violetDeep} />
-          <Text style={[styles.matchText, { color: colors.violetDeep }]}>Сравнить{'\n'}два средства</Text>
+          <Icon name="swap" size={17} color={colors.ink} />
+          <Text style={[styles.matchText, { color: colors.ink }]}>Сравнить{'\n'}два средства</Text>
         </Press>
         <Press onPress={() => { tap(); router.push('/match' as never); }} style={styles.matchBtn} accessibilityLabel="Подбор средств">
-          <LinearGradient colors={SOFT.button} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <Icon name="spark" size={17} color="#fff" />
           <Text style={styles.matchText}>Подбор под{'\n'}мои цели</Text>
         </Press>
@@ -416,14 +413,14 @@ export function ProductBase({ toggle }: { toggle: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  matchBtn: { flex: 1, height: 58, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 10 },
-  compareBtn: { backgroundColor: '#EEE9FF', borderWidth: 1, borderColor: '#DDD5FB' },
+  matchBtn: { flex: 1, height: 58, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 10 },
+  compareBtn: { backgroundColor: '#F1F0F6' },
   matchText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: '#fff' },
   noScore: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#F1F2F7', alignItems: 'center', justifyContent: 'center' },
   noScoreText: { fontFamily: fonts.semibold, fontSize: 16, color: colors.muted },
-  search: { marginTop: 14, height: 50, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  search: { marginTop: 14, height: 50, borderRadius: 99, backgroundColor: '#F1F0F6', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
-  chip: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', justifyContent: 'center' },
+  chip: { height: 34, paddingHorizontal: 14, borderRadius: 99, backgroundColor: '#F1F0F6', justifyContent: 'center' },
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.medium, fontSize: 13.5, color: colors.ink2 },
   chipTextOn: { color: colors.onDark, fontFamily: fonts.semibold },

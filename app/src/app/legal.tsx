@@ -47,7 +47,7 @@ export default function Legal() {
 }
 
 const styles = StyleSheet.create({
-  seg: { flexDirection: 'row', padding: 4, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1', gap: 4 },
+  seg: { flexDirection: 'row', padding: 4, borderRadius: 16, backgroundColor: '#F1F0F6', gap: 4 },
   segItem: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   segOn: { backgroundColor: colors.accent },
   segText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.muted },

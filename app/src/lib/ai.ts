@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getSession } from './cloud';
 import { usageByTitle, type Summary } from './effects';
-import { myId, mySecret } from './social';
+import { installId, myId, mySecret } from './social';
 import { readJSON, writeJSON } from './storage';
 
 // Our Yandex Cloud function (server/yandex-scan). Without it the app uses its local engines.
@@ -15,7 +15,7 @@ export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
   const id = await myId();
-  const who = { session: (await getSession()) ?? undefined, device: id, id, secret: await mySecret() };
+  const who = { session: (await getSession()) ?? undefined, device: id, id, secret: await mySecret(), inst: await installId() };
   // A photo read by the model can take ~20 s; past a minute the screen stops waiting and says so.
   const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }), signal: AbortSignal.timeout(60000) });
   if (res.status === 429) throw new Error('LIMIT');
@@ -139,6 +139,11 @@ export const SHOP_LINK = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:letu\.ru|goldapple
 /** Technologist's explanation of how two products differ (cached for everyone per pair). */
 export async function aiCompare(a: { title: string; items: string[] }, b: { title: string; items: string[] }, tier: 'pro' | 'lite' = 'pro'): Promise<{ text: string }> {
   return call({ mode: 'compare', a, b, tier });
+}
+
+/** «Спросить технолога» in a product card: a short answer, cached on the server for everyone per composition and question. */
+export async function aiAsk(title: string, items: string[], q: string): Promise<{ text: string }> {
+  return call({ mode: 'ask', title, items: items.slice(0, 35), q });
 }
 
 export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {

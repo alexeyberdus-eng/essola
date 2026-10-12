@@ -1,6 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { onBaseIngredient } from '../../lib/baseIngredient';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ProductBase } from '../../components/ProductBase';
 import { detailOf } from '../../data/shop-details';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,7 +11,7 @@ import { Icon } from '../../components/Icon';
 import { Brand, FadeIn, Glow } from '../../components/silk';
 import { Press, Seg, tap } from '../../components/ui';
 import { SHOP_CATEGORIES, SHOP_ITEMS, ShopItem } from '../../data/shop';
-import { colors, fonts, LAVENDER, shadow, space, TAB_SPACE } from '../../theme';
+import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
 type Cat = 'all' | (typeof SHOP_CATEGORIES)[number];
 
@@ -105,7 +104,6 @@ function ProductCard({ p }: { p: ShopItem }) {
       </Text>
       <View style={{ flex: 1 }} />
       <Press onPress={go} style={styles.open} accessibilityLabel={`Открыть ${p.title}`}>
-        <LinearGradient colors={LAVENDER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <Text style={styles.openText}>Открыть</Text>
       </Press>
     </Press>
@@ -113,12 +111,12 @@ function ProductCard({ p }: { p: ShopItem }) {
 }
 
 const styles = StyleSheet.create({
-  toggle: { flexDirection: 'row', marginTop: 14, padding: 4, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1' },
-  tg: { flex: 1, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  tgOn: { backgroundColor: colors.accent },
+  toggle: { flexDirection: 'row', marginTop: 14, padding: 4, borderRadius: 99, backgroundColor: '#F1F0F6' },
+  tg: { flex: 1, height: 40, borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  tgOn: { backgroundColor: '#FFFFFF', shadowColor: '#5B47C9', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
   tgText: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted },
-  tgTextOn: { fontFamily: fonts.semibold, color: '#fff' },
-  search: { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E1F1', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  tgTextOn: { fontFamily: fonts.semibold, color: colors.ink },
+  search: { marginTop: 14, height: 48, borderRadius: 99, backgroundColor: '#F1F0F6', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   input: { flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   card: { flex: 1, height: 334, borderRadius: 20, backgroundColor: '#fff', padding: 10, borderWidth: 1, borderColor: colors.line, ...shadow },
   art: { height: 110, borderRadius: 14, overflow: 'hidden' },
@@ -126,7 +124,7 @@ const styles = StyleSheet.create({
   cat: { fontFamily: fonts.semibold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.violet, marginTop: 10 },
   title: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 18, color: colors.ink, marginTop: 3, minHeight: 36 },
   desc: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 4, minHeight: 64 },
-  open: { height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 10 },
+  open: { height: 40, borderRadius: 99, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 10 },
   openText: { fontFamily: fonts.semibold, fontSize: 14, color: '#fff' },
   empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 40 },
 });

@@ -284,6 +284,6 @@ const styles = StyleSheet.create({
   barRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   toChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: colors.tint },
   toText: { fontFamily: fonts.semibold, fontSize: 12.5, color: colors.violet },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#FBFAFE' },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, backgroundColor: '#F1F0F6' },
   send: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
 });

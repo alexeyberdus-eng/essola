@@ -295,7 +295,10 @@ export function Brand({ size = 31, tagline = true, light }: { size?: number; tag
             </Animated.View>
           </MaskedView>
         )}
-        <Text style={[t, { fontFamily: fonts.regular, color: light ? 'rgba(255,255,255,0.7)' : '#A79BE0' }]}>lab</Text>
+        {/* «lab» in the same letters and size, white on a dark plate. */}
+        <View style={{ backgroundColor: light ? '#FFFFFF' : colors.ink, borderRadius: size * 0.26, paddingHorizontal: size * 0.2, marginBottom: size * 0.04, alignSelf: 'flex-end' }}>
+          <Text style={[t, { color: light ? colors.ink : '#FFFFFF', lineHeight: size * 1.12 }]}>lab</Text>
+        </View>
       </View>
       {tagline && <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: light ? 'rgba(255,255,255,0.7)' : colors.muted, marginTop: 2 }}>домашняя лаборатория косметики</Text>}
     </View>
