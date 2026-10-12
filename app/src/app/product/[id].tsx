@@ -2,7 +2,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AskTech } from '../../components/AskTech';
 import { Icon } from '../../components/Icon';
 import { ProductArt } from '../../components/ProductArt';
 import { RecipeCard } from '../../components/RecipeCard';
@@ -53,7 +52,6 @@ export default function ProductScreen() {
         <Text style={styles.title}>{p.title}</Text>
         <Text style={styles.desc}>{d?.lead || site.about || p.desc}</Text>
         {!!d?.lead && !!site.about && site.about !== d.lead && <Text style={[styles.desc, { marginTop: 8 }]}>{site.about}</Text>}
-        <AskTech title={p.title} items={(site.inci || p.title).split(/,\s*/).filter(Boolean)} />
 
         {!!d && (
           <>

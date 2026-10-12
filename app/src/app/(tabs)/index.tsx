@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { IconName } from '../../components/Icon';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,15 +20,15 @@ import { colors, fonts, shadow, space, TAB_SPACE } from '../../theme';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 
-// Six quick ways in (the scanner, the base and the builder also live in the tab bar): one compact row,
-// each tile in its own soft pastel with the icon in a deeper shade of the same colour. Icon + one word.
-const QUICK: { title: string; icon: IconName; href: string; bg: [string, string]; fg: string }[] = [
-  { title: 'Сканер', icon: 'scan', href: '/scanner', bg: ['#EDE7FF', '#DCD2FF'], fg: '#6A4FE0' },
-  { title: 'Подбор', icon: 'spark', href: '/match', bg: ['#FFE9F1', '#FFD3E3'], fg: '#D2457E' },
-  { title: 'Сравнить', icon: 'swap', href: '/compare', bg: ['#E3F1FF', '#CDE3FF'], fg: '#3A78D6' },
-  { title: 'Знания', icon: 'book', href: '/knowledge', bg: ['#FFF3DC', '#FFE6B8'], fg: '#C98418' },
-  { title: 'Форум', icon: 'comment', href: '/forum', bg: ['#DFF7EC', '#C7EFDD'], fg: '#2E9F6E' },
-  { title: 'Club', icon: 'heart', href: '/club', bg: ['#FFE8E1', '#FFD5C8'], fg: '#E0663F' },
+// Six quick ways in (the scanner, the base and the builder also live in the tab bar): three to a row,
+// frosted translucent tiles over the soft background glow, a thin ink icon and one word. No colour fills.
+const QUICK: { title: string; icon: IconName; href: string }[] = [
+  { title: 'Сканер', icon: 'scan', href: '/scanner' },
+  { title: 'Подбор', icon: 'spark', href: '/match' },
+  { title: 'Сравнить', icon: 'swap', href: '/compare' },
+  { title: 'Знания', icon: 'book', href: '/knowledge' },
+  { title: 'Форум', icon: 'comment', href: '/forum' },
+  { title: 'Club', icon: 'heart', href: '/club' },
 ];
 
 type Sort = 'for-you' | 'new' | 'hot' | 'easy' | 'saved';
@@ -107,13 +106,15 @@ export default function FeedScreen() {
       </View>
       <Stories />
       <View style={styles.quick}>
-        {QUICK.map((a) => (
-          <Press key={a.title} haptic={false} onPress={() => { tap(); router.push(a.href as never); }} style={styles.quickItem} accessibilityLabel={a.title}>
-            <LinearGradient colors={a.bg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickIcon}>
-              <Icon name={a.icon} size={20} color={a.fg} strokeWidth={2} />
-            </LinearGradient>
-            <Text style={styles.quickText} numberOfLines={1}>{a.title}</Text>
-          </Press>
+        {[QUICK.slice(0, 3), QUICK.slice(3)].map((row, r) => (
+          <View key={r} style={styles.quickRow}>
+            {row.map((a) => (
+              <Press key={a.title} haptic={false} onPress={() => { tap(); router.push(a.href as never); }} style={styles.quickItem} accessibilityLabel={a.title}>
+                <Icon name={a.icon} size={24} color={colors.ink} strokeWidth={1.6} />
+                <Text style={styles.quickText} numberOfLines={1}>{a.title}</Text>
+              </Press>
+            ))}
+          </View>
         ))}
       </View>
 
@@ -215,10 +216,24 @@ const styles = StyleSheet.create({
   badgeText: { fontFamily: fonts.semibold, fontSize: 10, color: '#fff' },
   add: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   // 3 × 2 grid of small tiles: a soft violet square with the icon, one word underneath.
-  quick: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
-  quickItem: { width: 56, alignItems: 'center', gap: 6 },
-  quickIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  quickText: { fontFamily: fonts.medium, fontSize: 11, color: colors.ink2, letterSpacing: -0.1 },
+  quick: { gap: 10, marginTop: 18 },
+  quickRow: { flexDirection: 'row', gap: 10 },
+  quickItem: {
+    flex: 1,
+    height: 92,
+    borderRadius: 24,
+    padding: 14,
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.95)',
+    shadowColor: '#5B47C9',
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 1,
+  },
+  quickText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink, letterSpacing: -0.2 },
   section: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.6, color: colors.ink, marginTop: 24 },
   modes: { flexDirection: 'row', gap: 6, padding: 4, borderRadius: 16, backgroundColor: '#F1F0F6', marginTop: 14 },
   mode: { flex: 1, height: 56, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },

@@ -141,11 +141,6 @@ export async function aiCompare(a: { title: string; items: string[] }, b: { titl
   return call({ mode: 'compare', a, b, tier });
 }
 
-/** «Спросить технолога» in a product card: a short answer, cached on the server for everyone per composition and question. */
-export async function aiAsk(title: string, items: string[], q: string): Promise<{ text: string }> {
-  return call({ mode: 'ask', title, items: items.slice(0, 35), q });
-}
-
 export async function productByName(name: string, brand?: string, web = false): Promise<{ item?: CatalogItem; ingredients?: string[]; limited?: boolean }> {
   return call({ mode: 'byname', name, brand, web });
 }

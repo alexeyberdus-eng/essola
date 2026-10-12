@@ -110,8 +110,6 @@ function decodeDescribe(text) {
   return out;
 }
 const COMPARE = `Ты косметолог-технолог. Сравни два средства по названию и составу. Сначала по названиям пойми, для чего каждое и для какой зоны (лицо, тело, волосы, руки, губы, глаза) — сравнивай с учётом этого: если назначение разное, так и скажи. Ответ — 3–4 коротких предложения простым языком, без списков и markdown: главное различие по действию (ключевые активы), кому какое подходит и вывод. Называй их только «средство А» и «средство Б» — названия не повторяй, они уже на экране. Не выдумывай того, чего нет в составе.`;
-// A question about one product from its card: the light model, a short plain answer.
-const ASK = `Ты косметолог-технолог. Ответь на вопрос о средстве по его названию и составу (по убыванию доли). 2–3 коротких предложения простым языком, без списков, markdown и вступлений. Опирайся только на состав; если по составу ответить нельзя, честно так и скажи. Не ставь диагнозов, при проблемах кожи советуй дерматолога. Если вопрос не о косметике, ответь: «Я отвечаю только о средстве и его составе».`;
 // «Технолог обычный»: the light model answers in codes, the server writes the comparison from fixed phrases.
 const COMPARE_LITE = `Ты косметолог-технолог. Сравни средство А и средство Б по названию и составу (по убыванию доли). Отвечай строго строками-кодами, без пояснений и markdown:
 Z:зона А,зона Б (коды FACE лицо, EYE вокруг глаз, BODY тело, HAND руки, LIP губы, HAIR волосы, SCALP кожа головы)
@@ -2188,26 +2186,6 @@ async function handle(event, context) {
         );
         const o = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
         if (o.text) await cachePut(ck, iam, o, true);
-        return o;
-      });
-      if (!out) return reply(429, { error: 'limit' });
-      return reply(200, { ...out, _usage: lastUsage });
-    }
-    if (req.mode === 'ask') {
-      // «Спросить технолога» in a product card. The same question about the same composition is answered once
-      // for everyone; the suggested questions in the app are worded the same, so most of them hit the cache.
-      const items = (Array.isArray(req.items) ? req.items : []).slice(0, 35).map((i) => clean(i, 60)).filter(Boolean);
-      const q = clean(req.q, 200).replace(/\s+/g, ' ').trim();
-      if (!items.length || q.length < 3) return reply(400, { error: 'empty' });
-      const title = clean(req.title, 160);
-      const ak = `ask1/${sha(`${items.join(',')}|${q.toLowerCase().replace(/[?!.\s]+$/, '')}`)}.json`;
-      const hit = await cacheGet(ak, iam);
-      if (hit?.text) return reply(200, hit);
-      const out = await shared(ak, async () => {
-        if (!(await allow('ask', 10, 30))) return null;
-        const text = await chat(textModel, [{ role: 'system', content: ASK }, { role: 'user', content: `Средство: ${title || 'без названия'}\nСостав: ${items.join(', ')}\nВопрос: ${q}` }], 160, true);
-        const o = { text: String(text).replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim() };
-        if (o.text) await cachePut(ak, iam, o, true);
         return o;
       });
       if (!out) return reply(429, { error: 'limit' });

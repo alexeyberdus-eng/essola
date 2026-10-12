@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../components/Icon';
 import { DarkBlock, Glass, RollingNumber, Ring } from '../../components/lab';
 import { TechnologistOpinion } from '../../components/Summary';
-import { AskTech } from '../../components/AskTech';
 import { aiEnabled, catalogSimilar, SimilarItem, useAiSummary } from '../../lib/ai';
 import { signature } from '../../lib/signature';
 import { ProductReviews } from '../../components/ProductReviews';
@@ -234,7 +233,6 @@ export default function AnalysisScreen() {
               </View>
             ))}
           </View>
-          {!special && <AskTech title={named ?? ''} items={items.map(euName)} />}
         </FadeIn>
 
         {me ? (
