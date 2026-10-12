@@ -2198,7 +2198,7 @@ async function handle(event, context) {
       // for everyone; the suggested questions in the app are worded the same, so most of them hit the cache.
       const items = (Array.isArray(req.items) ? req.items : []).slice(0, 35).map((i) => clean(i, 60)).filter(Boolean);
       const q = clean(req.q, 200).replace(/\s+/g, ' ').trim();
-      if (items.length < 2 || q.length < 3) return reply(400, { error: 'empty' });
+      if (!items.length || q.length < 3) return reply(400, { error: 'empty' });
       const title = clean(req.title, 160);
       const ak = `ask1/${sha(`${items.join(',')}|${q.toLowerCase().replace(/[?!.\s]+$/, '')}`)}.json`;
       const hit = await cacheGet(ak, iam);

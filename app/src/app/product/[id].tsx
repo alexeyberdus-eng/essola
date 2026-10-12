@@ -53,6 +53,7 @@ export default function ProductScreen() {
         <Text style={styles.title}>{p.title}</Text>
         <Text style={styles.desc}>{d?.lead || site.about || p.desc}</Text>
         {!!d?.lead && !!site.about && site.about !== d.lead && <Text style={[styles.desc, { marginTop: 8 }]}>{site.about}</Text>}
+        <AskTech title={p.title} items={(site.inci || p.title).split(/,\s*/).filter(Boolean)} />
 
         {!!d && (
           <>
@@ -98,7 +99,6 @@ export default function ProductScreen() {
             <Text style={styles.inciText}>{site.inci}</Text>
           </View>
         )}
-        {!!site.inci && <AskTech title={p.title} items={site.inci.split(/,\s*/).filter(Boolean)} />}
         {!!site.site && (
           <Press haptic={false} onPress={() => Linking.openURL(site.site!).catch(() => {})} style={styles.more}>
             <Text style={styles.moreText}>Подробнее на essola.ru: происхождение, протоколы, формулы</Text>

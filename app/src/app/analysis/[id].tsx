@@ -234,6 +234,7 @@ export default function AnalysisScreen() {
               </View>
             ))}
           </View>
+          {!special && <AskTech title={named ?? ''} items={items.map(euName)} />}
         </FadeIn>
 
         {me ? (
@@ -293,7 +294,6 @@ export default function AnalysisScreen() {
         )}
 
         {op && <TechnologistOpinion s={summary} op={op} />}
-        {!special && <AskTech title={named ?? ''} items={items.map(euName)} />}
 
         {!!scan.url && (
           <Press onPress={() => Linking.openURL(scan.url!).catch(() => {})} style={styles.buy} accessibilityLabel="Купить">
