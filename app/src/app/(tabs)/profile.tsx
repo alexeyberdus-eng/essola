@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useIsAdmin } from '../../lib/admin';
@@ -239,6 +240,13 @@ function AccountLinks({ signedIn, onDeleted }: { signedIn: boolean; onDeleted: (
           <Text style={[styles.linkText, { color: colors.bad }]}>{busy ? 'Удаляем…' : 'Удалить аккаунт'}</Text>
         </Press>
       )}
+      {/* «О приложении»: also carries the Admitad ownership code, which must stay until their check is done. */}
+      <View style={styles.about}>
+        <Text style={styles.aboutTitle}>О приложении</Text>
+        <Text style={styles.aboutText}>essola lab · версия {Constants.expoConfig?.version ?? '1.0.0'}</Text>
+        <Text style={styles.aboutText}>Разработчик: essola, essola.ru</Text>
+        <Text style={styles.aboutText}>Код верификации: 1570</Text>
+      </View>
     </View>
   );
 }
@@ -370,6 +378,9 @@ function Empty({ icon, text, cta, onPress }: { icon: IconName; text: string; cta
 const styles = StyleSheet.create({
   links: { marginTop: 28, marginHorizontal: space.gutter, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4E1F1', overflow: 'hidden' },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, height: 54, borderBottomWidth: 1, borderColor: '#F0EEF7' },
+  about: { paddingHorizontal: 16, paddingVertical: 14, gap: 3 },
+  aboutTitle: { fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginBottom: 2 },
+  aboutText: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   linkText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
   compact: { paddingHorizontal: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: '#EAE6F7' },
   importRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CFC4F7', marginBottom: 10 },
