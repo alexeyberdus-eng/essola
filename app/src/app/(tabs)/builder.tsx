@@ -1,3 +1,4 @@
+import { Star } from '../../components/Points';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -424,9 +425,10 @@ export default function BuilderScreen() {
               <Press onPress={askReview} disabled={shown?.busy} style={styles.reviewBtn}>
                 {shown?.busy ? <ActivityIndicator color={colors.onDark} /> : <Icon name="spark" size={17} color={colors.onDark} />}
                 <Text style={styles.reviewBtnText}>{shown?.busy ? 'Технолог смотрит формулу…' : `Оценка технолога · ${area.toLowerCase()}`}</Text>
+                {!shown?.busy && <Star n={3} dark />}
               </Press>
             )}
-            {shown?.error && <Text style={styles.reviewErr}>{shown.limit ? 'На сегодня лимит советов технолога исчерпан — завтра он обновится.' : 'Не получилось связаться. Проверьте интернет и нажмите ещё раз.'}</Text>}
+            {shown?.error && <Text style={styles.reviewErr}>{shown.limit ? 'На сегодня баллы ★ закончились — завтра будет снова 20.' : 'Не получилось связаться. Проверьте интернет и нажмите ещё раз.'}</Text>}
           </View>
         )}
 
@@ -681,7 +683,7 @@ const styles = StyleSheet.create({
   empty: { marginTop: 14, padding: 18, gap: 10 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 20, letterSpacing: -0.5, color: colors.ink },
   emptyText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.ink2, marginBottom: 4 },
-  reviewBtn: { height: 52, borderRadius: 18, backgroundColor: colors.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  reviewBtn: { height: 52, borderRadius: 99, backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   reviewBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onDark },
   reviewErr: { fontFamily: fonts.regular, fontSize: 12.5, color: colors.bad, marginTop: 8, textAlign: 'center' },
   review: { padding: 16, gap: 12 },

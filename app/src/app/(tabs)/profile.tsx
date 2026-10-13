@@ -1,3 +1,4 @@
+import { PointsCard } from '../../components/Points';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -105,6 +106,9 @@ export default function ProfileScreen() {
             </View>
           </View>
         </LinearGradient>
+        <View style={{ marginTop: 12 }}>
+          <PointsCard />
+        </View>
 
         <Press onPress={() => router.push('/about-me' as never)} style={styles.me}>
           <LinearGradient colors={['#F1ECFF', '#FFF0E8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 22 }]} />

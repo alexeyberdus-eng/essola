@@ -92,7 +92,9 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
 
 - Every model answer is cached on the server for everyone (same composition / formula / pair → no new call).
 - Prefer coded short answers decoded on the server: `DESCRIBE` + `decodeDescribe`, `COMPARE_LITE` + `decodeCompare`.
-- Daily limits per kind are enforced in `allow()`: free 3, Club 10, describe 30/100, admin unlimited.
+- AI actions cost daily ★ points, enforced in `spend()`: 20 free points a day (burn at Moscow midnight); photo 3,
+  label 1, technologist in builder 3, in compare 3; failed AI calls are refunded; cached answers are free.
+  Other limits stay in `allow()` (describe 30/100, web search, posts). Buying points is not switched on yet.
 - Photos are resized on the phone (`app/src/lib/ocr.ts`): 1080 px for a composition, 560 px for a label.
 - Real prices are in `docs/monetization.md`.
 

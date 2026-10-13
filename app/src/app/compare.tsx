@@ -1,5 +1,5 @@
+import { Star } from '../components/Points';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -228,9 +228,9 @@ function Result({ a, b, ra, rb }: { a: Side; b: Side; ra: Analysis; rb: Analysis
                 </>
               ) : (
                 <Press onPress={() => ask(tier)} disabled={x?.busy} style={styles.techBtn}>
-                  <LinearGradient colors={tier === 'pro' ? ['#9C8BF5', '#7C66EE'] : ['#7FC9A0', '#4FAE7C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                   {x?.busy ? <ActivityIndicator color="#fff" /> : <Icon name="spark" size={17} color="#fff" />}
                   <Text style={styles.techBtnText}>{x?.busy ? 'Технолог сравнивает…' : label}</Text>
+                  {!x?.busy && <Star n={3} dark />}
                 </Press>
               )}
               {!!x?.error && <Text style={styles.muted}>{x.error}</Text>}
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   countL: { fontFamily: fonts.medium, fontSize: 11.5, lineHeight: 14, color: colors.muted, textAlign: 'center' },
   techKicker: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: colors.violet },
   techText: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.ink },
-  techBtn: { height: 52, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  techBtn: { height: 52, borderRadius: 99, backgroundColor: colors.ink, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   techBtnText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
   legend: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   legendText: { flex: 1, fontFamily: fonts.medium, fontSize: 11.5, color: colors.faint },

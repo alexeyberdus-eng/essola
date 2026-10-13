@@ -1,3 +1,4 @@
+import { Star } from '../../components/Points';
 import { BarcodeScanningResult, BarcodeType, CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useIsFocused } from 'expo-router';
@@ -643,6 +644,11 @@ export default function ScannerScreen() {
         {mode === 'label' || mode === 'front' ? (
           <Press onPress={shoot} disabled={!permission?.granted || !ready || busy} style={styles.shutter} accessibilityLabel="Сфотографировать">
             <LinearGradient colors={['#9C8BF5', '#7C66EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.shutterIn} />
+            {aiEnabled && (
+              <View style={styles.shutterStar} pointerEvents="none">
+                <Star n={mode === 'front' ? 1 : 3} />
+              </View>
+            )}
           </Press>
         ) : mode === 'link' ? (
           <Press onPress={pasteLink} disabled={busy} style={styles.shutter} accessibilityLabel="Вставить ссылку">
@@ -1023,6 +1029,7 @@ const styles = StyleSheet.create({
   matchBrand: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 16 },
   square: { width: 52, height: 52, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)', backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
+  shutterStar: { position: 'absolute', top: -10, right: -18 },
   shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: '#FFFFFF', padding: 5 },
   shutterIn: { flex: 1, borderRadius: 32 },
   // «Штрихкод» reads by itself: a dashed ring instead of a button.

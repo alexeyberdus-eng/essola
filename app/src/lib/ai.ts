@@ -9,8 +9,8 @@ const url = process.env.EXPO_PUBLIC_SCAN_URL;
 const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
-/** The server counts paid requests per account (or per phone when signed out): 50 a day of each kind. */
-export const LIMIT_NOTE = 'На сегодня лимит распознаваний исчерпан — завтра он обновится. Пока можно найти средство в «Базе средств» или вставить состав текстом. В Essola Club (Профиль → Essola Club, сейчас бесплатно) — 10 в день вместо 3.';
+/** AI actions cost daily ★ points (20 a day for free, they burn at midnight Moscow time); the server counts them. */
+export const LIMIT_NOTE = 'На сегодня баллы ★ закончились — завтра будет снова 20. Пока можно найти средство в «Базе средств» или вставить состав текстом: это бесплатно.';
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
@@ -18,9 +18,45 @@ async function call<T>(body: object): Promise<T> {
   const who = { session: (await getSession()) ?? undefined, device: id, id, secret: await mySecret(), inst: await installId() };
   // A photo read by the model can take ~20 s; past a minute the screen stops waiting and says so.
   const res = await fetch(url!, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ ...who, ...body }), signal: AbortSignal.timeout(60000) });
-  if (res.status === 429) throw new Error('LIMIT');
+  if (res.status === 429) {
+    refreshPoints();
+    throw new Error('LIMIT');
+  }
   if (!res.ok) throw new Error(`AI_${res.status}`);
+  if (PAID.has((body as { mode?: string }).mode ?? 'scan')) refreshPoints();
   return (await res.json()) as T;
+}
+
+// ---- Daily ★ points: the balance shown in the app. The server decides what is spent; this only displays it.
+export type Points = { left: number; daily: number; cost: { photo: number; label: number; review: number; compare: number }; paid: boolean };
+const PAID = new Set(['scan', 'label', 'review', 'compare']);
+let points: Points | null = null;
+const listeners = new Set<(p: Points | null) => void>();
+let loading: Promise<void> | null = null;
+export function refreshPoints() {
+  if (!url) return Promise.resolve();
+  loading ??= call<Points>({ mode: 'points' })
+    .then((p) => {
+      points = p;
+      listeners.forEach((f) => f(p));
+    })
+    .catch(() => {})
+    .finally(() => {
+      loading = null;
+    });
+  return loading;
+}
+/** Today's ★ balance; null until the server answers (or without the server). */
+export function usePoints() {
+  const [p, setP] = useState<Points | null>(points);
+  useEffect(() => {
+    listeners.add(setP);
+    if (!points) refreshPoints();
+    return () => {
+      listeners.delete(setP);
+    };
+  }, []);
+  return p;
 }
 
 /** Photo (data URL) → ingredient list read by the vision model. */

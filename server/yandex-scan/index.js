@@ -1266,6 +1266,8 @@ async function handle(event, context) {
     return { statusCode: 302, headers: { Location: `${back}${back.includes('?') ? '&' : '?'}${params}` }, body: '' };
   }
   const h = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
+  // Points spent on an AI call that then failed are given back (set by spend(), cleared on success).
+  let refundPoints = null;
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
     const req = JSON.parse(raw);
@@ -1385,6 +1387,53 @@ async function handle(event, context) {
         return false;
       }
       return true;
+    };
+    // ---- Daily ★ points. Every person gets DAILY_POINTS a day for free; they burn at the end of the Moscow day.
+    // AI actions cost points (POINT_COST); everything else is free. Bought points come later, only in a store-reviewed
+    // app version (docs/monetization.md). Same reservation idea as allow(): each spend writes a file named with its
+    // cost, then the day's files are summed; the earliest ones win, a spend over the limit gives its place back.
+    const DAILY_POINTS = Number(process.env.DAILY_POINTS) || 20;
+    const POINT_COST = { photo: 3, label: 1, review: 3, compare: 3 };
+    const pointChecks = async () => {
+      const me = await sessionUid();
+      const who = me ? `u:${me}` : uid(req.device) ? `d:${uid(req.device)}` : null;
+      const inst = uid(req.inst);
+      return [who && [who, DAILY_POINTS], inst && [`i:${inst}`, DAILY_POINTS], ip && [`ip:${ip}`, DAILY_POINTS * 4]].filter(Boolean);
+    };
+    const costOf = (name) => Number((String(name).match(/-c(\d+)\.json$/) || [])[1]) || 0;
+    const spend = async (cost) => {
+      if (await adminOk()) return true;
+      const checks = await pointChecks();
+      if (!checks.length) return false;
+      const stamp = `${String(Date.now()).padStart(14, '0')}-${crypto.randomBytes(4).toString('hex')}-c${cost}.json`;
+      const dirs = checks.map(([w]) => `limits/${day()}/${sha(w)}/pts/`);
+      const release = () => Promise.all(dirs.map((d) => cacheDel(`${d}${stamp}`, iam)));
+      const wrote = await Promise.all(dirs.map((d) => putStrict(`${d}${stamp}`, iam, {})));
+      const lists = wrote.every(Boolean) ? await Promise.all(dirs.map((d) => listStrict(d, iam))) : [null];
+      if (lists.some((l) => !l)) {
+        await release();
+        console.log('points storage unavailable');
+        return false;
+      }
+      const over = lists.some((l, i) => {
+        const sorted = [...l].sort();
+        const pos = sorted.indexOf(`${dirs[i]}${stamp}`);
+        const upTo = pos < 0 ? sorted : sorted.slice(0, pos + 1);
+        return upTo.reduce((a, k) => a + costOf(k), 0) > checks[i][1];
+      });
+      if (over) {
+        await release();
+        return false;
+      }
+      refundPoints = release;
+      return true;
+    };
+    /** Points left today: the smallest of what is left on the account (or phone), the installation and the network. */
+    const pointsLeft = async () => {
+      if (await adminOk()) return DAILY_POINTS;
+      const checks = await pointChecks();
+      const used = await Promise.all(checks.map(async ([w, n]) => n - ((await cacheList(`limits/${day()}/${sha(w)}/pts/`, iam)) || []).reduce((a, k) => a + costOf(k), 0)));
+      return Math.max(0, Math.min(DAILY_POINTS, ...used));
     };
     // Admin: the session of an account whose email hash is listed, or the panel's token.
     let adminMemo;
@@ -2119,6 +2168,10 @@ async function handle(event, context) {
       await shopAdd(iam, key, product.title, product.image, ingredients, product.source).catch(() => {});
       return reply(200, { product });
     }
+    if (req.mode === 'points') {
+      // The ★ balance for today and the price list, for the app's header and the «Баллы» screen.
+      return reply(200, { left: await pointsLeft(), daily: DAILY_POINTS, cost: POINT_COST, paid: false });
+    }
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
       if (!list) return reply(400, { error: 'empty' });
@@ -2133,7 +2186,7 @@ async function handle(event, context) {
       if (cachedReview && cachedReview.verdict !== undefined) return reply(200, balanceReview(cachedReview, req.items || [], req.kind));
       if (lite) curMode = 'review.lite';
       const made = await shared(rk, async () => {
-        if (!(await (lite ? allow('review.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]) : allow('review')))) return null;
+        if (!(await spend(POINT_COST.review))) return null;
         const text = await chat(lite ? textModel : process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest', [{ role: 'user', content: `${REVIEW}\n\n${req.kind ? `Тип: ${req.kind}\n` : ''}Формула: ${list}${notes ? `\nЗамечания: ${notes}` : ''}${done ? `\nУже применено по твоим прошлым советам: ${done}. Формула доработана — не предлагай новых улучшений. Пиши строки «+», «-», «x» только если есть настоящая ошибка (из «Замечаний», опасная доля, нестабильность); иначе ответь строкой «О: …» — какое средство получилось, для чего и кому — и строкой «В: Формула готова…».` : ''}` }], 500, true);
         const out = { add: [], reduce: [], remove: [], warn: [] };
         for (const line of text.split('\n').map((l) => l.trim().replace(/^[-*•]\s+(?=[+x!-])/, ''))) {
@@ -2168,7 +2221,7 @@ async function handle(event, context) {
         // The cheap technologist: light model, a few dozen coded tokens, the text is assembled here.
         curMode = 'compare.lite';
         const out = await shared(ck, async () => {
-          if (!(await allow('compare.lite', DESCRIBE_LIMIT[0], DESCRIBE_LIMIT[1]))) return null;
+          if (!(await spend(POINT_COST.compare))) return null;
           const o = decodeCompare(await chat(textModel, [{ role: 'system', content: COMPARE_LITE }, { role: 'user', content: `Средство А: ${a.title || 'без названия'}. Состав: ${a.items.join(', ')}\nСредство Б: ${b.title || 'без названия'}. Состав: ${b.items.join(', ')}` }], 160, true));
           if (o.text) await cachePut(ck, iam, o, true);
           return o;
@@ -2177,7 +2230,7 @@ async function handle(event, context) {
         return reply(200, { ...out, _usage: lastUsage });
       }
       const out = await shared(ck, async () => {
-        if (!(await allow('compare'))) return null;
+        if (!(await spend(POINT_COST.compare))) return null;
         const text = await chat(
           process.env.REVIEW_MODEL || 'yandexgpt-5.1/latest',
           [{ role: 'user', content: `${COMPARE}\n\nСредство А: ${a.title || 'без названия'}\nСостав А: ${a.items.join(', ')}\n\nСредство Б: ${b.title || 'без названия'}\nСостав Б: ${b.items.join(', ')}` }],
@@ -2212,7 +2265,7 @@ async function handle(event, context) {
       // Front of the pack → brand and name only: a small photo and a one-line answer keep it cheap.
       const image = String(req.image || '');
       if (!image || image.length > 2_000_000 || !imageOk(image, 1600)) return reply(400, { error: 'bad_image' });
-      if (!(await allow('photo'))) return reply(429, { error: 'limit' });
+      if (!(await spend(POINT_COST.label))) return reply(429, { error: 'limit' });
       const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
       const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
       const msg = [{ role: 'user', content: [{ type: 'text', text: LABEL }, { type: 'image_url', image_url: { url } }] }];
@@ -2239,7 +2292,7 @@ async function handle(event, context) {
     const image = String(req.image || '');
     console.log('scan request, image chars:', image.length);
     if (!image || image.length > 4_000_000 || !imageOk(image, 3200)) return reply(400, { error: 'bad_image' });
-    if (!(await allow('photo'))) return reply(429, { error: 'limit' });
+    if (!(await spend(POINT_COST.photo))) return reply(429, { error: 'limit' });
     const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`;
     // Vision models differ per account; try the configured one first, then known multimodal ids.
     const models = [process.env.VLM_MODEL, 'qwen3.6-35b-a3b/latest', 'aliceai-vlm/latest', 'gemma-3-27b-it/latest'].filter(Boolean);
@@ -2278,6 +2331,7 @@ async function handle(event, context) {
     return reply(200, ingredients.length ? { ingredients, _usage: lastUsage } : { ingredients, why: out.raw ?? '', _usage: lastUsage });
   } catch (e) {
     console.error(e);
+    if (refundPoints) await refundPoints().catch(() => {});
     return reply(500, { error: 'failed', detail: String(e && e.message || e).slice(0, 400) });
   }
 }
