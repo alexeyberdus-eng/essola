@@ -2455,3 +2455,4 @@ module.exports._decodeDescribe = decodeDescribe;
 module.exports._decodeCompare = decodeCompare;
 module.exports._smtpSend = smtpSend;
 module.exports._imageOk = imageOk;
+module.exports._ykApi = ykApi;

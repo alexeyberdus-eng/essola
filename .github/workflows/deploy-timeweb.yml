@@ -328,6 +328,9 @@ jobs:
           curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"auth.config"}' | sed 's/^/sign-in options: /'; echo
           # Mail ports: some hosts close them on new servers.
           $SSH 'for p in 465 587 25; do timeout 6 bash -c "</dev/tcp/smtp.mail.ru/$p" 2>/dev/null && echo "smtp.mail.ru:$p open" || echo "smtp.mail.ru:$p closed"; done; timeout 8 openssl s_client -quiet -connect smtp.mail.ru:465 </dev/null 2>/dev/null | head -1 | sed "s/^/greeting on 465: /"' || true
+          # ЮKassa: do the shop id and secret key work? (GET /me shows the shop; nothing is charged.)
+          $SSH 'cd /srv/essola/app && set -a && . /etc/essola.env && set +a && if [ -n "${YOOKASSA_SHOP_ID:-}" ]; then node -e "require(\"./index.js\")._ykApi(\"me\").then((m) => console.log(\"yookassa: OK, shop\", m.account_id, \"test:\", m.test, \"fiscalization:\", JSON.stringify(m.fiscalization || m.fiscalization_enabled || null), \"methods:\", (m.payment_methods || []).join(\",\")), (e) => console.log(\"yookassa FAILED:\", e.message))"; else echo "yookassa: no keys"; fi' || true
+          curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"points","device":"ci-check"}' | sed 's/^/points: /'; echo
           # Mail: one test letter to the sending mailbox itself (nobody else gets it).
           $SSH 'cd /srv/essola/app && set -a && . /etc/essola.env && set +a && [ -n "${SMTP_USER:-}" ] && node -e "require(\"./index.js\")._smtpSend(process.env.SMTP_USER, \"essola: проверка почты\", \"Письмо с сервера essola: отправка работает.\", \"<p>Письмо с сервера essola: отправка работает.</p>\").then(() => console.log(\"smtp test: sent\"), (e) => console.log(\"smtp test failed:\", e.message))" || echo "smtp: not configured"' || true
           # A composition the cache hasn't seen (order shuffled), so a model really answers; then who answered.
