@@ -29,6 +29,15 @@
 
 ---
 
+## 2026-10-14 · Claude
+
+- ЮKassa: сервер (`PACKS`, `ykApi`, `withWallet`, `ykSettle`, режимы `pay.create` / `points`, уведомления без ключа
+  приложения, страница `?paid=1`), приложение (`/points`: выбор пакета, оплата во встроенном браузере;
+  `canBuyPoints()` в `lib/store.ts`), версия 1.1.0, модуль `expo-application` (нужна новая сборка для RuStore).
+  Ждёт владельца: секреты `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY`, адрес уведомлений в кабинете ЮKassa,
+  сборка «Android APK» (store) → загрузка в RuStore. После публикации 1.1.0 — дневных баллов 3 вместо 20
+  (переменная `DAILY_POINTS`).
+
 ## 2026-10-13 · Claude
 
 - Дневные баллы ★: сервер `spend()` (резерв файлами `limits/<день>/<кто>/pts/…-c<цена>.json`, возврат при ошибке ИИ),

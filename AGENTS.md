@@ -84,7 +84,7 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
 - Server logs: change `server/yandex-scan/logs.trigger` and push → workflow «AI scan function logs» prints the recent logs.
 - AI spend: admin panel → «Расходы и статистика».
 - Secrets live only in GitHub → Settings → Secrets: `YC_*`, `EXPO_TOKEN`, `ADMIN_TOKEN`, `VK_CLIENT_ID`, `BACKUP_PASSWORD`,
-  `OPENAI_API_KEY`, `GIGACHAT_KEY`, `TIMEWEB_*`, `RELAY_*`, and Apple keys later.
+  `OPENAI_API_KEY`, `GIGACHAT_KEY`, `TIMEWEB_*`, `RELAY_*`, `YOOKASSA_*`, and Apple keys later.
 - Moving off Yandex Cloud (October 2026): plan and steps in `docs/MIGRATION.md`.
   Never put keys in code, chat or files. Never ask the owner to paste them.
 
@@ -94,7 +94,8 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
 - Prefer coded short answers decoded on the server: `DESCRIBE` + `decodeDescribe`, `COMPARE_LITE` + `decodeCompare`.
 - AI actions cost daily ★ points, enforced in `spend()`: 20 free points a day (burn at Moscow midnight); photo 3,
   label 1, technologist in builder 3, in compare 3; failed AI calls are refunded; cached answers are free.
-  Other limits stay in `allow()` (describe 30/100, web search, posts). Buying points is not switched on yet.
+  Other limits stay in `allow()` (describe 30/100, web search, posts). Bought points (`wallet/<uid>.json`) are spent
+  after the free daily ones.
 - Photos are resized on the phone (`app/src/lib/ocr.ts`): 1080 px for a composition, 560 px for a label.
 - Real prices are in `docs/monetization.md`.
 
@@ -106,9 +107,10 @@ The exported helpers are `_balanceReview`, `_decodeDescribe`, `_decodeCompare`, 
   - CosIng: EU open data, keep the attribution.
   - COSMILE: not allowed.
 - Never fabricate user content (reviews, forum posts). Editorial content is signed «essola».
-- Payments: no hidden enabling through the server. Points or payments come only in a new app version reviewed by the
-  store. On iPhone, digital goods are sold only through Apple in-app purchases. The plan is in `docs/monetization.md`
-  and is **not enabled yet**: App Store publication comes first.
+- Payments: no hidden enabling through the server. Buying points (ЮKassa, server modes `pay.create` / `points`,
+  webhook, `ykSettle()`) is shown only by `canBuyPoints()` in `app/src/lib/store.ts`: Android store builds from 1.1.0
+  (a native version an OTA update cannot change), never the Google Play build (version `-gp`, Google Play billing)
+  and never iPhone (Apple in-app purchases only). Secrets `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY`.
 - Don't publish the owner's photos. Admin access is by email hash or `ADMIN_TOKEN`.
 - Who acts on the server is decided by `actor()`: the session, or a guest id with its device secret. Never trust
   `req.id` alone for anything that changes data.

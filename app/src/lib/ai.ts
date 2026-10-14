@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getSession } from './cloud';
 import { usageByTitle, type Summary } from './effects';
 import { installId, myId, mySecret } from './social';
+import { canBuyPoints } from './store';
 import { readJSON, writeJSON } from './storage';
 
 // Our Yandex Cloud function (server/yandex-scan). Without it the app uses its local engines.
@@ -10,7 +11,7 @@ const key = process.env.EXPO_PUBLIC_SCAN_KEY ?? '';
 export const aiEnabled = !!url;
 
 /** AI actions cost daily ★ points (20 a day for free, they burn at midnight Moscow time); the server counts them. */
-export const LIMIT_NOTE = 'На сегодня баллы ★ закончились — завтра будет снова 20. Пока можно найти средство в «Базе средств» или вставить состав текстом: это бесплатно.';
+export const LIMIT_NOTE = `На сегодня баллы ★ закончились — завтра они обновятся.${canBuyPoints() ? ' Можно докупить: Кабинет → Баллы.' : ''} Найти средство в «Базе средств» или вставить состав текстом можно бесплатно.`;
 export const isLimit = (e: unknown) => String(e).includes('LIMIT');
 
 async function call<T>(body: object): Promise<T> {
@@ -28,7 +29,7 @@ async function call<T>(body: object): Promise<T> {
 }
 
 // ---- Daily ★ points: the balance shown in the app. The server decides what is spent; this only displays it.
-export type Points = { left: number; daily: number; cost: { photo: number; label: number; review: number; compare: number }; paid: boolean };
+export type Points = { left: number; daily: number; bought?: number; cost: { photo: number; label: number; review: number; compare: number }; paid: boolean; packs?: { id: string; n: number; rub: number }[]; signedIn?: boolean };
 const PAID = new Set(['scan', 'label', 'review', 'compare']);
 let points: Points | null = null;
 const listeners = new Set<(p: Points | null) => void>();
@@ -46,6 +47,11 @@ export function refreshPoints() {
     });
   return loading;
 }
+/** Buying a pack: the server creates a ЮKassa payment and returns the page to pay on. */
+export async function payCreate(pack: string): Promise<{ id: string; url: string }> {
+  return call({ mode: 'pay.create', pack });
+}
+
 /** Today's ★ balance; null until the server answers (or without the server). */
 export function usePoints() {
   const [p, setP] = useState<Points | null>(points);

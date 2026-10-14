@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePoints } from '../lib/ai';
+import { canBuyPoints } from '../lib/store';
 import { colors, fonts } from '../theme';
 import { Icon } from './Icon';
 import { Press, tap } from './ui';
@@ -27,7 +28,7 @@ export function PointsCard() {
         <Text style={s.title}>
           {p.left} из {p.daily} баллов на сегодня
         </Text>
-        <Text style={s.sub}>Пока бесплатно · обновляются каждый день</Text>
+        <Text style={s.sub}>{p.bought ? `+ ★ ${p.bought} купленных` : p.paid && canBuyPoints() ? 'Обновляются каждый день · можно докупить' : 'Пока бесплатно · обновляются каждый день'}</Text>
       </View>
       <Icon name="arrowRight" size={16} color={colors.muted} />
     </Press>

@@ -1233,6 +1233,56 @@ async function sendCode(email, code, iam) {
 }
 
 // Every request is counted under its mode; the spending is written out after the answer is ready.
+// ---- ЮKassa: bought points. Packs are fixed here; the price is checked again when a payment is settled.
+// A payment is only ever trusted after asking ЮKassa about it with our own key (the webhook body is not trusted).
+const PACKS = { p100: { n: 100, rub: 199 }, p200: { n: 200, rub: 299 }, p300: { n: 300, rub: 399 } };
+const ykOn = () => !!(process.env.YOOKASSA_SHOP_ID && process.env.YOOKASSA_SECRET_KEY);
+async function ykApi(path, body) {
+  const auth = Buffer.from(`${process.env.YOOKASSA_SHOP_ID}:${process.env.YOOKASSA_SECRET_KEY}`).toString('base64');
+  const res = await fetch(`${process.env.YOOKASSA_API || 'https://api.yookassa.ru/v3'}/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json', ...(body ? { 'Idempotence-Key': crypto.randomUUID() } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(20000),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(`yookassa ${res.status}: ${String(json.description || json.code || '').slice(0, 200)}`), { status: res.status, body: json });
+  return json;
+}
+// One wallet change at a time per account (the server is a single process), so balances never race.
+const walletLocks = new Map();
+function withWallet(uid, iam, fn) {
+  const key = `wallet/${uid}.json`;
+  const run = (walletLocks.get(uid) || Promise.resolve()).then(async () => {
+    const w = (await cacheGet(key, iam)) || { bal: 0, paid: [], pending: [] };
+    const out = await fn(w);
+    if (out !== false) await cachePut(key, iam, w, true);
+    return w;
+  });
+  walletLocks.set(uid, run.catch(() => {}));
+  return run;
+}
+/** Asks ЮKassa about a payment and, if it is paid in full for a known pack, adds its points once. */
+async function ykSettle(id, iam) {
+  const p = await ykApi(`payments/${encodeURIComponent(id)}`);
+  const uid = String(p.metadata?.uid || '');
+  const pack = PACKS[p.metadata?.pack];
+  if (!uid || !pack) return { status: p.status };
+  const okPaid = p.status === 'succeeded' && p.paid && p.amount?.currency === 'RUB' && Number(p.amount?.value) === pack.rub;
+  let credited = false;
+  await withWallet(uid, iam, (w) => {
+    w.paid ||= [];
+    w.pending = (w.pending || []).filter((x) => x.id !== id || (p.status === 'pending' || p.status === 'waiting_for_capture'));
+    if (okPaid && !w.paid.includes(id)) {
+      w.bal = (w.bal || 0) + pack.n;
+      w.paid.push(id);
+      credited = true;
+      console.log('points bought:', pack.n, 'payment', id);
+    }
+  });
+  return { status: p.status, credited };
+}
+
 module.exports.handler = async (event, context) => {
   curMode = 'other';
   if (event.httpMethod === 'POST') {
@@ -1251,6 +1301,8 @@ async function handle(event, context) {
   if (event.httpMethod === 'GET') {
     const q0 = event.queryStringParameters || {};
     if (q0.doc) return { statusCode: 200, headers: htmlHeaders({ 'Cache-Control': 'public, max-age=600' }), body: docPage(String(q0.doc).replace(/[^a-z]/g, '')) };
+    // After paying, ЮKassa sends the person here: a short page that takes them back into the app.
+    if (q0.paid !== undefined) return { statusCode: 200, headers: htmlHeaders({ 'Cache-Control': 'no-store' }), body: '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>essola lab</title><body style="font-family:-apple-system,Roboto,sans-serif;text-align:center;padding:60px 24px;color:#15172B"><h2>Спасибо!</h2><p>Баллы появятся в приложении через несколько секунд.</p><p><a href="essola://points" style="display:inline-block;margin-top:16px;padding:14px 26px;border-radius:99px;background:#15172B;color:#fff;text-decoration:none">Вернуться в essola lab</a></p><script>setTimeout(function(){location.href="essola://points"},600)</script></body>' };
     if (q0.admin !== undefined) return { statusCode: 200, headers: htmlHeaders({ 'Cache-Control': 'no-store' }), body: ADMIN_PAGE_OF() };
     // VK ID redirects here (the only https address VK accepts); send the code on into the app it came from.
     // The app registered its return address under the state beforehand (mode "vk.start").
@@ -1271,6 +1323,11 @@ async function handle(event, context) {
   try {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}';
     const req = JSON.parse(raw);
+    // ЮKassa notification (no app key): only the payment id is used, the payment itself is fetched from ЮKassa.
+    if (req.type === 'notification' && req.object?.id && ykOn()) {
+      await ykSettle(String(req.object.id).slice(0, 80), context?.token?.access_token).catch((e) => console.log('yookassa webhook:', e.message));
+      return reply(200, { ok: true });
+    }
     // The app key is shared by every installed app, so it only keeps out random traffic; who may do what is
     // decided below by the session or the device secret. The admin panel has no app key: it may call only the
     // admin-only modes, each of which checks the admin token itself.
@@ -1423,7 +1480,17 @@ async function handle(event, context) {
       });
       if (over) {
         await release();
-        return false;
+        // Today's free points are used up: bought points (signed-in accounts) pay for it.
+        const me = await sessionUid();
+        if (!me) return false;
+        let took = false;
+        await withWallet(me, iam, (w) => {
+          if ((w.bal || 0) < cost) return false;
+          w.bal -= cost;
+          took = true;
+        });
+        if (took) refundPoints = () => withWallet(me, iam, (w) => { w.bal = (w.bal || 0) + cost; });
+        return took;
       }
       refundPoints = release;
       return true;
@@ -2168,9 +2235,55 @@ async function handle(event, context) {
       await shopAdd(iam, key, product.title, product.image, ingredients, product.source).catch(() => {});
       return reply(200, { product });
     }
-    if (req.mode === 'points') {
-      // The ★ balance for today and the price list, for the app's header and the «Баллы» screen.
-      return reply(200, { left: await pointsLeft(), daily: DAILY_POINTS, cost: POINT_COST, paid: false });
+    if (req.mode === 'points' || req.mode === 'pay.check') {
+      // The ★ balance for today, bought points (signed-in accounts) and the price list. Payments still waiting
+      // are asked about here too, so points arrive even if the person closed the payment page early.
+      const me = await sessionUid();
+      let bought = 0;
+      if (me) {
+        let w = await get(`wallet/${me}.json`, null);
+        if (ykOn() && w?.pending?.length) {
+          for (const x of w.pending.slice(-5)) await ykSettle(x.id, iam).catch((e) => console.log('yookassa check:', e.message));
+          w = await get(`wallet/${me}.json`, null);
+        }
+        bought = w?.bal || 0;
+      }
+      const packs = Object.entries(PACKS).map(([id, p]) => ({ id, n: p.n, rub: p.rub }));
+      return reply(200, { left: await pointsLeft(), daily: DAILY_POINTS, bought, cost: POINT_COST, paid: ykOn(), packs, signedIn: !!me });
+    }
+    if (req.mode === 'pay.create') {
+      // Buying a pack: only for a signed-in account (bought points belong to it, on any phone).
+      if (!ykOn()) return reply(503, { error: 'payments_off' });
+      const me = await sessionUid();
+      if (!me) return reply(401, { error: 'not_signed' });
+      const id = String(req.pack || '');
+      const pack = PACKS[id];
+      if (!pack) return reply(400, { error: 'bad_pack' });
+      if (!(await allow('pay', 20))) return reply(429, { error: 'limit' });
+      const acc = await get(`accounts/${me}.json`, null);
+      const host = String(h['x-forwarded-host'] || h.host || '').replace(/[^a-z0-9.:-]/gi, '');
+      const amount = { value: `${pack.rub}.00`, currency: 'RUB' };
+      const body = {
+        amount,
+        capture: true,
+        confirmation: { type: 'redirect', return_url: `https://${host}/?paid=1` },
+        description: `essola lab: ${pack.n} баллов`,
+        metadata: { uid: me, pack: id, points: String(pack.n) },
+      };
+      // A receipt (54-ФЗ) goes to the buyer's email when the shop has ЮKassa receipts switched on.
+      const receipt = acc?.email ? { customer: { email: acc.email }, items: [{ description: `Баллы essola lab, ${pack.n} шт.`, quantity: '1.00', amount, vat_code: 1, payment_subject: 'service', payment_mode: 'full_payment' }] } : null;
+      let pay;
+      try {
+        pay = await ykApi('payments', receipt ? { ...body, receipt } : body);
+      } catch (e) {
+        if (!receipt || e.status !== 400) throw e;
+        console.log('yookassa: payment without receipt,', e.message);
+        pay = await ykApi('payments', body);
+      }
+      await withWallet(me, iam, (w) => {
+        w.pending = [...(w.pending || []).filter((x) => Date.now() - x.at < 86400e3), { id: pay.id, pack: id, at: Date.now() }].slice(-10);
+      });
+      return reply(200, { id: pay.id, url: pay.confirmation?.confirmation_url });
     }
     if (req.mode === 'review') {
       const list = (req.items || []).slice(0, 40).join(', ');
