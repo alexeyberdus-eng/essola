@@ -1,0 +1,29 @@
+name: CosIng probe (query shapes)
+on:
+  push:
+    paths: ['.github/workflows/cosing-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Which filters the search accepts
+        run: |
+          S='https://api.tech.ec.europa.eu/search-api/prod/rest/search?apiKey=285a77fd-1257-4271-8507-f0c6b2961203&pageSize=1&pageNumber=1'
+          q() { printf '%-70s ' "$1 $2"; curl -s -m 60 -X POST "$S&text=$1" -F "query=$2;type=application/json" -o r.json -w '%{http_code} '; jq -r '.totalResults // .message // "?"' r.json 2>/dev/null | head -c 120; echo; }
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"terms":{"functionName":["EMOLLIENT"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"terms":{"functionName":["SKIN CONDITIONING"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"terms":{"perfuming":["Y"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"terms":{"status":["Active"]}}]}}'
+          q 'a*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}}'
+          q 'glycerin' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"range":{"substanceId":{"gte":"1","lte":"40000"}}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}}],"must_not":[{"terms":{"functionName":["SKIN CONDITIONING"]}}]}}'
+          q '*' '{"bool":{"must":[{"terms":{"itemType":["ingredient"]}},{"terms":{"refNo_letter":["A"]}}]}}'
+          echo "== sort"
+          curl -s -m 60 -X POST "$S&text=*&sort=inciName" -F 'query={"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}};type=application/json' | jq -r '.sort, .results[0].metadata.inciName[0]' 
+          curl -s -m 60 -X POST "$S&text=*&pageNumber=101&pageSize=100" -F 'query={"bool":{"must":[{"terms":{"itemType":["ingredient"]}}]}};type=application/json' -w '\npage101 %{http_code}\n' | head -c 300; echo

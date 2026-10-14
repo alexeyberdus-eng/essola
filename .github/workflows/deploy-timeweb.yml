@@ -1,0 +1,342 @@
+# «Сервер на Timeweb»: the same server code (server/yandex-scan) on our own VPS, independent of Yandex Cloud.
+#  - installs Node, nginx and a free HTTPS certificate (address <ip-with-dashes>.sslip.io until essola.ru is pointed here);
+#  - copies the code, writes the settings from GitHub secrets, runs it as a systemd service «essola»;
+#  - data lives in /srv/essola/data; the first run (or a commit message with [restore-data]) fills it from the
+#    newest «Резервная копия данных» archive.
+# AI: ChatGPT through the relay (OPENAI_API_KEY + RELAY_HOST), then GigaChat (GIGACHAT_KEY), then Yandex.
+# Needs secrets TIMEWEB_HOST (server IP) and TIMEWEB_SSH_KEY (private key with root access); runs when this file,
+# .github/timeweb.trigger or the server code changes.
+name: Сервер на Timeweb
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/timeweb.trigger', '.github/workflows/deploy-timeweb.yml', 'server/yandex-scan/**', 'app/src/data/legal.ts', 'app/src/lib/recipeCsv.ts']
+  workflow_dispatch:
+
+concurrency:
+  group: timeweb
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+      TIMEWEB_PASSWORD: ${{ secrets.TIMEWEB_PASSWORD }}
+      YC_API_KEY: ${{ secrets.YC_API_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      # The service account key: lets the server get Yandex IAM tokens for Postbox (sign-in emails from noreply@essola.ru).
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+      VK_CLIENT_ID: ${{ secrets.VK_CLIENT_ID }}
+      NK_API_KEY: ${{ secrets.NK_API_KEY }}
+      GIGACHAT_KEY: ${{ secrets.GIGACHAT_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Sign-in codes by email through an ordinary mailbox (Mail.ru etc.): login and an app password.
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      # Payments for points through ЮKassa: shop id and secret key from the ЮKassa cabinet (Интеграция → Ключи API).
+      # The shop id is not secret (it is on every payment page); a secret or variable with this name wins.
+      YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID || vars.YOOKASSA_SHOP_ID || '1483427' }}
+      YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
+      RELAY_HOST: ${{ secrets.RELAY_HOST }}
+      GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
+      AI_PRIMARY: ${{ vars.AI_PRIMARY }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Server secrets
+        run: |
+          if [ -z "$TIMEWEB_HOST" ] || { [ -z "$TIMEWEB_SSH_KEY" ] && [ -z "$TIMEWEB_PASSWORD" ]; }; then
+            echo "::warning::Add TIMEWEB_HOST and TIMEWEB_SSH_KEY (or TIMEWEB_PASSWORD) secrets to deploy to Timeweb."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != '1'
+
+      - name: Build the bundle
+        if: env.SKIP != '1'
+        run: |
+          npx -y esbuild@0.25.0 app/src/lib/recipeCsv.ts --bundle --format=iife --global-name=RecipeCsv --minify --outfile=server/yandex-scan/admin-csv.js
+          npx -y esbuild@0.25.0 app/src/data/legal.ts --bundle --format=cjs --platform=node --outfile="$RUNNER_TEMP/legal.cjs"
+          node -e "console.log(JSON.stringify(require('$RUNNER_TEMP/legal.cjs').DOCS))" > server/yandex-scan/legal.json
+          # GigaChat's certificates are issued by the Russian Trusted Root CA (Минцифры).
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o server/yandex-scan/russian-ca.pem \
+            || echo "::warning::Russian CA not downloaded: GigaChat calls will fail TLS"
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          HOSTNAME_TW="$(echo "$TIMEWEB_HOST" | tr . -).sslip.io"
+          echo "HOSTNAME_TW=$HOSTNAME_TW" >> "$GITHUB_ENV"
+          # Settings for the service: one KEY=value per line, readable only by root.
+          {
+            echo "NODE_ENV=production"
+            echo "PORT=8787"
+            echo "DATA_DIR=/srv/essola/data"
+            echo "APP_KEY=$APP_KEY"
+            echo "NODE_EXTRA_CA_CERTS=/srv/essola/app/russian-ca.pem"
+            [ -n "$YC_API_KEY" ] && echo "YC_API_KEY=$YC_API_KEY"
+            [ -n "$YC_FOLDER_ID" ] && echo "YC_FOLDER_ID=$YC_FOLDER_ID"
+            [ -n "$ADMIN_TOKEN" ] && echo "ADMIN_TOKEN=$ADMIN_TOKEN"
+            [ -n "$VK_CLIENT_ID" ] && echo "VK_CLIENT_ID=$VK_CLIENT_ID"
+            [ -n "$NK_API_KEY" ] && echo "NK_API_KEY=$NK_API_KEY"
+            [ -n "$GIGACHAT_KEY" ] && echo "GIGACHAT_KEY=$GIGACHAT_KEY"
+            echo "GIGACHAT_SCOPE=${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}"
+            # ChatGPT through the relay abroad (workflow «Пересылка к ChatGPT»), GigaChat and Yandex as stand-ins.
+            if [ -n "$OPENAI_API_KEY" ]; then
+              echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+              if [ -n "$RELAY_HOST" ]; then
+                echo "OPENAI_BASE_URL=https://$(echo "$RELAY_HOST" | tr . -).sslip.io/v1"
+                echo "RELAY_TOKEN=$(printf 'essola-relay:%s' "$OPENAI_API_KEY" | sha256sum | cut -c1-40)"
+              fi
+            fi
+            echo "AI_PRIMARY=${AI_PRIMARY:-openai}"
+            [ -n "$SMTP_USER" ] && echo "SMTP_USER=$SMTP_USER"
+            [ -n "$SMTP_PASS" ] && echo "SMTP_PASS=$SMTP_PASS"
+            [ -n "$SMTP_HOST" ] && echo "SMTP_HOST=$SMTP_HOST"
+            [ -n "$YOOKASSA_SHOP_ID" ] && echo "YOOKASSA_SHOP_ID=$YOOKASSA_SHOP_ID"
+            [ -n "$YOOKASSA_SECRET_KEY" ] && echo "YOOKASSA_SECRET_KEY=$YOOKASSA_SECRET_KEY"
+            [ -n "$YC_SA_KEY" ] && echo "YC_SA_KEY_B64=$(printf '%s' "$YC_SA_KEY" | base64 -w0)"
+            # Our own server sends the sign-in letters (Postfix + DKIM, step «Mail» below).
+            [ "${{ vars.MAIL_LOCAL }}" = "1" ] && echo "MAIL_LOCAL=1" && echo "MAIL_FROM=noreply@essola.ru"
+            true
+          } > "$RUNNER_TEMP/essola.env"
+          # SSH by key, or by the root password when the hosting gave only that.
+          OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          if [ -n "$TIMEWEB_SSH_KEY" ]; then
+            install -m 600 /dev/null "$RUNNER_TEMP/key"
+            printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
+            RSH="ssh -i $RUNNER_TEMP/key $OPTS"
+          else
+            sudo apt-get install -y -qq sshpass >/dev/null
+            echo "SSHPASS=$TIMEWEB_PASSWORD" >> "$GITHUB_ENV"
+            RSH="sshpass -e ssh $OPTS -o PubkeyAuthentication=no"
+          fi
+          echo "RSH=$RSH" >> "$GITHUB_ENV"
+          echo "SSH=$RSH root@$TIMEWEB_HOST" >> "$GITHUB_ENV"
+
+      - name: Prepare the server (Node, nginx, certificate tools)
+        if: env.SKIP != '1'
+        run: |
+          $SSH 'bash -s' <<'EOF'
+          set -e
+          # Never on the owner's dashboard server (it runs Caddy): essola has a server of its own.
+          if systemctl is-active --quiet caddy || [ -f /etc/caddy/Caddyfile ]; then
+            echo "This is the dashboard server (Caddy found): nothing changed. Point TIMEWEB_HOST at the essola server."
+            exit 1
+          fi
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
+            apt-get install -y -qq nodejs >/dev/null
+          fi
+          command -v nginx >/dev/null || apt-get install -y -qq nginx >/dev/null
+          command -v certbot >/dev/null || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+          command -v 7z >/dev/null || apt-get install -y -qq p7zip-full >/dev/null
+          command -v rsync >/dev/null || apt-get install -y -qq rsync >/dev/null
+          mkdir -p /srv/essola/app /srv/essola/data
+          # A 2 GB swap file as a safety net: the product base is held in memory and 4 GB is just enough.
+          if [ ! -f /swapfile ]; then fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+          node -v; nginx -v 2>&1; free -m | head -2; df -h /srv | tail -1
+          EOF
+
+      - name: Copy the code and settings
+        if: env.SKIP != '1'
+        run: |
+          sudo apt-get install -y -qq rsync >/dev/null 2>&1 || true
+          rsync -az --delete -e "$RSH" \
+            server/yandex-scan/index.js server/yandex-scan/server.js server/yandex-scan/forum-seed.json server/yandex-scan/admin.html \
+            server/yandex-scan/admin-csv.js server/yandex-scan/legal.json server/yandex-scan/russian-ca.pem "root@$TIMEWEB_HOST:/srv/essola/app/"
+          $SSH 'umask 077; cat > /etc/essola.env' < "$RUNNER_TEMP/essola.env"
+
+      - name: Mail (Postfix + DKIM for essola.ru, send-only)
+        # Off for now: the letters go through the Mail.ru mailbox. Turn on with the repository variable MAIL_LOCAL=1.
+        if: env.SKIP != '1' && vars.MAIL_LOCAL == '1'
+        run: |
+          $SSH 'bash -s' <<'EOF'
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v postfix >/dev/null || ! command -v opendkim >/dev/null; then
+            echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections
+            echo "postfix postfix/mailname string mail.essola.ru" | debconf-set-selections
+            apt-get install -y -qq postfix opendkim opendkim-tools dnsutils >/dev/null
+          fi
+          # Postfix: only accepts letters from this machine, signs them through OpenDKIM, delivers them itself.
+          postconf -e "myhostname = mail.essola.ru" "myorigin = essola.ru" "inet_interfaces = loopback-only" \
+            "mydestination =" "smtp_tls_security_level = may" "smtpd_milters = inet:127.0.0.1:8891" \
+            "non_smtpd_milters = inet:127.0.0.1:8891" "milter_default_action = accept" "smtp_helo_name = mail.essola.ru"
+          echo "mail.essola.ru" > /etc/mailname
+          # DKIM key (made once, kept): selector «essola», so the old «postbox» key in DNS stays untouched.
+          mkdir -p /etc/opendkim/keys
+          [ -f /etc/opendkim/keys/essola.private ] || opendkim-genkey -b 2048 -d essola.ru -s essola -D /etc/opendkim/keys
+          chown -R opendkim:opendkim /etc/opendkim/keys && chmod 600 /etc/opendkim/keys/essola.private
+          cat > /etc/opendkim.conf <<CONF
+          Syslog yes
+          Mode s
+          Domain essola.ru
+          Selector essola
+          KeyFile /etc/opendkim/keys/essola.private
+          Canonicalization relaxed/simple
+          Socket inet:8891@127.0.0.1
+          UserID opendkim
+          PidFile /run/opendkim/opendkim.pid
+          UMask 007
+          CONF
+          sed -i 's/^ *//' /etc/opendkim.conf
+          systemctl enable opendkim postfix >/dev/null 2>&1
+          systemctl restart opendkim || { journalctl -u opendkim -n 15 --no-pager; exit 1; }
+          systemctl restart postfix
+          echo "=== Records for reg.ru (essola.ru → DNS) ==="
+          IP=$(curl -s -4 https://ifconfig.me || hostname -I | cut -d" " -f1)
+          echo "A     mail                $IP"
+          echo "TXT   essola._domainkey   $(tr -d '\n\t' < /etc/opendkim/keys/essola.txt | sed -E 's/.*\( *//; s/ *\).*//; s/" *"//g; s/"//g')"
+          echo "TXT   _dmarc              v=DMARC1; p=none"
+          echo "SPF now on essola.ru: $(dig +short TXT essola.ru | grep -i spf1 || echo none)"
+          echo "MX now on essola.ru: $(dig +short MX essola.ru | tr '\n' ' ' || true)"
+          echo "PTR of $IP: $(dig +short -x $IP)"
+          echo "port 25 out: $(timeout 6 bash -c '</dev/tcp/gmail-smtp-in.l.google.com/25' 2>/dev/null && echo open || echo closed)"
+          EOF
+
+      - name: Data from the newest backup (first run or [restore-data])
+        if: env.SKIP != '1'
+        run: |
+          MSG=$(git log -1 --format=%B)
+          EMPTY=$($SSH '[ -z "$(ls -A /srv/essola/data 2>/dev/null)" ] && echo yes || echo no')
+          if [ "$EMPTY" != yes ] && ! echo "$MSG" | grep -q '\[restore-data\]'; then echo "data already there"; exit 0; fi
+          RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/backup.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].id')
+          echo "backup run: $RUN"
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --pattern 'essola-vse-dannye-*' --dir backup
+          F=$(find backup -name 'essola-vse-dannye-*.7z' | head -1)
+          ls -lh "$F"
+          command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null; }
+          mkdir data && 7z x -p"$BACKUP_PASSWORD" -odata "$F" >/dev/null
+          echo "files: $(find data -type f | wc -l)"; du -sh data
+          rsync -az -e "$RSH" data/ "root@$TIMEWEB_HOST:/srv/essola/data/"
+          rm -rf data backup
+
+      - name: Service, nginx and HTTPS
+        if: env.SKIP != '1'
+        run: |
+          $SSH "HOSTNAME_TW=$HOSTNAME_TW bash -s" <<'EOF'
+          set -e
+          # The product base is held in memory: give Node three quarters of the RAM.
+          MEM=$(free -m | awk '/Mem:/ {print int($2*0.75)}')
+          cat > /etc/systemd/system/essola.service <<UNIT
+          [Unit]
+          Description=essola server
+          After=network.target
+          [Service]
+          EnvironmentFile=/etc/essola.env
+          Environment=NODE_OPTIONS=--max-old-space-size=$MEM
+          WorkingDirectory=/srv/essola/app
+          ExecStart=/usr/bin/node /srv/essola/app/server.js
+          Restart=always
+          RestartSec=3
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          sed -i 's/^ *//' /etc/systemd/system/essola.service
+          systemctl daemon-reload
+          systemctl enable essola >/dev/null 2>&1
+          systemctl restart essola
+          # Port 80/443 may already belong to another web server on this machine (Caddy here): then our site is
+          # added to it as one more block, and nothing else it serves is touched. Otherwise nginx + certbot.
+          echo "already listening:"; ss -ltnp | grep -E ':(80|443|8787) ' || true
+          if systemctl is-active --quiet caddy; then
+            systemctl disable --now nginx >/dev/null 2>&1 || true
+            CF=/etc/caddy/Caddyfile
+            echo "sites Caddy already serves:"; grep -E '^[^#[:space:]].*\{\s*$' "$CF" || true
+            # Our address is already set up in the main Caddyfile (an earlier setup): show it and stop, nothing changed.
+            if grep -qE "^$HOSTNAME_TW" "$CF"; then
+              sed -i '\#import /etc/caddy/essola.caddy#d' "$CF"
+              echo "=== Caddyfile (secrets hidden) ==="
+              sed -E 's/((basic_?auth|password|token|secret|key|hash)[^[:space:]]*)[[:space:]].*/\1 [hidden]/I' "$CF"
+              echo "=== listening ==="; ss -ltnp | grep LISTEN || true
+              echo "=== running services ==="; systemctl list-units --type=service --state=running --no-pager --plain | awk '{print $1}' | grep -vE '^(systemd|dbus|cron|ssh|getty|serial|polkit|rsyslog|snapd|unattended|networkd|multipathd|qemu|udisks|ModemManager|user@)' || true
+              echo "=== folders ==="; ls -la /srv /opt /var/www /root 2>/dev/null | head -60
+              command -v docker >/dev/null && docker ps --format '{{.Names}} {{.Image}} {{.Ports}}' || true
+              exit 1
+            fi
+            cat > /etc/caddy/essola.caddy <<CADDY
+          $HOSTNAME_TW {
+            request_body {
+              max_size 12MB
+            }
+            reverse_proxy 127.0.0.1:8787 {
+              header_up X-Real-IP {remote_host}
+            }
+          }
+          CADDY
+            sed -i 's/^ *//' /etc/caddy/essola.caddy
+            grep -q 'import /etc/caddy/essola.caddy' "$CF" || { cp "$CF" "$CF.bak-essola"; printf '\nimport /etc/caddy/essola.caddy\n' >> "$CF"; }
+            caddy validate --config "$CF" --adapter caddyfile >/dev/null
+            systemctl reload caddy
+          else
+            cat > /etc/nginx/sites-available/essola <<NGX
+          server {
+            listen 80;
+            server_name $HOSTNAME_TW api.essola.ru;
+            client_max_body_size 12m;
+            location / {
+              proxy_pass http://127.0.0.1:8787;
+              proxy_set_header Host \$host;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_read_timeout 90s;
+            }
+          }
+          NGX
+            ln -sf /etc/nginx/sites-available/essola /etc/nginx/sites-enabled/essola
+            rm -f /etc/nginx/sites-enabled/default
+            nginx -t
+            systemctl enable nginx >/dev/null 2>&1
+            systemctl restart nginx || { journalctl -u nginx -n 20 --no-pager; exit 1; }
+            # A free Let's Encrypt certificate for the sslip.io address (renews itself).
+            # The config above is rewritten on every run, so HTTPS is put back into it each time: an existing
+            # certificate is kept (no new one is issued), only the 443 block and the redirect are added again.
+            certbot --nginx -d "$HOSTNAME_TW" --non-interactive --agree-tos --register-unsafely-without-email --redirect --keep-until-expiring
+            systemctl restart nginx
+          fi
+          sleep 5; systemctl is-active essola; journalctl -u essola -n 15 --no-pager
+          EOF
+
+      - name: Check
+        if: env.SKIP != '1'
+        run: |
+          U="https://$HOSTNAME_TW"
+          echo "Server address: $U"
+          # nginx was just restarted: give it a few tries.
+          for i in 1 2 3 4 5 6; do C=$(curl -s -o /dev/null -w "%{http_code}" "$U/?doc=privacy" || true); [ "$C" = 200 ] && break; sleep 5; done
+          echo "privacy page HTTP $C"
+          # From the server itself: does the ChatGPT relay answer?
+          $SSH 'set -a; . /etc/essola.env; set +a
+            [ -z "${OPENAI_BASE_URL:-}" ] && { echo "no relay configured"; exit 0; }
+            echo "relay: $OPENAI_BASE_URL"
+            getent hosts "$(echo "$OPENAI_BASE_URL" | cut -d/ -f3)" || echo "DNS: cannot resolve"
+            curl -sS -m 20 -o /dev/null -w "relay via curl: HTTP %{http_code} in %{time_total}s\n" "$OPENAI_BASE_URL/models" -H "Authorization: Bearer $OPENAI_API_KEY" -H "X-Relay-Token: $RELAY_TOKEN" 2>&1 | tail -2
+            ls -l /srv/essola/app/russian-ca.pem; head -c 60 /srv/essola/app/russian-ca.pem; echo
+            node -e "fetch(process.env.OPENAI_BASE_URL+\"/models\",{headers:{Authorization:\"Bearer \"+process.env.OPENAI_API_KEY,\"X-Relay-Token\":process.env.RELAY_TOKEN}}).then(r=>console.log(\"relay via node: HTTP\",r.status)).catch(e=>console.log(\"relay via node failed:\",e.cause&&e.cause.code||\"\",String(e.cause||e).slice(0,200)))"' || true
+          APP_KEY=$(printf '%s' "$YC_API_KEY" | sha256sum | cut -c1-40)
+          curl -s -m 30 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"catalog","q":"крем","size":2}' | head -c 400; echo
+          curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d '{"mode":"describe","device":"ci-check","ingredients":["Aqua","Glycerin","Niacinamide","Panthenol","Phenoxyethanol"]}' -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 900
+          curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"auth.config"}' | sed 's/^/sign-in options: /'; echo
+          # Mail ports: some hosts close them on new servers.
+          $SSH 'for p in 465 587 25; do timeout 6 bash -c "</dev/tcp/smtp.mail.ru/$p" 2>/dev/null && echo "smtp.mail.ru:$p open" || echo "smtp.mail.ru:$p closed"; done; timeout 8 openssl s_client -quiet -connect smtp.mail.ru:465 </dev/null 2>/dev/null | head -1 | sed "s/^/greeting on 465: /"' || true
+          # ЮKassa: do the shop id and secret key work? (GET /me shows the shop; nothing is charged.)
+          $SSH 'cd /srv/essola/app && set -a && . /etc/essola.env && set +a && if [ -n "${YOOKASSA_SHOP_ID:-}" ]; then node -e "require(\"./index.js\")._ykApi(\"me\").then((m) => console.log(\"yookassa: OK, shop\", m.account_id, \"test:\", m.test, \"fiscalization:\", JSON.stringify(m.fiscalization || m.fiscalization_enabled || null), \"methods:\", (m.payment_methods || []).join(\",\")), (e) => console.log(\"yookassa FAILED:\", e.message))"; else echo "yookassa: no keys"; fi' || true
+          curl -s -m 20 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" -d '{"mode":"points","device":"ci-check"}' | sed 's/^/points: /'; echo
+          # Mail: one test letter to the sending mailbox itself (nobody else gets it).
+          $SSH 'cd /srv/essola/app && set -a && . /etc/essola.env && set +a && [ -n "${SMTP_USER:-}" ] && node -e "require(\"./index.js\")._smtpSend(process.env.SMTP_USER, \"essola: проверка почты\", \"Письмо с сервера essola: отправка работает.\", \"<p>Письмо с сервера essola: отправка работает.</p>\").then(() => console.log(\"smtp test: sent\"), (e) => console.log(\"smtp test failed:\", e.message))" || echo "smtp: not configured"' || true
+          # A composition the cache hasn't seen (order shuffled), so a model really answers; then who answered.
+          LIST=$(printf '"%s"\n' Aqua Glycerin Niacinamide Squalane "Sodium Hyaluronate" Allantoin Panthenol Tocopherol "Centella Asiatica Extract" Phenoxyethanol | shuf | paste -sd, -)
+          curl -s -m 60 -X POST "$U" -H 'Content-Type: application/json' -H "X-App-Key: $APP_KEY" \
+            -d "{\"mode\":\"describe\",\"device\":\"ci-check2\",\"ingredients\":[$LIST]}" -w '\nHTTP %{http_code} in %{time_total}s\n' | head -c 1200
+          $SSH 'journalctl -u essola -n 30 --no-pager -o cat | tail -12 | cut -c1-300' || true
+          $SSH 'journalctl -u essola -n 200 --no-pager -o cat | grep -iE "postbox|iam |smtp" | tail -5 | cut -c1-300' || true

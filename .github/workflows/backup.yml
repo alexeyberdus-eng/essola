@@ -1,0 +1,113 @@
+# «Резервная копия данных»: every file of the Yandex bucket (product bases, accounts, forum, recipes, AI caches)
+# packed into password-protected 7z archives (BACKUP_PASSWORD secret) and kept as downloadable artifacts for 30 days:
+# «essola-baza-sredstv» — the product base only, «essola-vse-dannye» — everything.
+# When the TIMEWEB_HOST and TIMEWEB_SSH_KEY secrets exist, a copy also goes to the Timeweb server (/srv/essola-backup).
+# Open: on a Mac with Keka / The Unarchiver, or `7z x <file>.7z` — the password is BACKUP_PASSWORD.
+# Runs by hand (Actions → «Резервная копия данных»), when .github/backup.trigger changes, and every night once the
+# default branch is the working branch.
+name: Резервная копия данных
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/backup.trigger']
+  schedule:
+    - cron: '37 0 * * *'
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+    steps:
+      - name: Password for the archive
+        run: |
+          # Accounts and emails are personal data: the archive is never stored unencrypted.
+          if [ -z "$BACKUP_PASSWORD" ]; then
+            echo "::error::Add the BACKUP_PASSWORD secret (GitHub → Settings → Secrets → Actions) and run again."
+            exit 1
+          fi
+
+      - name: Download the bucket
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n >/dev/null
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json"
+          yc config set service-account-key "$RUNNER_TEMP/sa.json" >/dev/null
+          yc config set endpoint api.cloud.yandex.net:443 >/dev/null
+          TOKEN=$(yc iam create-token)
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          # Every key, page by page. Daily limit marks and one-time codes are temporary and stay out.
+          : > keys.txt
+          NEXT=""
+          while :; do
+            Q="list-type=2&max-keys=1000"
+            [ -n "$NEXT" ] && Q="$Q&continuation-token=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$NEXT")"
+            curl -sS -f "$B?$Q" -H "X-YaCloud-SubjectToken: $TOKEN" > page.xml
+            grep -o '<Key>[^<]*</Key>' page.xml | sed 's/<Key>//;s/<\/Key>//' >> keys.txt
+            NEXT=$(grep -o '<NextContinuationToken>[^<]*' page.xml | sed 's/<NextContinuationToken>//' || true)
+            [ -z "$NEXT" ] && break
+          done
+          grep -v -E '^(limits|codes|vk)/' keys.txt > want.txt || true
+          echo "files in the bucket: $(wc -l < keys.txt), to copy: $(wc -l < want.txt)"
+          mkdir -p data
+          export TOKEN B
+          < want.txt xargs -P 24 -I{} sh -c 'mkdir -p "data/$(dirname "{}")" && curl -sS -f --retry 3 -o "data/{}" "$B/{}" -H "X-YaCloud-SubjectToken: $TOKEN" || echo "failed: {}"' | tee failed.txt
+          echo "copied: $(find data -type f | wc -l), failed: $(grep -c . failed.txt || true)"
+          du -sh data
+
+      - name: Pack and encrypt
+        run: |
+          STAMP=$(TZ=Europe/Moscow date +%Y-%m-%d)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null; }
+          # 7z with AES-256 and hidden file names: opens on a Mac with Keka or The Unarchiver after typing the password.
+          cd data
+          # 1) The product base only (no personal data): Letual, INKEEDecoder, Open Beauty Facts catalog, link and
+          #    barcode products, EU CosIng, the ingredient index and the owner's table export.
+          ls -d letu inci cosing ingr exports bc url nk label bcweb catalog.json shop.json index.json 2>/dev/null > ../products.lst || true
+          7z a -t7z -mx=5 -mhe=on -p"$BACKUP_PASSWORD" "../essola-baza-sredstv-$STAMP.7z" @../products.lst >/dev/null
+          # 2) Everything: the base plus accounts, forum, recipes, reviews, settings and AI caches.
+          7z a -t7z -mx=5 -mhe=on -p"$BACKUP_PASSWORD" "../essola-vse-dannye-$STAMP.7z" . >/dev/null
+          cd ..
+          rm -rf data
+          ls -lh *.7z
+
+      - name: Keep the product base (30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: essola-baza-sredstv-${{ env.STAMP }}
+          path: essola-baza-sredstv-*.7z
+          retention-days: 30
+          compression-level: 0
+
+      - name: Keep all data (30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: essola-vse-dannye-${{ env.STAMP }}
+          path: essola-vse-dannye-*.7z
+          retention-days: 30
+          compression-level: 0
+
+      - name: Copy to the Timeweb server
+        if: env.TIMEWEB_HOST != '' && env.TIMEWEB_SSH_KEY != ''
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/key"
+          printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
+          SSH="ssh -i $RUNNER_TEMP/key -o StrictHostKeyChecking=accept-new"
+          $SSH "root@$TIMEWEB_HOST" 'mkdir -p /srv/essola-backup && ls -1t /srv/essola-backup/essola-vse-dannye-*.7z 2>/dev/null | tail -n +8 | xargs -r rm -f'
+          scp -i "$RUNNER_TEMP/key" -o StrictHostKeyChecking=accept-new essola-vse-dannye-*.7z "root@$TIMEWEB_HOST:/srv/essola-backup/"
+          echo "copied to the server, the last 7 copies are kept"

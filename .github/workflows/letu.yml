@@ -1,0 +1,163 @@
+name: Letual catalog (with Letual's permission)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: 'Only rebuild the index from the base already in the bucket (no crawling)'
+        type: boolean
+        default: false
+      skip:
+        description: 'Sections already collected, comma-separated (skipped by this run)'
+        type: string
+        default: ''
+  schedule:
+    - cron: '23 1 1 */3 *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: letu
+  cancel-in-progress: false
+
+jobs:
+  # One collector per site section, in parallel; each saves after every category and uploads what it has
+  # even if it hits its time limit.
+  roots:
+    if: ${{ !inputs.build_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sections: ${{ steps.find.outputs.sections }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: find
+        env:
+          SKIP_SECTIONS: ${{ inputs.skip }}
+        # Only the last stdout line is the section list; diagnostics go to stderr.
+        run: echo "sections=$(node app/scripts/letu-crawl.mjs roots | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+  list:
+    needs: roots
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.roots.outputs.sections) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Walk ${{ matrix.root }}
+        timeout-minutes: 120
+        continue-on-error: true
+        run: mkdir -p out && node app/scripts/letu-crawl.mjs list out/ids-${{ matrix.part }}.json ${{ matrix.root }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: letu-ids-${{ matrix.part }}
+          path: out/ids-*.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+  tabs:
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: letu-ids-*
+          path: out
+          merge-multiple: true
+      - name: Products already in the base
+        env:
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n >/dev/null
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          curl -s -f -o out/prev-index.json "https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID/letu/index.json" -H "X-YaCloud-SubjectToken: $(yc iam create-token)" || echo '[]' > out/prev-index.json
+          node -e "console.log(require('./out/prev-index.json').filter(x=>!x.z).map(x=>x.k.replace('letu:','')).join('\n'))" > out/known.txt
+          # Products listed without a composition are not "known": every run checks them again.
+          echo "already in the base with composition: $(grep -c . out/known.txt || true)"
+      - name: Fetch compositions
+        timeout-minutes: 330
+        continue-on-error: true
+        env:
+          KNOWN_IDS: out/known.txt
+        run: node app/scripts/letu-crawl.mjs tabs out ${{ matrix.shard }} 10 out/tabs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: letu-tabs-${{ matrix.shard }}
+          path: out/tabs/
+          retention-days: 3
+
+  build:
+    needs: [list, tabs]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: out
+          pattern: letu-*
+          merge-multiple: true
+      - name: Yandex Cloud access and the existing base
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yc" -n
+          export PATH="$HOME/yc/bin:$PATH"
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/sa.json" && yc config set service-account-key "$RUNNER_TEMP/sa.json" && yc config set endpoint api.cloud.yandex.net:443
+          TOKEN=$(yc iam create-token)
+          echo "::add-mask::$TOKEN"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "B=https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID" >> "$GITHUB_ENV"
+          B="https://storage.yandexcloud.net/essola-products-$YC_FOLDER_ID"
+          mkdir -p out/prev/x
+          if curl -s -f -o out/prev/letu-index.json "$B/letu/index.json" -H "X-YaCloud-SubjectToken: $TOKEN"; then
+            node -e "const c=require('crypto');const i=require('./out/prev/letu-index.json');console.log([...new Set(i.map(x=>c.createHash('sha1').update(x.k).digest('hex').slice(0,3)))].join('\n'))" > out/prev/shards.txt
+            echo "existing items: $(node -e "console.log(require('./out/prev/letu-index.json').length)"), shards: $(wc -l < out/prev/shards.txt)"
+            cat out/prev/shards.txt | xargs -P 24 -I{} sh -c 'curl -s -f --retry 4 --retry-all-errors -o out/prev/x/{}.json "$0/letu/x/{}.json" -H "X-YaCloud-SubjectToken: $1" || true' "$B" "$TOKEN"
+          else
+            echo "no existing base"
+          fi
+      - name: Score and shard
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p ../out/tabs && mv ../out/tabs-*.json ../out/tabs/ 2>/dev/null || true
+          npx --yes tsx scripts/build-letu.ts ../out ../out/tabs ../out/build ../out/prev
+          du -sh ../out/build ../out/build/letu-index.json
+      - name: Upload to Object Storage
+        run: |
+          cd out/build
+          # Compositions first, then the index, so the app never sees cards without their shard.
+          ls x | xargs -P 12 -I{} sh -c 'curl -s -f --retry 6 --retry-all-errors --retry-delay 3 -o /dev/null -X PUT "$B/letu/x/{}" -H "X-YaCloud-SubjectToken: $TOKEN" -H "Content-Type: application/json" --data-binary @x/{} || echo "fail {}"'
+          gzip -k -9 letu.csv
+          curl -sS -f -X PUT "$B/exports/letu.csv.gz" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/gzip' --data-binary @letu.csv.gz -w 'table HTTP %{http_code}\n'
+          curl -sS -f -X PUT "$B/letu/index.json" -H "X-YaCloud-SubjectToken: $TOKEN" -H 'Content-Type: application/json' --data-binary @letu-index.json -w 'index HTTP %{http_code}\n'

@@ -1,0 +1,60 @@
+# «Ссылки на сборки»: the latest Android builds in Expo with their status and download links, posted to the issue
+# "📱 Essola в Expo Go". Useful when the build job stopped waiting but Expo finished the build later.
+name: Ссылки на сборки
+
+on:
+  workflow_dispatch:
+  # Also runs when this file or its trigger changes (a manual run needs the file on the default branch).
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/workflows/build-links.yml', '.github/build-links.trigger']
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # The Expo CLI reads the app config, which needs the app's packages.
+      - name: Install dependencies
+        run: npm ci
+      - name: Latest builds
+        run: |
+          npx --yes eas-cli@latest init --non-interactive --force
+          # Waits while the newest build is still in the Expo queue or building (up to ~5 hours).
+          for i in $(seq 1 150); do
+            npx --yes eas-cli@latest build:list --platform android --limit 4 --json --non-interactive > /tmp/builds.json
+            S=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/builds.json','utf8'))[0].status")
+            echo "newest build: $S"
+            case "$S" in NEW|IN_QUEUE|IN_PROGRESS|PENDING_CANCEL) sleep 120;; *) break;; esac
+          done
+          node -e "
+            const b=JSON.parse(require('fs').readFileSync('/tmp/builds.json','utf8'));
+            const kind=(x)=>/\.aab$/.test((x.artifacts&&x.artifacts.buildUrl)||'')?'AAB (Google Play)':'APK';
+            const rows=b.map((x)=>'- '+kind(x)+' · версия '+(x.appBuildVersion||'')+' · '+x.status+(x.artifacts&&x.artifacts.buildUrl?' · [скачать]('+x.artifacts.buildUrl+')':''));
+            require('fs').writeFileSync('/tmp/body.md','## Последние сборки Android\n\n'+rows.join('\n')+'\n');
+          "
+          cat /tmp/body.md
+      - name: Post
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = require('fs').readFileSync('/tmp/body.md', 'utf8');
+            const { data: issues } = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', per_page: 100 });
+            const issue = issues.find((i) => i.title === '📱 Essola в Expo Go' && !i.pull_request);
+            if (issue) await github.rest.issues.createComment({ ...context.repo, issue_number: issue.number, body });
+            await core.summary.addRaw(body).write();

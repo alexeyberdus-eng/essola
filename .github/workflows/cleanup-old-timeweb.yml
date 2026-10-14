@@ -1,0 +1,79 @@
+# One-off: remove everything essola put on the owner's dashboard server (the one with Caddy) on 11.10.2026,
+# leaving the dashboard as it was. Runs only on a machine where Caddy is running (that server), never on a fresh one.
+# Run: change .github/cleanup-old.trigger and push.
+name: Убрать essola со старого сервера
+
+on:
+  push:
+    branches: [claude/awesome-mccarthy-dlbgor]
+    paths: ['.github/cleanup-old.trigger']
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_PASSWORD: ${{ secrets.TIMEWEB_PASSWORD }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+    steps:
+      - name: Clean up
+        run: |
+          OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
+          if [ -n "$TIMEWEB_SSH_KEY" ]; then
+            install -m 600 /dev/null "$RUNNER_TEMP/key"; printf '%s\n' "$TIMEWEB_SSH_KEY" > "$RUNNER_TEMP/key"
+            SSH="ssh -i $RUNNER_TEMP/key $OPTS root@$TIMEWEB_HOST"
+          else
+            sudo apt-get install -y -qq sshpass >/dev/null
+            export SSHPASS="$TIMEWEB_PASSWORD"
+            SSH="sshpass -e ssh $OPTS -o PubkeyAuthentication=no root@$TIMEWEB_HOST"
+          fi
+          $SSH 'bash -s' <<'EOF'
+          set -u
+          if ! systemctl is-active --quiet caddy; then echo "No Caddy here: not the dashboard server, nothing done."; exit 0; fi
+          T=$(date +%F)
+          echo "== 1. Caddy settings: remove only our line =="
+          CF=/etc/caddy/Caddyfile
+          sed -i '\#^import /etc/caddy/essola.caddy$#d' "$CF"
+          # Our append also left one empty line at the end: drop trailing empty lines only.
+          sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$CF"
+          rm -f /etc/caddy/essola.caddy
+          if [ -f "$CF.bak-essola" ]; then
+            if diff -B -q "$CF.bak-essola" "$CF" >/dev/null; then echo "Caddyfile is exactly as before (apart from blank lines)"; rm -f "$CF.bak-essola"; else echo "WARNING: Caddyfile differs from the copy made before our change:"; diff -B "$CF.bak-essola" "$CF" | sed -E 's/((password|token|secret|key|hash)[^[:space:]]*)[[:space:]].*/\1 [hidden]/I'; fi
+          fi
+          caddy validate --config "$CF" --adapter caddyfile >/dev/null 2>&1 && echo "Caddyfile valid" || echo "WARNING: Caddyfile does not validate"
+          systemctl is-active caddy
+          echo "== 2. essola service and files =="
+          systemctl disable --now essola >/dev/null 2>&1 || true
+          rm -f /etc/systemd/system/essola.service
+          systemctl daemon-reload
+          rm -rf /srv/essola /etc/essola.env
+          rmdir /srv 2>/dev/null || true
+          echo "== 3. swap file we added =="
+          if grep -q '^/swapfile none swap sw 0 0$' /etc/fstab; then
+            swapoff /swapfile 2>/dev/null; rm -f /swapfile; sed -i '\#^/swapfile none swap sw 0 0$#d' /etc/fstab; echo "removed"
+          fi
+          echo "== 4. packages installed today by us =="
+          NEW=$(grep "^$T" /var/log/dpkg.log 2>/dev/null | awk '$3=="install"{print $4}' | cut -d: -f1 | sort -u)
+          echo "installed today: $(echo $NEW)"
+          for p in nginx nginx-common nginx-core libnginx-mod-http-geoip2 libnginx-mod-stream certbot python3-certbot-nginx python3-certbot p7zip-full; do
+            echo "$NEW" | grep -qx "$p" && PURGE="${PURGE:-} $p"
+          done
+          if [ -n "${PURGE:-}" ]; then
+            systemctl disable --now nginx >/dev/null 2>&1 || true
+            DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq $PURGE >/dev/null 2>&1 && echo "removed:$PURGE"
+            DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq >/dev/null 2>&1 || true
+          fi
+          # Node.js: removed if we installed it today; if it was upgraded from an older version, only reported.
+          if echo "$NEW" | grep -qx nodejs; then
+            DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq nodejs >/dev/null 2>&1 && echo "removed: nodejs (installed today)"
+            rm -f /etc/apt/sources.list.d/nodesource.list* /etc/apt/keyrings/nodesource.gpg
+          fi
+          grep "^$T" /var/log/dpkg.log 2>/dev/null | awk '$3=="upgrade" && $4 ~ /^nodejs/' | sed 's/^/NOTE node upgraded today: /'
+          echo "== 5. now =="
+          ss -ltnp | grep LISTEN | grep -vE '127.0.0.53' || true
+          free -m | head -2
+          EOF
