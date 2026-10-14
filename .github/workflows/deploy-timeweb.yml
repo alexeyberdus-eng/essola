@@ -44,7 +44,8 @@ jobs:
       SMTP_PASS: ${{ secrets.SMTP_PASS }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       # Payments for points through ЮKassa: shop id and secret key from the ЮKassa cabinet (Интеграция → Ключи API).
-      YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID }}
+      # The shop id is not secret (it is on every payment page); a secret or variable with this name wins.
+      YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID || vars.YOOKASSA_SHOP_ID || '1483427' }}
       YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
       RELAY_HOST: ${{ secrets.RELAY_HOST }}
       GIGACHAT_SCOPE: ${{ vars.GIGACHAT_SCOPE }}
