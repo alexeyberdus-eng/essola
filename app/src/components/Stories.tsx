@@ -1,40 +1,22 @@
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
-import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Easing,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "../context/AuthContext";
-import { BUILTIN_STORIES, Story } from "../data/stories";
-import { useIsAdmin } from "../lib/admin";
-import {
-  ServerStory,
-  storiesList,
-  storyAdd,
-  storyImage,
-  storyRemove,
-} from "../lib/social";
-import { readJSON, writeJSON } from "../lib/storage";
-import { colors, fonts, space } from "../theme";
-import { Icon } from "./Icon";
-import { StoryArt } from "./StoryArt";
-import { Press, tap } from "./ui";
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
+import { BUILTIN_STORIES, Story } from '../data/stories';
+import { useIsAdmin } from '../lib/admin';
+import { ServerStory, storiesList, storyAdd, storyImage, storyRemove } from '../lib/social';
+import { readJSON, writeJSON } from '../lib/storage';
+import { colors, fonts, space } from '../theme';
+import { Icon } from './Icon';
+import { StoryArt } from './StoryArt';
+import { Press, tap } from './ui';
 
-const SEEN = "essola.stories.seen";
+const SEEN = 'essola.stories.seen';
 const SLIDE_MS = 6000;
 
 /** A posted story becomes one slide; its image is loaded when it is opened. */
@@ -65,10 +47,7 @@ export function Stories() {
 
   const all = [...server, ...BUILTIN_STORIES];
   // Unseen first, in their order; seen ones move to the end like in Instagram.
-  const ordered = [
-    ...all.filter((s) => !seen.includes(s.id)),
-    ...all.filter((s) => seen.includes(s.id)),
-  ];
+  const ordered = [...all.filter((s) => !seen.includes(s.id)), ...all.filter((s) => seen.includes(s.id))];
 
   const markSeen = (id: string) => {
     setSeen((prev) => {
@@ -81,31 +60,12 @@ export function Stories() {
 
   return (
     <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginHorizontal: -space.gutter, marginTop: 14 }}
-        contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 12 }}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter, marginTop: 14 }} contentContainerStyle={{ paddingHorizontal: space.gutter, gap: 12 }}>
         {admin && (
-          <Press
-            onPress={() => setAdding(true)}
-            style={styles.item}
-            accessibilityLabel="Добавить историю"
-          >
-            <View style={[styles.ring, { backgroundColor: "#ECEEF6" }]}>
-              <View
-                style={[
-                  styles.inner,
-                  { alignItems: "center", justifyContent: "center" },
-                ]}
-              >
-                <Icon
-                  name="plus"
-                  size={24}
-                  color={colors.violet}
-                  strokeWidth={2}
-                />
+          <Press onPress={() => setAdding(true)} style={styles.item} accessibilityLabel="Добавить историю">
+            <View style={[styles.ring, { backgroundColor: '#ECEEF6' }]}>
+              <View style={[styles.inner, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Icon name="plus" size={24} color={colors.violet} strokeWidth={2} />
               </View>
             </View>
             <Text style={styles.label} numberOfLines={1}>
@@ -126,25 +86,15 @@ export function Stories() {
               style={styles.item}
             >
               {was ? (
-                <View style={[styles.ring, { backgroundColor: "#D9DBE4" }]}>
+                <View style={[styles.ring, { backgroundColor: '#D9DBE4' }]}>
                   <Bubble s={s} />
                 </View>
               ) : (
-                <LinearGradient
-                  colors={["#5B4BD6", "#E0466E", "#FFB547"]}
-                  start={{ x: 0, y: 1 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.ring}
-                >
+                <LinearGradient colors={['#5B4BD6', '#E0466E', '#FFB547']} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }} style={styles.ring}>
                   <Bubble s={s} />
                 </LinearGradient>
               )}
-              <Text
-                style={[styles.label, was && { color: colors.muted }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-              >
+              <Text style={[styles.label, was && { color: colors.muted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {s.title}
               </Text>
             </Press>
@@ -186,32 +136,19 @@ function Bubble({ s }: { s: Story }) {
   return (
     <View style={styles.inner}>
       {s.icon ? (
-        <LinearGradient
-          colors={["#8A74F2", "#5B47C9"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            StyleSheet.absoluteFill,
-            { alignItems: "center", justifyContent: "center" },
-          ]}
-        >
+        <LinearGradient colors={['#8A74F2', '#5B47C9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
           <Icon name={s.icon} size={26} color="#fff" strokeWidth={2} />
         </LinearGradient>
       ) : s.cover ? (
-        <Image
-          source={s.cover}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          contentPosition="top"
-        />
+        <Image source={s.cover} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
       ) : (
         <View
           style={[
             StyleSheet.absoluteFill,
             {
               backgroundColor: colors.accent,
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems: 'center',
+              justifyContent: 'center',
             },
           ]}
         >
@@ -219,7 +156,7 @@ function Bubble({ s }: { s: Story }) {
             style={{
               fontFamily: fonts.display,
               fontSize: 26,
-              color: "#fff",
+              color: '#fff',
               marginTop: -3,
             }}
           >
@@ -231,19 +168,7 @@ function Bubble({ s }: { s: Story }) {
   );
 }
 
-function Viewer({
-  stories,
-  start,
-  onClose,
-  onSeen,
-  onRemove,
-}: {
-  stories: Story[];
-  start: number;
-  onClose: () => void;
-  onSeen: (id: string) => void;
-  onRemove?: (s: Story) => void;
-}) {
+function Viewer({ stories, start, onClose, onSeen, onRemove }: { stories: Story[]; start: number; onClose: () => void; onSeen: (id: string) => void; onRemove?: (s: Story) => void }) {
   const insets = useSafeAreaInsets();
   const [si, setSi] = useState(start);
   const [k, setK] = useState(0);
@@ -254,10 +179,7 @@ function Viewer({
 
   useEffect(() => {
     if (story) onSeen(story.id);
-    if (story?.server && img[story.server] === undefined)
-      storyImage(story.server).then((d) =>
-        setImg((m) => ({ ...m, [story.server!]: d })),
-      );
+    if (story?.server && img[story.server] === undefined) storyImage(story.server).then((d) => setImg((m) => ({ ...m, [story.server!]: d })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [si]);
 
@@ -309,18 +231,8 @@ function Viewer({
   const picture = story.server ? img[story.server] : slide.image;
 
   return (
-    <Modal
-      visible
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <LinearGradient
-        colors={["#5B47C9", "#8A74F2", "#C9A2F5"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1, paddingTop: insets.top + 8 }}
-      >
+    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <LinearGradient colors={['#5B47C9', '#8A74F2', '#C9A2F5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, paddingTop: insets.top + 8 }}>
         <View style={[styles.bars, held && { opacity: 0 }]}>
           {story.slides.map((_, i) => (
             <View key={i} style={styles.bar}>
@@ -330,12 +242,12 @@ function Viewer({
                   {
                     width:
                       i < k
-                        ? "100%"
+                        ? '100%'
                         : i > k
-                          ? "0%"
+                          ? '0%'
                           : progress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: ["0%", "100%"],
+                              outputRange: ['0%', '100%'],
                             }),
                   },
                 ]}
@@ -349,7 +261,7 @@ function Viewer({
               style={{
                 fontFamily: fonts.display,
                 fontSize: 16,
-                color: "#fff",
+                color: '#fff',
                 marginTop: -2,
               }}
             >
@@ -361,11 +273,11 @@ function Viewer({
           {onRemove && story.server && (
             <Press
               onPress={() =>
-                Alert.alert("Удалить историю?", "", [
-                  { text: "Отмена", style: "cancel" },
+                Alert.alert('Удалить историю?', '', [
+                  { text: 'Отмена', style: 'cancel' },
                   {
-                    text: "Удалить",
-                    style: "destructive",
+                    text: 'Удалить',
+                    style: 'destructive',
                     onPress: () => onRemove(story),
                   },
                 ])
@@ -375,11 +287,7 @@ function Viewer({
               <Icon name="trash" size={18} color="#fff" />
             </Press>
           )}
-          <Press
-            onPress={onClose}
-            style={styles.close}
-            accessibilityLabel="Закрыть"
-          >
+          <Press onPress={onClose} style={styles.close} accessibilityLabel="Закрыть">
             <Icon name="close" size={20} color="#fff" />
           </Press>
         </View>
@@ -394,14 +302,7 @@ function Viewer({
           ) : (
             <View style={styles.shot}>
               {picture ? (
-                <Image
-                  source={
-                    typeof picture === "string" ? { uri: picture } : picture
-                  }
-                  style={StyleSheet.absoluteFill}
-                  contentFit={story.server ? "cover" : "contain"}
-                  contentPosition="top"
-                />
+                <Image source={typeof picture === 'string' ? { uri: picture } : picture} style={StyleSheet.absoluteFill} contentFit={story.server ? 'cover' : 'contain'} contentPosition="top" />
               ) : (
                 <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />
               )}
@@ -428,27 +329,13 @@ function Viewer({
             {
               top: insets.top + 70,
               bottom: story.cta ? 110 : 0,
-              flexDirection: "row",
+              flexDirection: 'row',
             },
           ]}
           pointerEvents="box-none"
         >
-          <Pressable
-            style={{ flex: 1 }}
-            onPress={prev}
-            onPressIn={hold}
-            onPressOut={release}
-            onLongPress={() => {}}
-            delayLongPress={220}
-          />
-          <Pressable
-            style={{ flex: 2 }}
-            onPress={next}
-            onPressIn={hold}
-            onPressOut={release}
-            onLongPress={() => {}}
-            delayLongPress={220}
-          />
+          <Pressable style={{ flex: 1 }} onPress={prev} onPressIn={hold} onPressOut={release} onLongPress={() => {}} delayLongPress={220} />
+          <Pressable style={{ flex: 2 }} onPress={next} onPressIn={hold} onPressOut={release} onLongPress={() => {}} delayLongPress={220} />
         </View>
       </LinearGradient>
     </Modal>
@@ -456,22 +343,16 @@ function Viewer({
 }
 
 /** Admin: post a story — a picture plus a title and a line of text. */
-function AddStory({
-  onClose,
-  onDone,
-}: {
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function AddStory({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [uri, setUri] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
+  const [title, setTitle] = useState('');
+  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const pick = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: ['images'],
       quality: 1,
     });
     if (!r.canceled && r.assets[0]) setUri(r.assets[0].uri);
@@ -482,26 +363,16 @@ function AddStory({
     try {
       const ctx = ImageManipulator.manipulate(uri);
       ctx.resize({ width: 900 });
-      const saved = await (
-        await ctx.renderAsync()
-      ).saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
+      const saved = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
       await storyAdd(user.email, title.trim(), text.trim(), saved.base64!);
       onDone();
     } catch {
-      Alert.alert(
-        "Не получилось опубликовать",
-        "Проверьте интернет или выберите картинку поменьше.",
-      );
+      Alert.alert('Не получилось опубликовать', 'Проверьте интернет или выберите картинку поменьше.');
       setBusy(false);
     }
   };
   return (
-    <Modal
-      visible
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <ScrollView
         contentContainerStyle={{
           padding: space.gutter,
@@ -512,9 +383,9 @@ function AddStory({
       >
         <View
           style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <Text style={styles.addTitle}>Новая история</Text>
@@ -523,44 +394,13 @@ function AddStory({
           </Press>
         </View>
         <Press onPress={pick} style={styles.pick}>
-          {uri ? (
-            <Image
-              source={{ uri }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-            />
-          ) : (
-            <Icon name="image" size={30} color={colors.violet} />
-          )}
+          {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="image" size={30} color={colors.violet} />}
           {!uri && <Text style={styles.pickText}>Выбрать картинку</Text>}
         </Press>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Заголовок (под кружком)"
-          placeholderTextColor={colors.faint}
-          style={styles.input}
-          maxLength={40}
-        />
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Текст истории"
-          placeholderTextColor={colors.faint}
-          style={[styles.input, { minHeight: 90 }]}
-          multiline
-          maxLength={300}
-        />
-        <Press
-          onPress={send}
-          disabled={busy || !uri || !title.trim()}
-          style={[styles.publish, (!uri || !title.trim()) && { opacity: 0.5 }]}
-        >
-          {busy ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.publishText}>Опубликовать для всех</Text>
-          )}
+        <TextInput value={title} onChangeText={setTitle} placeholder="Заголовок (под кружком)" placeholderTextColor={colors.faint} style={styles.input} maxLength={40} />
+        <TextInput value={text} onChangeText={setText} placeholder="Текст истории" placeholderTextColor={colors.faint} style={[styles.input, { minHeight: 90 }]} multiline maxLength={300} />
+        <Press onPress={send} disabled={busy || !uri || !title.trim()} style={[styles.publish, (!uri || !title.trim()) && { opacity: 0.5 }]}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishText}>Опубликовать для всех</Text>}
         </Press>
       </ScrollView>
     </Modal>
@@ -568,37 +408,37 @@ function AddStory({
 }
 
 const styles = StyleSheet.create({
-  item: { width: 72, alignItems: "center", gap: 6 },
+  item: { width: 72, alignItems: 'center', gap: 6 },
   ring: {
     width: 70,
     height: 70,
     borderRadius: 35,
     padding: 3,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inner: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    overflow: "hidden",
-    backgroundColor: "#fff",
+    overflow: 'hidden',
+    backgroundColor: '#fff',
     borderWidth: 2.5,
-    borderColor: "#fff",
+    borderColor: '#fff',
   },
   label: { fontFamily: fonts.medium, fontSize: 11.5, color: colors.ink },
-  bars: { flexDirection: "row", gap: 4, paddingHorizontal: 12 },
+  bars: { flexDirection: 'row', gap: 4, paddingHorizontal: 12 },
   bar: {
     flex: 1,
     height: 3,
     borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    overflow: "hidden",
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
   },
-  barFill: { height: 3, backgroundColor: "#fff" },
+  barFill: { height: 3, backgroundColor: '#fff' },
   head: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     paddingHorizontal: 14,
     marginTop: 12,
@@ -607,16 +447,16 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headName: { fontFamily: fonts.semibold, fontSize: 14, color: "#fff" },
+  headName: { fontFamily: fonts.semibold, fontSize: 14, color: '#fff' },
   close: {
     width: 38,
     height: 38,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: { flex: 1, paddingHorizontal: 22, paddingTop: 18 },
   title: {
@@ -624,13 +464,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 33,
     letterSpacing: -0.8,
-    color: "#fff",
+    color: '#fff',
   },
   text: {
     fontFamily: fonts.regular,
     fontSize: 16,
     lineHeight: 23,
-    color: "rgba(255,255,255,0.86)",
+    color: 'rgba(255,255,255,0.86)',
     marginTop: 10,
   },
   shot: {
@@ -638,20 +478,20 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 20,
     borderRadius: 26,
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   art: { flex: 1, marginTop: 8, marginBottom: 20 },
   cta: {
     marginHorizontal: 22,
     height: 52,
     borderRadius: 99,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   ctaText: { fontFamily: fonts.semibold, fontSize: 15.5, color: colors.ink },
@@ -660,9 +500,9 @@ const styles = StyleSheet.create({
     height: 260,
     borderRadius: 20,
     backgroundColor: colors.tint,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
     gap: 8,
   },
   pickText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.violet },
@@ -676,15 +516,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15,
     color: colors.ink,
-    backgroundColor: "#FBFAFE",
-    textAlignVertical: "top",
+    backgroundColor: '#FBFAFE',
+    textAlignVertical: 'top',
   },
   publish: {
     height: 50,
     borderRadius: 16,
     backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  publishText: { fontFamily: fonts.semibold, fontSize: 15, color: "#fff" },
+  publishText: { fontFamily: fonts.semibold, fontSize: 15, color: '#fff' },
 });
